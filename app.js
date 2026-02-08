@@ -49,6 +49,28 @@ let userLocation = null;
 // Current filter state
 let currentFilter = 'all';
 let currentSearch = '';
+let currentCity = 'all';
+
+// Chain detection from name
+function detectChain(name) {
+    const n = name.toLowerCase();
+    if (n.includes('סופר פארם') || n.includes('סופר-פארם')) return 'superpharm';
+    if (n.includes('שופרסל')) return 'shufersal';
+    if (n.includes('רמי לוי')) return 'rami_levy';
+    if (n.includes('ויקטורי')) return 'victory';
+    if (n.includes('איקאה') || n.includes('ikea')) return 'ikea';
+    if (n.includes('הום סנטר')) return 'home_center';
+    if (n.includes('אופיס דיפו')) return 'office_depot';
+    if (n.includes('פלאפון')) return 'pelephone';
+    if (n.includes('סלקום')) return 'cellcom';
+    if (n.includes('פרטנר')) return 'partner';
+    if (n.includes('מדטון')) return 'medton';
+    if (n.includes('ביג אלקטריק')) return 'big_electric';
+    if (n.includes('באג')) return 'bug';
+    if (n.includes('עיריי') || n.includes('מועצה') || n.includes('רשות מקומית')) return 'municipality';
+    if (n.includes('בית ספר') || n.includes('ביה"ס')) return 'school';
+    return 'other';
+}
 
 // Calculate distance between two points (in km)
 function getDistance(lat1, lng1, lat2, lng2) {
@@ -101,11 +123,16 @@ function createPopupContent(location) {
 
 // Update which markers are visible based on filters
 function updateMarkers() {
+    let visibleCount = 0;
+
     allMarkers.forEach((item, index) => {
         const location = allLocations[index];
 
         // Check filter match
         const filterMatch = currentFilter === 'all' || location.type === currentFilter;
+
+        // Check city match
+        const cityMatch = currentCity === 'all' || location.city === currentCity;
 
         // Check search match (search in city name)
         const searchMatch = currentSearch === '' ||
@@ -114,11 +141,43 @@ function updateMarkers() {
             location.address.includes(currentSearch);
 
         // Show or hide marker
-        if (filterMatch && searchMatch) {
+        if (filterMatch && cityMatch && searchMatch) {
             item.marker.addTo(map);
+            visibleCount++;
         } else {
             map.removeLayer(item.marker);
         }
+    });
+
+    // Update count display
+    const countEl = document.getElementById('location-count');
+    if (countEl) {
+        countEl.textContent = `${visibleCount} נקודות`;
+    }
+}
+
+// Populate city dropdown with top cities
+function populateCityDropdown() {
+    const citySelect = document.getElementById('city-filter');
+    if (!citySelect) return;
+
+    // Count locations per city
+    const cityCounts = {};
+    allLocations.forEach(loc => {
+        cityCounts[loc.city] = (cityCounts[loc.city] || 0) + 1;
+    });
+
+    // Sort by count and get top 20
+    const topCities = Object.entries(cityCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20);
+
+    // Add options
+    topCities.forEach(([city, count]) => {
+        const option = document.createElement('option');
+        option.value = city;
+        option.textContent = `${city} (${count})`;
+        citySelect.appendChild(option);
     });
 }
 
@@ -138,11 +197,26 @@ fetch('locations.json')
             allMarkers.push({ marker, location });
         });
 
+        // Populate city dropdown
+        populateCityDropdown();
+
+        // Update initial count
+        updateMarkers();
+
         console.log('Loaded', allLocations.length, 'locations');
     })
     .catch(error => {
         console.error('Error loading locations:', error);
     });
+
+// --- City Filter Dropdown ---
+const citySelect = document.getElementById('city-filter');
+if (citySelect) {
+    citySelect.addEventListener('change', () => {
+        currentCity = citySelect.value;
+        updateMarkers();
+    });
+}
 
 // --- Filter Buttons ---
 const filterButtons = document.querySelectorAll('.filter-btn');

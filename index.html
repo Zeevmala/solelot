@@ -20,8 +20,13 @@
     <div class="controls">
         <!-- Search Box -->
         <div class="search-box">
-            <input type="text" id="search-input" placeholder="חיפוש לפי עיר...">
+            <input type="text" id="search-input" placeholder="חיפוש...">
         </div>
+
+        <!-- City Filter -->
+        <select id="city-filter" class="city-select">
+            <option value="all">כל הערים</option>
+        </select>
 
         <!-- Filter Buttons -->
         <div class="filters">
@@ -32,6 +37,9 @@
 
         <!-- Find Nearest Button -->
         <button id="find-nearest" class="nearest-btn">📍 מצא הקרוב אליי</button>
+
+        <!-- Location Count -->
+        <span id="location-count" class="count-badge">0 נקודות</span>
     </div>
 
     <!-- The map -->

@@ -53,6 +53,32 @@ header h1 {
     border-color: #2e7d32;
 }
 
+/* City Dropdown */
+.city-select {
+    padding: 10px 15px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+    min-width: 140px;
+}
+
+.city-select:focus {
+    outline: none;
+    border-color: #2e7d32;
+}
+
+/* Location Count Badge */
+.count-badge {
+    background-color: #2e7d32;
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
 /* Filter Buttons */
 .filters {
     display: flex;
