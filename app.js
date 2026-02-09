@@ -20,55 +20,116 @@ baseMaps['רחובות'].addTo(map);
 // Add layer control
 L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
-// Add legend
+// Custom SVG Battery Icons
+const batterySvg = {
+    store: `<svg viewBox="0 0 24 36" width="28" height="42">
+        <defs>
+            <linearGradient id="storeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#4caf50"/>
+                <stop offset="100%" style="stop-color:#2e7d32"/>
+            </linearGradient>
+        </defs>
+        <rect x="7" y="0" width="10" height="4" rx="1" fill="#388e3c"/>
+        <rect x="3" y="4" width="18" height="30" rx="3" fill="url(#storeGrad)" stroke="#1b5e20" stroke-width="1"/>
+        <rect x="6" y="8" width="12" height="6" rx="1" fill="#81c784" opacity="0.6"/>
+        <rect x="6" y="16" width="12" height="6" rx="1" fill="#81c784" opacity="0.4"/>
+        <rect x="6" y="24" width="12" height="6" rx="1" fill="#81c784" opacity="0.2"/>
+    </svg>`,
+    facility: `<svg viewBox="0 0 24 36" width="28" height="42">
+        <defs>
+            <linearGradient id="facilityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#ef5350"/>
+                <stop offset="100%" style="stop-color:#c62828"/>
+            </linearGradient>
+        </defs>
+        <rect x="7" y="0" width="10" height="4" rx="1" fill="#d32f2f"/>
+        <rect x="3" y="4" width="18" height="30" rx="3" fill="url(#facilityGrad)" stroke="#b71c1c" stroke-width="1"/>
+        <path d="M12 10 L15 18 H13 L14 28 L9 18 H11 L10 10 Z" fill="#ffcdd2" opacity="0.9"/>
+    </svg>`,
+    user: `<svg viewBox="0 0 24 36" width="28" height="42">
+        <defs>
+            <linearGradient id="userGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#42a5f5"/>
+                <stop offset="100%" style="stop-color:#1565c0"/>
+            </linearGradient>
+        </defs>
+        <circle cx="12" cy="12" r="10" fill="url(#userGrad)" stroke="#0d47a1" stroke-width="1"/>
+        <circle cx="12" cy="12" r="4" fill="white"/>
+        <path d="M12 22 L12 34" stroke="#1565c0" stroke-width="3" stroke-linecap="round"/>
+    </svg>`
+};
+
+// Create L.divIcon for custom markers
+function createBatteryIcon(type) {
+    return L.divIcon({
+        html: batterySvg[type],
+        className: 'battery-marker',
+        iconSize: [28, 42],
+        iconAnchor: [14, 42],
+        popupAnchor: [0, -42]
+    });
+}
+
+const icons = {
+    store: createBatteryIcon('store'),
+    facility: createBatteryIcon('facility'),
+    user: createBatteryIcon('user')
+};
+
+// Add enhanced legend with cluster info
 const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function() {
     const div = L.DomUtil.create('div', 'map-legend');
     div.innerHTML = `
-        <h4>מקרא</h4>
-        <div class="legend-item">
-            <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png" alt="">
-            <span>נקודת איסוף</span>
-        </div>
-        <div class="legend-item">
-            <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png" alt="">
-            <span>מתקן מיחזור</span>
-        </div>
-        <div class="legend-item">
-            <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png" alt="">
-            <span>המיקום שלך</span>
+        <h4>
+            מקרא
+            <button class="legend-toggle" onclick="toggleLegend()">▼</button>
+        </h4>
+        <div class="legend-content">
+            <div class="legend-section">
+                <div class="legend-section-title">סוגי נקודות</div>
+                <div class="legend-item">
+                    <div class="legend-icon">${batterySvg.store.replace('width="28" height="42"', 'width="20" height="30"')}</div>
+                    <span>נקודת איסוף</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-icon">${batterySvg.facility.replace('width="28" height="42"', 'width="20" height="30"')}</div>
+                    <span>מתקן מיחזור</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-icon">${batterySvg.user.replace('width="28" height="42"', 'width="20" height="30"')}</div>
+                    <span>המיקום שלך</span>
+                </div>
+            </div>
+            <div class="legend-section">
+                <div class="legend-section-title">צבעי קבוצות</div>
+                <div class="legend-item">
+                    <span class="cluster-indicator cluster-small"></span>
+                    <span>עד 20 נקודות</span>
+                </div>
+                <div class="legend-item">
+                    <span class="cluster-indicator cluster-medium"></span>
+                    <span>20-100 נקודות</span>
+                </div>
+                <div class="legend-item">
+                    <span class="cluster-indicator cluster-large"></span>
+                    <span>מעל 100 נקודות</span>
+                </div>
+            </div>
         </div>
     `;
     return div;
 };
 legend.addTo(map);
 
-// Define marker icons for different location types
-const icons = {
-    store: L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    }),
-    facility: L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    }),
-    user: L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    })
+// Toggle legend on mobile
+window.toggleLegend = function() {
+    const content = document.querySelector('.legend-content');
+    const btn = document.querySelector('.legend-toggle');
+    if (content) {
+        content.classList.toggle('collapsed');
+        btn.textContent = content.classList.contains('collapsed') ? '▲' : '▼';
+    }
 };
 
 // Hebrew names for types
@@ -82,6 +143,7 @@ let allLocations = [];
 let allMarkers = [];
 let userMarker = null;
 let userLocation = null;
+let totalLocations = 0;
 
 // Marker cluster group
 const markerCluster = L.markerClusterGroup({
@@ -143,17 +205,33 @@ function getDistance(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-// Create popup content for a location
+// Create enhanced popup content for a location
 function createPopupContent(location) {
+    const typeIcon = location.type === 'store'
+        ? batterySvg.store.replace('width="28" height="42"', 'width="18" height="27"')
+        : batterySvg.facility.replace('width="28" height="42"', 'width="18" height="27"');
+
     let content = `
-        <h3>${location.name}</h3>
-        <p><strong>סוג:</strong> ${typeNames[location.type]}</p>
-        <p><strong>כתובת:</strong> ${location.address}</p>
-        <p><strong>שעות:</strong> ${location.hours}</p>
+        <h3>
+            <span class="popup-icon">${typeIcon}</span>
+            ${location.name}
+        </h3>
+        <div class="popup-row">
+            <span class="icon">📍</span>
+            <span>${location.address}</span>
+        </div>
+        <div class="popup-row">
+            <span class="icon">🕐</span>
+            <span>${location.hours}</span>
+        </div>
     `;
 
     if (location.description) {
-        content += `<p><strong>פרטים:</strong> ${location.description}</p>`;
+        content += `
+        <div class="popup-row">
+            <span class="icon">ℹ️</span>
+            <span>${location.description}</span>
+        </div>`;
     }
 
     // Add distance if user location is known
@@ -162,7 +240,11 @@ function createPopupContent(location) {
             userLocation.lat, userLocation.lng,
             location.lat, location.lng
         );
-        content += `<p class="distance">📍 מרחק: ${distance.toFixed(1)} ק"מ</p>`;
+        content += `
+        <div class="popup-row distance">
+            <span class="icon">📏</span>
+            <span>${distance.toFixed(1)} ק"מ ממיקומך</span>
+        </div>`;
     }
 
     // Add navigation links
@@ -171,12 +253,20 @@ function createPopupContent(location) {
 
     content += `
         <div class="nav-links">
-            <a href="${googleMapsUrl}" target="_blank" class="nav-btn google">Google Maps</a>
-            <a href="${wazeUrl}" target="_blank" class="nav-btn waze">Waze</a>
+            <a href="${googleMapsUrl}" target="_blank" class="nav-btn google">🗺️ Google</a>
+            <a href="${wazeUrl}" target="_blank" class="nav-btn waze">🚗 Waze</a>
         </div>
     `;
 
     return content;
+}
+
+// Show/hide empty state
+function showEmptyState(show) {
+    const emptyState = document.getElementById('empty-state');
+    if (emptyState) {
+        emptyState.style.display = show ? 'block' : 'none';
+    }
 }
 
 // Update which markers are visible based on filters
@@ -210,10 +300,44 @@ function updateMarkers() {
     markerCluster.clearLayers();
     markerCluster.addLayers(visibleMarkers);
 
-    // Update count display
+    // Show/hide empty state
+    showEmptyState(visibleCount === 0 && allLocations.length > 0);
+
+    // Update count display with "X of Y" format
     const countEl = document.getElementById('location-count');
     if (countEl) {
-        countEl.textContent = `${visibleCount} נקודות`;
+        if (visibleCount === totalLocations) {
+            countEl.textContent = `${visibleCount} נקודות`;
+        } else {
+            countEl.textContent = `${visibleCount} מתוך ${totalLocations}`;
+        }
+    }
+
+    return visibleMarkers;
+}
+
+// Auto-zoom to visible markers when city changes
+function zoomToVisibleMarkers(visibleMarkers) {
+    if (visibleMarkers.length === 0) return;
+
+    if (visibleMarkers.length === 1) {
+        // Single result: zoom in and open popup
+        const marker = visibleMarkers[0];
+        const latlng = marker.getLatLng();
+        map.flyTo(latlng, 15, { duration: 0.8 });
+        setTimeout(() => {
+            markerCluster.zoomToShowLayer(marker, () => {
+                marker.openPopup();
+            });
+        }, 900);
+    } else {
+        // Multiple results: fit bounds
+        const group = L.featureGroup(visibleMarkers);
+        map.flyToBounds(group.getBounds(), {
+            padding: [50, 50],
+            duration: 0.8,
+            maxZoom: 14
+        });
     }
 }
 
@@ -242,13 +366,68 @@ function populateCityDropdown() {
     });
 }
 
+// Clear all filters
+function clearFilters() {
+    currentFilter = 'all';
+    currentCity = 'all';
+    currentSearch = '';
+
+    // Reset UI
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    filterButtons.forEach(btn => btn.classList.remove('active'));
+    document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+
+    const citySelect = document.getElementById('city-filter');
+    if (citySelect) citySelect.value = 'all';
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    updateMarkers();
+
+    // Reset map view
+    map.flyTo([31.5, 34.9], 8, { duration: 0.8 });
+}
+
+// Loading functions
+function showLoading(text) {
+    const overlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    if (overlay) {
+        overlay.classList.remove('fade-out');
+        overlay.style.display = 'flex';
+    }
+    if (loadingText && text) {
+        loadingText.textContent = text;
+    }
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.add('fade-out');
+        setTimeout(() => {
+            overlay.style.display = 'none';
+        }, 400);
+    }
+}
+
 // Load locations from JSON
+showLoading('טוען נקודות מיחזור...');
+
 fetch('locations.json')
     .then(response => response.json())
     .then(data => {
         allLocations = data.locations;
+        totalLocations = allLocations.length;
 
-        // Create markers for all locations (don't add to map yet - updateMarkers handles that)
+        // Update loading text
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) {
+            loadingText.textContent = `טוען ${totalLocations} נקודות...`;
+        }
+
+        // Create markers for all locations
         allLocations.forEach(location => {
             const icon = icons[location.type] || icons.store;
             const marker = L.marker([location.lat, location.lng], { icon: icon });
@@ -263,18 +442,40 @@ fetch('locations.json')
         // Update initial count
         updateMarkers();
 
+        // Hide loading after a short delay
+        setTimeout(() => {
+            hideLoading();
+        }, 300);
+
         console.log('Loaded', allLocations.length, 'locations');
     })
     .catch(error => {
         console.error('Error loading locations:', error);
+        hideLoading();
+
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) {
+            loadingText.textContent = 'שגיאה בטעינת הנתונים';
+        }
     });
+
+// --- Clear Filters Button ---
+const clearFiltersBtn = document.getElementById('clear-filters');
+if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener('click', clearFilters);
+}
 
 // --- City Filter Dropdown ---
 const citySelect = document.getElementById('city-filter');
 if (citySelect) {
     citySelect.addEventListener('change', () => {
         currentCity = citySelect.value;
-        updateMarkers();
+        const visibleMarkers = updateMarkers();
+
+        // Auto-zoom when city changes (but not for "all")
+        if (currentCity !== 'all') {
+            zoomToVisibleMarkers(visibleMarkers);
+        }
     });
 }
 
@@ -370,7 +571,11 @@ findNearestBtn.addEventListener('click', () => {
                 // Open popup of nearest location
                 const nearestMarkerItem = allMarkers.find(item => item.location.id === nearest.id);
                 if (nearestMarkerItem) {
-                    nearestMarkerItem.marker.openPopup();
+                    setTimeout(() => {
+                        markerCluster.zoomToShowLayer(nearestMarkerItem.marker, () => {
+                            nearestMarkerItem.marker.openPopup();
+                        });
+                    }, 500);
                 }
             }
 

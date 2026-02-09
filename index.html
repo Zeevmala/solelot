@@ -20,6 +20,24 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Loading Spinner Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p id="loading-text">טוען נקודות מיחזור...</p>
+        </div>
+    </div>
+
+    <!-- Empty State Message -->
+    <div id="empty-state" class="empty-state" style="display: none;">
+        <div class="empty-state-content">
+            <span class="empty-icon">🔍</span>
+            <h3>לא נמצאו תוצאות</h3>
+            <p>נסה לשנות את הסינון או לחפש מונח אחר</p>
+            <button id="clear-filters" class="clear-filters-btn">נקה סינון</button>
+        </div>
+    </div>
+
     <header>
         <h1>🔋 מפת מיחזור סוללות</h1>
     </header>
