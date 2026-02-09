@@ -9,14 +9,8 @@ const baseMaps = {
     'בהיר': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© CartoDB'
     }),
-    'כהה': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© CartoDB'
-    }),
     'לוויין': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: '© Esri'
-    }),
-    'טופוגרפי': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenTopoMap'
     })
 };
 
@@ -25,6 +19,29 @@ baseMaps['רחובות'].addTo(map);
 
 // Add layer control
 L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+
+// Add legend
+const legend = L.control({ position: 'bottomright' });
+legend.onAdd = function() {
+    const div = L.DomUtil.create('div', 'map-legend');
+    div.innerHTML = `
+        <h4>מקרא</h4>
+        <div class="legend-item">
+            <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png" alt="">
+            <span>נקודת איסוף</span>
+        </div>
+        <div class="legend-item">
+            <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png" alt="">
+            <span>מתקן מיחזור</span>
+        </div>
+        <div class="legend-item">
+            <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png" alt="">
+            <span>המיקום שלך</span>
+        </div>
+    `;
+    return div;
+};
+legend.addTo(map);
 
 // Define marker icons for different location types
 const icons = {
