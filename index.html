@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="מפת נקודות מיחזור סוללות בישראל - מצא את הנקודה הקרובה אליך">
+    <meta name="theme-color" content="#2e7d32">
     <title>מפת מיחזור סוללות - ישראל</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96.png">
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -20,56 +28,148 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Skip to main content link for accessibility -->
+    <a href="#map" class="skip-link" aria-label="דלג לתוכן המפה">דלג למפה</a>
+
     <!-- Loading Spinner Overlay -->
-    <div id="loading-overlay" class="loading-overlay">
+    <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">
         <div class="loading-content">
-            <div class="loading-spinner"></div>
+            <div class="loading-spinner" aria-hidden="true"></div>
             <p id="loading-text">טוען נקודות מיחזור...</p>
         </div>
     </div>
 
     <!-- Empty State Message -->
-    <div id="empty-state" class="empty-state" style="display: none;">
+    <div id="empty-state" class="empty-state" style="display: none;" role="alert">
         <div class="empty-state-content">
-            <span class="empty-icon">🔍</span>
+            <span class="empty-icon" aria-hidden="true">🔍</span>
             <h3>לא נמצאו תוצאות</h3>
             <p>נסה לשנות את הסינון או לחפש מונח אחר</p>
-            <button id="clear-filters" class="clear-filters-btn">נקה סינון</button>
+            <button id="clear-filters" class="clear-filters-btn" aria-label="נקה את כל הסינונים">נקה סינון</button>
         </div>
     </div>
 
-    <header>
+    <!-- Header -->
+    <header role="banner">
         <h1>🔋 מפת מיחזור סוללות</h1>
+        <div class="header-actions">
+            <button id="theme-toggle" class="theme-toggle-btn" aria-label="החלף מצב תצוגה בהיר/כהה" title="מצב כהה/בהיר">
+                <span class="theme-icon-light" aria-hidden="true">🌙</span>
+                <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+            </button>
+            <button id="install-btn" class="install-btn" style="display: none;" aria-label="התקן אפליקציה">
+                <span aria-hidden="true">📲</span> התקן
+            </button>
+        </div>
     </header>
 
     <!-- Controls Panel -->
-    <div class="controls">
-        <!-- Search Box -->
+    <div class="controls" role="search" aria-label="חיפוש וסינון נקודות מיחזור">
+        <!-- Search Box with Autocomplete -->
         <div class="search-box">
-            <input type="text" id="search-input" placeholder="חיפוש...">
+            <label for="search-input" class="visually-hidden">חיפוש נקודות מיחזור</label>
+            <input type="text" id="search-input" placeholder="חיפוש עיר או נקודה..." autocomplete="off" aria-describedby="search-hint">
+            <div id="search-suggestions" class="search-suggestions" role="listbox" aria-label="הצעות חיפוש"></div>
+            <span id="search-hint" class="visually-hidden">הקלד לחיפוש, יופיעו הצעות אוטומטיות</span>
         </div>
 
         <!-- City Filter -->
-        <select id="city-filter" class="city-select">
+        <label for="city-filter" class="visually-hidden">סינון לפי עיר</label>
+        <select id="city-filter" class="city-select" aria-label="בחר עיר לסינון">
             <option value="all">כל הערים</option>
         </select>
 
+        <!-- Chain Filter -->
+        <label for="chain-filter" class="visually-hidden">סינון לפי רשת</label>
+        <select id="chain-filter" class="chain-select" aria-label="בחר רשת לסינון">
+            <option value="all">כל הרשתות</option>
+            <option value="superpharm">סופר פארם</option>
+            <option value="shufersal">שופרסל</option>
+            <option value="rami_levy">רמי לוי</option>
+            <option value="victory">ויקטורי</option>
+            <option value="home_center">הום סנטר</option>
+            <option value="office_depot">אופיס דיפו</option>
+            <option value="ikea">איקאה</option>
+            <option value="pelephone">פלאפון</option>
+            <option value="cellcom">סלקום</option>
+            <option value="partner">פרטנר</option>
+            <option value="big_electric">ביג אלקטריק</option>
+            <option value="municipality">עירייה/מועצה</option>
+            <option value="school">בית ספר</option>
+            <option value="other">אחר</option>
+        </select>
+
         <!-- Filter Buttons -->
-        <div class="filters">
-            <button class="filter-btn active" data-filter="all">הכל</button>
-            <button class="filter-btn" data-filter="store">🟢 נקודות איסוף</button>
-            <button class="filter-btn" data-filter="facility">🔴 מתקני מיחזור</button>
+        <div class="filters" role="group" aria-label="סינון לפי סוג נקודה">
+            <button class="filter-btn active" data-filter="all" aria-pressed="true">הכל</button>
+            <button class="filter-btn" data-filter="store" aria-pressed="false">🟢 נקודות איסוף</button>
+            <button class="filter-btn" data-filter="facility" aria-pressed="false">🔴 מתקני מיחזור</button>
         </div>
 
+        <!-- Favorites Filter -->
+        <button id="favorites-filter" class="favorites-filter-btn" aria-pressed="false" aria-label="הצג מועדפים בלבד">
+            <span aria-hidden="true">❤️</span> מועדפים
+        </button>
+
         <!-- Find Nearest Button -->
-        <button id="find-nearest" class="nearest-btn">📍 מצא הקרוב אליי</button>
+        <button id="find-nearest" class="nearest-btn" aria-label="מצא את נקודת המיחזור הקרובה למיקום שלי">
+            <span aria-hidden="true">📍</span> מצא הקרוב אליי
+        </button>
+
+        <!-- Radius Search -->
+        <div class="radius-control">
+            <label for="radius-slider" class="visually-hidden">טווח חיפוש בקילומטרים</label>
+            <span class="radius-label" aria-hidden="true">טווח:</span>
+            <input type="range" id="radius-slider" min="1" max="50" value="50" aria-valuemin="1" aria-valuemax="50" aria-valuenow="50">
+            <span id="radius-value" class="radius-value">ללא הגבלה</span>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="view-toggle" role="tablist" aria-label="בחר תצוגה">
+            <button id="map-view-btn" class="view-btn active" role="tab" aria-selected="true" aria-controls="map">
+                <span aria-hidden="true">🗺️</span> מפה
+            </button>
+            <button id="list-view-btn" class="view-btn" role="tab" aria-selected="false" aria-controls="list-view">
+                <span aria-hidden="true">📋</span> רשימה
+            </button>
+        </div>
 
         <!-- Location Count -->
-        <span id="location-count" class="count-badge">0 נקודות</span>
+        <span id="location-count" class="count-badge" role="status" aria-live="polite">0 נקודות</span>
     </div>
 
-    <!-- The map -->
-    <div id="map"></div>
+    <!-- Main Content Container -->
+    <main class="main-content">
+        <!-- The map -->
+        <div id="map" role="application" aria-label="מפת נקודות מיחזור סוללות בישראל" tabindex="0"></div>
+
+        <!-- List View -->
+        <div id="list-view" class="list-view" style="display: none;" role="tabpanel" aria-labelledby="list-view-btn">
+            <div class="list-header">
+                <div class="sort-controls">
+                    <label for="sort-select" class="visually-hidden">מיין לפי</label>
+                    <select id="sort-select" class="sort-select" aria-label="מיין תוצאות">
+                        <option value="name">מיון: שם</option>
+                        <option value="distance">מיון: מרחק</option>
+                        <option value="type">מיון: סוג</option>
+                    </select>
+                </div>
+            </div>
+            <div id="list-container" class="list-container" role="list" aria-label="רשימת נקודות מיחזור"></div>
+        </div>
+
+        <!-- Location Sidebar -->
+        <aside id="sidebar" class="sidebar" aria-label="פרטי נקודה נבחרת" style="display: none;">
+            <button id="sidebar-close" class="sidebar-close" aria-label="סגור פרטי נקודה">✕</button>
+            <div id="sidebar-content" class="sidebar-content"></div>
+        </aside>
+    </main>
+
+    <!-- Radius Circle Info -->
+    <div id="radius-info" class="radius-info" style="display: none;" aria-live="polite"></div>
+
+    <!-- Notification for favorites -->
+    <div id="notification" class="notification" role="alert" aria-live="assertive" style="display: none;"></div>
 
     <!-- Leaflet JavaScript -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -79,5 +179,16 @@
 
     <!-- Our JavaScript -->
     <script src="app.js"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed:', err));
+            });
+        }
+    </script>
 </body>
 </html>
