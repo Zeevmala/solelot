@@ -49,106 +49,10 @@
         </div>
     </div>
 
-    <!-- Header -->
-    <header role="banner">
-        <h1>מפת מיחזור סוללות</h1>
-
-        <!-- Search Box in Header -->
-        <div class="header-search">
-            <label for="search-input" class="visually-hidden">חיפוש נקודות מיחזור</label>
-            <input type="text" id="search-input" placeholder="חיפוש..." autocomplete="off" aria-describedby="search-hint">
-            <div id="search-suggestions" class="search-suggestions" role="listbox" aria-label="הצעות חיפוש"></div>
-            <span id="search-hint" class="visually-hidden">הקלד לחיפוש, יופיעו הצעות אוטומטיות</span>
-        </div>
-
-        <div class="header-actions">
-            <!-- Find Nearest Button -->
-            <button id="find-nearest" class="header-btn nearest-btn" aria-label="מצא את נקודת המיחזור הקרובה למיקום שלי" title="מצא הקרוב אליי">
-                <span aria-hidden="true">📍</span>
-            </button>
-
-            <!-- Menu Toggle Button -->
-            <button id="menu-toggle" class="header-btn menu-toggle-btn" aria-label="פתח תפריט" aria-expanded="false" aria-controls="dropdown-menu">
-                <span class="menu-icon" aria-hidden="true">☰</span>
-            </button>
-
-            <!-- Theme Toggle -->
-            <button id="theme-toggle" class="header-btn theme-toggle-btn" aria-label="החלף מצב תצוגה בהיר/כהה" title="מצב כהה/בהיר">
-                <span class="theme-icon-light" aria-hidden="true">🌙</span>
-                <span class="theme-icon-dark" aria-hidden="true">☀️</span>
-            </button>
-
-            <button id="install-btn" class="install-btn" style="display: none;" aria-label="התקן אפליקציה">
-                <span aria-hidden="true">📲</span> התקן
-            </button>
-        </div>
-    </header>
-
-    <!-- Dropdown Menu -->
-    <div id="dropdown-menu" class="dropdown-menu" role="menu" aria-label="תפריט סינון" style="display: none;">
-        <!-- City Filter -->
-        <div class="menu-section">
-            <label for="city-filter" class="menu-label">עיר</label>
-            <select id="city-filter" class="city-select" aria-label="בחר עיר לסינון">
-                <option value="all">כל הערים</option>
-            </select>
-        </div>
-
-        <!-- Filter Buttons -->
-        <div class="menu-section">
-            <span class="menu-label">סוג</span>
-            <div class="filters" role="group" aria-label="סינון לפי סוג נקודה">
-                <button class="filter-btn active" data-filter="all" aria-pressed="true">הכל</button>
-                <button class="filter-btn" data-filter="store" aria-pressed="false">🟢 נקודות איסוף</button>
-                <button class="filter-btn" data-filter="facility" aria-pressed="false">🔴 מתקני מיחזור</button>
-            </div>
-        </div>
-
-        <!-- Favorites Filter -->
-        <div class="menu-section">
-            <button id="favorites-filter" class="favorites-filter-btn" aria-pressed="false" aria-label="הצג מועדפים בלבד">
-                <span aria-hidden="true">❤️</span> מועדפים
-            </button>
-        </div>
-
-        <!-- View Toggle -->
-        <div class="menu-section">
-            <span class="menu-label">תצוגה</span>
-            <div class="view-toggle" role="tablist" aria-label="בחר תצוגה">
-                <button id="map-view-btn" class="view-btn active" role="tab" aria-selected="true" aria-controls="map">
-                    <span aria-hidden="true">🗺️</span> מפה
-                </button>
-                <button id="list-view-btn" class="view-btn" role="tab" aria-selected="false" aria-controls="list-view">
-                    <span aria-hidden="true">📋</span> רשימה
-                </button>
-            </div>
-        </div>
-
-        <!-- Location Count -->
-        <div class="menu-section menu-count">
-            <span id="location-count" class="count-badge" role="status" aria-live="polite">0 נקודות</span>
-        </div>
-    </div>
-
     <!-- Main Content Container -->
     <main class="main-content">
         <!-- The map -->
         <div id="map" role="application" aria-label="מפת נקודות מיחזור סוללות בישראל" tabindex="0"></div>
-
-        <!-- List View -->
-        <div id="list-view" class="list-view" style="display: none;" role="tabpanel" aria-labelledby="list-view-btn">
-            <div class="list-header">
-                <div class="sort-controls">
-                    <label for="sort-select" class="visually-hidden">מיין לפי</label>
-                    <select id="sort-select" class="sort-select" aria-label="מיין תוצאות">
-                        <option value="name">מיון: שם</option>
-                        <option value="distance">מיון: מרחק</option>
-                        <option value="type">מיון: סוג</option>
-                    </select>
-                </div>
-            </div>
-            <div id="list-container" class="list-container" role="list" aria-label="רשימת נקודות מיחזור"></div>
-        </div>
 
         <!-- Location Sidebar -->
         <aside id="sidebar" class="sidebar" aria-label="פרטי נקודה נבחרת" style="display: none;">

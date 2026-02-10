@@ -99,14 +99,11 @@ const map = L.map('map').setView([31.5, 34.9], 8);
 
 // Define multiple basemap options
 const baseMaps = {
-    'רחובות': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
+    'רחובות': L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '© CartoDB © OpenStreetMap'
     }),
     'בהיר': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© CartoDB'
-    }),
-    'לוויין': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: '© Esri'
     })
 };
 
@@ -116,11 +113,61 @@ const darkBasemap = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/
 });
 
 // Track current basemap
-let currentBasemap = baseMaps['רחובות'];
-currentBasemap.addTo(map);
+let currentBasemapName = 'רחובות';
+baseMaps['רחובות'].addTo(map);
 
-// Add layer control
-L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+// Create toggle button for basemap with layers icon
+const basemapToggle = L.control({ position: 'bottomleft' });
+basemapToggle.onAdd = function() {
+    const btn = L.DomUtil.create('button', 'basemap-toggle-btn');
+    btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>`;
+    btn.title = 'החלף ל: בהיר';
+
+    L.DomEvent.disableClickPropagation(btn);
+
+    btn.onclick = function() {
+        // Remove current basemap
+        map.removeLayer(baseMaps[currentBasemapName]);
+
+        // Toggle to other basemap
+        if (currentBasemapName === 'רחובות') {
+            currentBasemapName = 'בהיר';
+            btn.title = 'החלף ל: רחובות';
+        } else {
+            currentBasemapName = 'רחובות';
+            btn.title = 'החלף ל: בהיר';
+        }
+
+        // Add new basemap
+        baseMaps[currentBasemapName].addTo(map);
+    };
+
+    return btn;
+};
+basemapToggle.addTo(map);
+
+// Create search control on map
+const searchControl = L.control({ position: 'topright' });
+searchControl.onAdd = function() {
+    const container = L.DomUtil.create('div', 'map-search-container');
+    container.innerHTML = `
+        <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." autocomplete="off">
+        <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
+    `;
+
+    // Prevent map from capturing clicks and keyboard events
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+
+    // Stop keyboard events from reaching the map
+    const input = container.querySelector('#search-input');
+    L.DomEvent.on(input, 'keydown keyup keypress', L.DomEvent.stopPropagation);
+
+    return container;
+};
+searchControl.addTo(map);
 
 // Update map tiles based on theme
 function updateMapTiles() {
@@ -724,22 +771,30 @@ function switchView(view) {
     const listBtn = document.getElementById('list-view-btn');
 
     if (view === 'map') {
-        mapEl.style.display = 'block';
-        listView.style.display = 'none';
-        mapBtn.classList.add('active');
-        mapBtn.setAttribute('aria-selected', 'true');
-        listBtn.classList.remove('active');
-        listBtn.setAttribute('aria-selected', 'false');
+        if (mapEl) mapEl.style.display = 'block';
+        if (listView) listView.style.display = 'none';
+        if (mapBtn) {
+            mapBtn.classList.add('active');
+            mapBtn.setAttribute('aria-selected', 'true');
+        }
+        if (listBtn) {
+            listBtn.classList.remove('active');
+            listBtn.setAttribute('aria-selected', 'false');
+        }
 
         // Invalidate map size after showing
         setTimeout(() => map.invalidateSize(), 100);
     } else {
-        mapEl.style.display = 'none';
-        listView.style.display = 'flex';
-        listBtn.classList.add('active');
-        listBtn.setAttribute('aria-selected', 'true');
-        mapBtn.classList.remove('active');
-        mapBtn.setAttribute('aria-selected', 'false');
+        if (mapEl) mapEl.style.display = 'none';
+        if (listView) listView.style.display = 'flex';
+        if (listBtn) {
+            listBtn.classList.add('active');
+            listBtn.setAttribute('aria-selected', 'true');
+        }
+        if (mapBtn) {
+            mapBtn.classList.remove('active');
+            mapBtn.setAttribute('aria-selected', 'false');
+        }
 
         // Update list content
         updateMarkers();

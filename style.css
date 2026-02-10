@@ -475,7 +475,7 @@ header h1 {
 .main-content {
     display: flex;
     position: relative;
-    height: calc(100vh - 60px);
+    height: 100vh;
 }
 
 /* Map container */
@@ -955,7 +955,7 @@ header h1 {
     }
 
     .main-content {
-        height: calc(100vh - 56px);
+        height: 100vh;
         flex-direction: column;
     }
 
@@ -1074,15 +1074,100 @@ header h1 {
     background-color: rgba(211, 47, 47, 0.9);
 }
 
-/* Layer control styling */
-.leaflet-control-layers {
-    border-radius: 8px;
-    box-shadow: 0 2px 10px var(--shadow-medium);
+/* Map Search Control */
+.map-search-container {
+    position: relative;
 }
 
-.leaflet-control-layers-toggle {
-    width: 40px;
-    height: 40px;
+.map-search-input {
+    width: 220px;
+    padding: 10px 14px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    direction: rtl;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: 0 2px 10px var(--shadow-medium);
+    transition: all 0.2s;
+}
+
+.map-search-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 2px 15px var(--shadow-medium);
+}
+
+.map-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.map-search-container .search-suggestions {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    margin-top: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1200;
+    display: none;
+    box-shadow: 0 4px 12px var(--shadow-medium);
+}
+
+.map-search-container .search-suggestions.active {
+    display: block;
+}
+
+[data-theme="dark"] .map-search-input {
+    filter: invert(90%) hue-rotate(180deg);
+}
+
+[data-theme="dark"] .map-search-container .search-suggestions {
+    filter: invert(90%) hue-rotate(180deg);
+}
+
+/* Basemap Toggle Button */
+.basemap-toggle-btn {
+    background: var(--bg-secondary);
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 4px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #333;
+    cursor: pointer;
+    box-shadow: 0 2px 10px var(--shadow-medium);
+    transition: all 0.2s;
+}
+
+.basemap-toggle-btn svg {
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.basemap-toggle-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+}
+
+.basemap-toggle-btn:focus {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+[data-theme="dark"] .basemap-toggle-btn {
+    filter: invert(90%) hue-rotate(180deg);
 }
 
 /* Loading Overlay */
