@@ -1,29 +1,6 @@
 // ============================================
 // Battery Recycling Map - Israel
-// Enhanced with favorites, filters, list view,
-// dark mode, autocomplete, and PWA support
 // ============================================
-
-// === THEME MANAGEMENT ===
-function initTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const theme = savedTheme || (prefersDark ? 'dark' : 'light');
-    document.documentElement.setAttribute('data-theme', theme);
-}
-
-function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme');
-    const newTheme = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-
-    // Update map tiles for dark mode
-    updateMapTiles();
-}
-
-// Initialize theme immediately
-initTheme();
 
 // === FAVORITES MANAGEMENT ===
 const favoritesKey = 'battery-recycling-favorites';
@@ -168,12 +145,6 @@ searchControl.onAdd = function() {
     return container;
 };
 searchControl.addTo(map);
-
-// Update map tiles based on theme
-function updateMapTiles() {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    // Dark mode is handled via CSS filter for simplicity
-}
 
 // Custom SVG Battery Icons - Simplified pin style
 const batterySvg = {
@@ -1071,12 +1042,6 @@ fetch('locations.json')
     });
 
 // === EVENT LISTENERS ===
-
-// Theme toggle
-const themeToggle = document.getElementById('theme-toggle');
-if (themeToggle) {
-    themeToggle.addEventListener('click', toggleTheme);
-}
 
 // Clear Filters Button
 const clearFiltersBtn = document.getElementById('clear-filters');
