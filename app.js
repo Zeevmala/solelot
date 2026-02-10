@@ -128,42 +128,52 @@ function updateMapTiles() {
     // Dark mode is handled via CSS filter for simplicity
 }
 
-// Custom SVG Battery Icons
+// Custom SVG Battery Icons - Simplified pin style
 const batterySvg = {
-    store: `<svg viewBox="0 0 24 36" width="28" height="42">
+    store: `<svg viewBox="0 0 32 44" width="32" height="44">
         <defs>
             <linearGradient id="storeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#4caf50"/>
-                <stop offset="100%" style="stop-color:#2e7d32"/>
+                <stop offset="0%" style="stop-color:#4CAF50"/>
+                <stop offset="100%" style="stop-color:#2E7D32"/>
             </linearGradient>
+            <filter id="storeShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+            </filter>
         </defs>
-        <rect x="7" y="0" width="10" height="4" rx="1" fill="#388e3c"/>
-        <rect x="3" y="4" width="18" height="30" rx="3" fill="url(#storeGrad)" stroke="#1b5e20" stroke-width="1"/>
-        <rect x="6" y="8" width="12" height="6" rx="1" fill="#81c784" opacity="0.6"/>
-        <rect x="6" y="16" width="12" height="6" rx="1" fill="#81c784" opacity="0.4"/>
-        <rect x="6" y="24" width="12" height="6" rx="1" fill="#81c784" opacity="0.2"/>
+        <path d="M16 0C8 0 2 6 2 14C2 24 16 44 16 44S30 24 30 14C30 6 24 0 16 0Z" fill="url(#storeGrad)" filter="url(#storeShadow)"/>
+        <circle cx="16" cy="14" r="8" fill="white" opacity="0.95"/>
+        <rect x="13" y="9" width="6" height="2" rx="1" fill="#2E7D32"/>
+        <rect x="11" y="11" width="10" height="8" rx="1" fill="#4CAF50"/>
+        <rect x="12" y="12" width="8" height="2" rx="0.5" fill="#81C784"/>
+        <rect x="12" y="15" width="8" height="2" rx="0.5" fill="#A5D6A7"/>
     </svg>`,
-    facility: `<svg viewBox="0 0 24 36" width="28" height="42">
+    facility: `<svg viewBox="0 0 32 44" width="32" height="44">
         <defs>
             <linearGradient id="facilityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#ef5350"/>
-                <stop offset="100%" style="stop-color:#c62828"/>
+                <stop offset="0%" style="stop-color:#EF5350"/>
+                <stop offset="100%" style="stop-color:#C62828"/>
             </linearGradient>
+            <filter id="facilityShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+            </filter>
         </defs>
-        <rect x="7" y="0" width="10" height="4" rx="1" fill="#d32f2f"/>
-        <rect x="3" y="4" width="18" height="30" rx="3" fill="url(#facilityGrad)" stroke="#b71c1c" stroke-width="1"/>
-        <path d="M12 10 L15 18 H13 L14 28 L9 18 H11 L10 10 Z" fill="#ffcdd2" opacity="0.9"/>
+        <path d="M16 0C8 0 2 6 2 14C2 24 16 44 16 44S30 24 30 14C30 6 24 0 16 0Z" fill="url(#facilityGrad)" filter="url(#facilityShadow)"/>
+        <circle cx="16" cy="14" r="8" fill="white" opacity="0.95"/>
+        <path d="M16 7L18 12H16.5L17 20L13 12H14.5L14 7Z" fill="#C62828" transform="translate(0, 1)"/>
     </svg>`,
-    user: `<svg viewBox="0 0 24 36" width="28" height="42">
+    user: `<svg viewBox="0 0 32 44" width="32" height="44">
         <defs>
             <linearGradient id="userGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#42a5f5"/>
-                <stop offset="100%" style="stop-color:#1565c0"/>
+                <stop offset="0%" style="stop-color:#42A5F5"/>
+                <stop offset="100%" style="stop-color:#1565C0"/>
             </linearGradient>
+            <filter id="userShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+            </filter>
         </defs>
-        <circle cx="12" cy="12" r="10" fill="url(#userGrad)" stroke="#0d47a1" stroke-width="1"/>
-        <circle cx="12" cy="12" r="4" fill="white"/>
-        <path d="M12 22 L12 34" stroke="#1565c0" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="16" cy="14" r="12" fill="url(#userGrad)" filter="url(#userShadow)" stroke="white" stroke-width="3"/>
+        <circle cx="16" cy="14" r="5" fill="white"/>
+        <circle cx="16" cy="14" r="2" fill="#1565C0"/>
     </svg>`
 };
 
@@ -172,72 +182,16 @@ function createBatteryIcon(type) {
     return L.divIcon({
         html: batterySvg[type],
         className: 'battery-marker',
-        iconSize: [28, 42],
-        iconAnchor: [14, 42],
-        popupAnchor: [0, -42]
+        iconSize: [32, 44],
+        iconAnchor: [16, 44],
+        popupAnchor: [0, -44]
     });
 }
 
 const icons = {
     store: createBatteryIcon('store'),
-    facility: createBatteryIcon('facility'),
+    facility: createBatteryIcon('store'),  // Use same icon as store
     user: createBatteryIcon('user')
-};
-
-// Add enhanced legend with cluster info
-const legend = L.control({ position: 'bottomright' });
-legend.onAdd = function() {
-    const div = L.DomUtil.create('div', 'map-legend');
-    div.innerHTML = `
-        <h4>
-            מקרא
-            <button class="legend-toggle" onclick="toggleLegend()" aria-label="הרחב/כווץ מקרא">▼</button>
-        </h4>
-        <div class="legend-content">
-            <div class="legend-section">
-                <div class="legend-section-title">סוגי נקודות</div>
-                <div class="legend-item">
-                    <div class="legend-icon">${batterySvg.store.replace('width="28" height="42"', 'width="20" height="30"')}</div>
-                    <span>נקודת איסוף</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-icon">${batterySvg.facility.replace('width="28" height="42"', 'width="20" height="30"')}</div>
-                    <span>מתקן מיחזור</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-icon">${batterySvg.user.replace('width="28" height="42"', 'width="20" height="30"')}</div>
-                    <span>המיקום שלך</span>
-                </div>
-            </div>
-            <div class="legend-section">
-                <div class="legend-section-title">צבעי קבוצות</div>
-                <div class="legend-item">
-                    <span class="cluster-indicator cluster-small"></span>
-                    <span>עד 20 נקודות</span>
-                </div>
-                <div class="legend-item">
-                    <span class="cluster-indicator cluster-medium"></span>
-                    <span>20-100 נקודות</span>
-                </div>
-                <div class="legend-item">
-                    <span class="cluster-indicator cluster-large"></span>
-                    <span>מעל 100 נקודות</span>
-                </div>
-            </div>
-        </div>
-    `;
-    return div;
-};
-legend.addTo(map);
-
-// Toggle legend on mobile
-window.toggleLegend = function() {
-    const content = document.querySelector('.legend-content');
-    const btn = document.querySelector('.legend-toggle');
-    if (content) {
-        content.classList.toggle('collapsed');
-        btn.textContent = content.classList.contains('collapsed') ? '▲' : '▼';
-    }
 };
 
 // Hebrew names for types
@@ -272,7 +226,6 @@ let allMarkers = [];
 let userMarker = null;
 let userLocation = null;
 let totalLocations = 0;
-let radiusCircle = null;
 
 // Marker cluster group
 const markerCluster = L.markerClusterGroup({
@@ -299,11 +252,10 @@ map.addLayer(markerCluster);
 let currentFilter = 'all';
 let currentSearch = '';
 let currentCity = 'all';
-let currentChain = 'all';
-let currentRadius = 50;
 let showFavoritesOnly = false;
 let currentView = 'map';
 let selectedLocationId = null;
+let menuOpen = false;
 
 // Chain detection from name
 function detectChain(name) {
@@ -342,8 +294,8 @@ function getDistance(lat1, lng1, lat2, lng2) {
 // Create enhanced popup content for a location
 function createPopupContent(location) {
     const typeIcon = location.type === 'store'
-        ? batterySvg.store.replace('width="28" height="42"', 'width="18" height="27"')
-        : batterySvg.facility.replace('width="28" height="42"', 'width="18" height="27"');
+        ? batterySvg.store.replace('width="32" height="44"', 'width="20" height="28"')
+        : batterySvg.facility.replace('width="32" height="44"', 'width="20" height="28"');
 
     const isFav = isFavorite(location.id);
     const favClass = isFav ? 'active' : '';
@@ -411,8 +363,8 @@ function createPopupContent(location) {
 // Create sidebar content for a location
 function createSidebarContent(location) {
     const typeIcon = location.type === 'store'
-        ? batterySvg.store.replace('width="28" height="42"', 'width="32" height="48"')
-        : batterySvg.facility.replace('width="28" height="42"', 'width="32" height="48"');
+        ? batterySvg.store.replace('width="32" height="44"', 'width="36" height="50"')
+        : batterySvg.facility.replace('width="32" height="44"', 'width="36" height="50"');
 
     const isFav = isFavorite(location.id);
     const favClass = isFav ? 'active' : '';
@@ -531,16 +483,12 @@ function updateMarkers() {
 
     allMarkers.forEach((item, index) => {
         const location = allLocations[index];
-        const chain = detectChain(location.name);
 
         // Check filter match
         const filterMatch = currentFilter === 'all' || location.type === currentFilter;
 
         // Check city match
         const cityMatch = currentCity === 'all' || location.city === currentCity;
-
-        // Check chain match
-        const chainMatch = currentChain === 'all' || chain === currentChain;
 
         // Check search match (search in city name, location name, address)
         const searchMatch = currentSearch === '' ||
@@ -551,18 +499,8 @@ function updateMarkers() {
         // Check favorites filter
         const favoritesMatch = !showFavoritesOnly || isFavorite(location.id);
 
-        // Check radius filter (only if user location is known)
-        let radiusMatch = true;
-        if (userLocation && currentRadius < 50) {
-            const distance = getDistance(
-                userLocation.lat, userLocation.lng,
-                location.lat, location.lng
-            );
-            radiusMatch = distance <= currentRadius;
-        }
-
         // Collect visible markers
-        if (filterMatch && cityMatch && chainMatch && searchMatch && favoritesMatch && radiusMatch) {
+        if (filterMatch && cityMatch && searchMatch && favoritesMatch) {
             visibleMarkers.push(item.marker);
             visibleLocations.push(location);
             visibleCount++;
@@ -592,37 +530,6 @@ function updateMarkers() {
     }
 
     return visibleMarkers;
-}
-
-// Update radius circle on map
-function updateRadiusCircle() {
-    // Remove existing circle
-    if (radiusCircle) {
-        map.removeLayer(radiusCircle);
-        radiusCircle = null;
-    }
-
-    const radiusInfo = document.getElementById('radius-info');
-
-    // Only show if user location exists and radius is limited
-    if (userLocation && currentRadius < 50) {
-        radiusCircle = L.circle([userLocation.lat, userLocation.lng], {
-            radius: currentRadius * 1000, // Convert km to meters
-            color: '#1976d2',
-            fillColor: '#1976d2',
-            fillOpacity: 0.1,
-            weight: 2
-        }).addTo(map);
-
-        if (radiusInfo) {
-            radiusInfo.textContent = `מציג נקודות בטווח ${currentRadius} ק"מ מהמיקום שלך`;
-            radiusInfo.style.display = 'block';
-        }
-    } else {
-        if (radiusInfo) {
-            radiusInfo.style.display = 'none';
-        }
-    }
 }
 
 // Auto-zoom to visible markers when city changes
@@ -679,9 +586,7 @@ function populateCityDropdown() {
 function clearFilters() {
     currentFilter = 'all';
     currentCity = 'all';
-    currentChain = 'all';
     currentSearch = '';
-    currentRadius = 50;
     showFavoritesOnly = false;
 
     // Reset UI
@@ -699,16 +604,8 @@ function clearFilters() {
     const citySelect = document.getElementById('city-filter');
     if (citySelect) citySelect.value = 'all';
 
-    const chainSelect = document.getElementById('chain-filter');
-    if (chainSelect) chainSelect.value = 'all';
-
     const searchInput = document.getElementById('search-input');
     if (searchInput) searchInput.value = '';
-
-    const radiusSlider = document.getElementById('radius-slider');
-    const radiusValue = document.getElementById('radius-value');
-    if (radiusSlider) radiusSlider.value = 50;
-    if (radiusValue) radiusValue.textContent = 'ללא הגבלה';
 
     const favoritesBtn = document.getElementById('favorites-filter');
     if (favoritesBtn) {
@@ -716,7 +613,6 @@ function clearFilters() {
         favoritesBtn.setAttribute('aria-pressed', 'false');
     }
 
-    updateRadiusCircle();
     updateMarkers();
 
     // Reset map view
@@ -747,8 +643,8 @@ function updateListView(locations) {
 
     container.innerHTML = sortedLocations.map(location => {
         const typeIcon = location.type === 'store'
-            ? batterySvg.store.replace('width="28" height="42"', 'width="24" height="36"')
-            : batterySvg.facility.replace('width="28" height="42"', 'width="24" height="36"');
+            ? batterySvg.store.replace('width="32" height="44"', 'width="26" height="36"')
+            : batterySvg.facility.replace('width="32" height="44"', 'width="26" height="36"');
 
         const isFav = isFavorite(location.id);
         const favIcon = isFav ? '❤️' : '🤍';
@@ -1147,15 +1043,6 @@ if (citySelect) {
     });
 }
 
-// Chain Filter Dropdown
-const chainSelect = document.getElementById('chain-filter');
-if (chainSelect) {
-    chainSelect.addEventListener('change', () => {
-        currentChain = chainSelect.value;
-        updateMarkers();
-    });
-}
-
 // Filter Buttons
 const filterButtons = document.querySelectorAll('.filter-btn');
 filterButtons.forEach(button => {
@@ -1202,26 +1089,6 @@ if (searchInput) {
     });
 }
 
-// Radius Slider
-const radiusSlider = document.getElementById('radius-slider');
-const radiusValue = document.getElementById('radius-value');
-if (radiusSlider && radiusValue) {
-    radiusSlider.addEventListener('input', () => {
-        const value = parseInt(radiusSlider.value);
-        currentRadius = value;
-
-        if (value >= 50) {
-            radiusValue.textContent = 'ללא הגבלה';
-        } else {
-            radiusValue.textContent = `${value} ק"מ`;
-        }
-
-        radiusSlider.setAttribute('aria-valuenow', value);
-        updateRadiusCircle();
-        updateMarkers();
-    });
-}
-
 // View Toggle
 const mapViewBtn = document.getElementById('map-view-btn');
 const listViewBtn = document.getElementById('list-view-btn');
@@ -1247,7 +1114,7 @@ if (sidebarClose) {
     sidebarClose.addEventListener('click', hideSidebar);
 }
 
-// Close sidebar on Escape key
+// Close sidebar, menu, and autocomplete on Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         hideSidebar();
@@ -1255,6 +1122,11 @@ document.addEventListener('keydown', (e) => {
         // Also close autocomplete
         const suggestions = document.getElementById('search-suggestions');
         if (suggestions) suggestions.classList.remove('active');
+
+        // Close menu if open
+        if (menuOpen) {
+            toggleMenu();
+        }
     }
 });
 
@@ -1270,7 +1142,7 @@ if (findNearestBtn) {
 
         // Disable button while getting location
         findNearestBtn.disabled = true;
-        findNearestBtn.innerHTML = '<span>⏳</span> מאתר...';
+        findNearestBtn.innerHTML = '<span aria-hidden="true">⏳</span>';
 
         navigator.geolocation.getCurrentPosition(
             // Success
@@ -1317,9 +1189,6 @@ if (findNearestBtn) {
                         item.marker.setPopupContent(createPopupContent(item.location));
                     });
 
-                    // Update radius circle
-                    updateRadiusCircle();
-
                     // Zoom to show user and nearest location
                     const bounds = L.latLngBounds(
                         [userLocation.lat, userLocation.lng],
@@ -1343,7 +1212,7 @@ if (findNearestBtn) {
 
                 // Reset button
                 findNearestBtn.disabled = false;
-                findNearestBtn.innerHTML = '<span>📍</span> מצא הקרוב אליי';
+                findNearestBtn.innerHTML = '<span aria-hidden="true">📍</span>';
 
                 // Update list view with distances
                 if (currentView === 'list') {
@@ -1353,7 +1222,7 @@ if (findNearestBtn) {
             // Error
             (error) => {
                 findNearestBtn.disabled = false;
-                findNearestBtn.innerHTML = '<span>📍</span> מצא הקרוב אליי';
+                findNearestBtn.innerHTML = '<span aria-hidden="true">📍</span>';
 
                 switch (error.code) {
                     case error.PERMISSION_DENIED:
@@ -1384,3 +1253,38 @@ setupInstallButton();
 
 // Make toggleFavorite globally available
 window.toggleFavorite = toggleFavorite;
+
+// === MENU TOGGLE ===
+function toggleMenu() {
+    const menu = document.getElementById('dropdown-menu');
+    const menuBtn = document.getElementById('menu-toggle');
+
+    if (!menu || !menuBtn) return;
+
+    menuOpen = !menuOpen;
+
+    if (menuOpen) {
+        menu.style.display = 'flex';
+        menuBtn.setAttribute('aria-expanded', 'true');
+
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'menu-overlay';
+        overlay.id = 'menu-overlay';
+        overlay.addEventListener('click', toggleMenu);
+        document.body.appendChild(overlay);
+    } else {
+        menu.style.display = 'none';
+        menuBtn.setAttribute('aria-expanded', 'false');
+
+        // Remove overlay
+        const overlay = document.getElementById('menu-overlay');
+        if (overlay) overlay.remove();
+    }
+}
+
+// Menu toggle button
+const menuToggleBtn = document.getElementById('menu-toggle');
+if (menuToggleBtn) {
+    menuToggleBtn.addEventListener('click', toggleMenu);
+}
