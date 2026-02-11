@@ -1,4 +1,4 @@
-/* CSS Variables for theming */
+/* CSS Variables */
 :root {
     --bg-primary: #f5f7fa;
     --bg-secondary: #ffffff;
@@ -18,31 +18,6 @@
     --shadow-medium: rgba(0,0,0,0.15);
     --shadow-strong: rgba(0,0,0,0.2);
     --overlay-bg: rgba(255, 255, 255, 0.95);
-    --card-bg: #ffffff;
-    --favorite-color: #e91e63;
-}
-
-/* Dark Mode Variables */
-[data-theme="dark"] {
-    --bg-primary: #121212;
-    --bg-secondary: #1e1e1e;
-    --bg-tertiary: #1a2634;
-    --text-primary: #e0e0e0;
-    --text-secondary: #b0b0b0;
-    --text-muted: #757575;
-    --accent-primary: #42A5F5;
-    --accent-dark: #1E88E5;
-    --accent-light: #64B5F6;
-    --accent-action: #42a5f5;
-    --accent-eco: #81c784;
-    --border-color: #444444;
-    --border-light: #333333;
-    --shadow-light: rgba(0,0,0,0.3);
-    --shadow-medium: rgba(0,0,0,0.4);
-    --shadow-strong: rgba(0,0,0,0.5);
-    --overlay-bg: rgba(18, 18, 18, 0.95);
-    --card-bg: #252525;
-    --favorite-color: #ff4081;
 }
 
 /* Reset and base styles */
@@ -57,7 +32,6 @@ body {
     direction: rtl;
     background: var(--bg-primary);
     color: var(--text-primary);
-    transition: background-color 0.3s, color 0.3s;
 }
 
 /* Skip Link for Accessibility */
@@ -91,57 +65,59 @@ body {
     border: 0;
 }
 
-/* Header */
-header {
-    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-dark) 100%);
-    color: white;
-    padding: 10px 16px;
+/* Main Content Container */
+.main-content {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    box-shadow: 0 2px 10px var(--shadow-medium);
     position: relative;
-    z-index: 1100;
+    height: 100vh;
 }
 
-header h1 {
-    font-size: 1.1rem;
-    font-weight: 700;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-/* Header Search Box */
-.header-search {
+/* Map container */
+#map {
     flex: 1;
-    max-width: 280px;
+    height: 100%;
+    width: 100%;
+    cursor: default;
+}
+
+#map.leaflet-container {
+    cursor: grab;
+}
+
+#map.leaflet-container:active {
+    cursor: grabbing;
+}
+
+/* Map Search Control */
+.map-search-container {
     position: relative;
 }
 
-.header-search #search-input {
-    width: 100%;
-    padding: 8px 14px;
-    border: none;
-    border-radius: 20px;
+.map-search-input {
+    width: 220px;
+    padding: 10px 14px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 8px;
     font-size: 14px;
+    font-family: inherit;
     direction: rtl;
-    background: rgba(255,255,255,0.95);
+    background: var(--bg-secondary);
     color: var(--text-primary);
-    transition: box-shadow 0.2s;
+    box-shadow: 0 2px 10px var(--shadow-medium);
+    transition: all 0.2s;
 }
 
-.header-search #search-input::placeholder {
+.map-search-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 2px 15px var(--shadow-medium);
+}
+
+.map-search-input::placeholder {
     color: var(--text-muted);
 }
 
-.header-search #search-input:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(255,255,255,0.4);
-}
-
-.header-search .search-suggestions {
+.map-search-container .search-suggestions {
     position: absolute;
     top: 100%;
     right: 0;
@@ -149,7 +125,7 @@ header h1 {
     margin-top: 4px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 8px;
     max-height: 300px;
     overflow-y: auto;
     z-index: 1200;
@@ -157,132 +133,11 @@ header h1 {
     box-shadow: 0 4px 12px var(--shadow-medium);
 }
 
-.header-search .search-suggestions.active {
+.map-search-container .search-suggestions.active {
     display: block;
 }
 
-.header-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-shrink: 0;
-}
-
-/* Header Buttons */
-.header-btn {
-    background: rgba(255,255,255,0.2);
-    border: none;
-    border-radius: 50%;
-    width: 38px;
-    height: 38px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    transition: background-color 0.2s, transform 0.2s;
-    color: white;
-}
-
-.header-btn:hover {
-    background: rgba(255,255,255,0.3);
-    transform: scale(1.05);
-}
-
-.header-btn:focus {
-    outline: 2px solid white;
-    outline-offset: 2px;
-}
-
-/* Menu Toggle Button */
-.menu-toggle-btn .menu-icon {
-    font-size: 20px;
-}
-
-/* Theme Toggle in header uses .header-btn styles */
-.theme-icon-dark {
-    display: none;
-}
-
-[data-theme="dark"] .theme-icon-light {
-    display: none;
-}
-
-[data-theme="dark"] .theme-icon-dark {
-    display: block;
-}
-
-/* Install Button */
-.install-btn {
-    background: rgba(255,255,255,0.2);
-    border: none;
-    border-radius: 20px;
-    padding: 8px 16px;
-    color: white;
-    cursor: pointer;
-    font-size: 14px;
-    font-family: inherit;
-    transition: background-color 0.2s;
-}
-
-.install-btn:hover {
-    background: rgba(255,255,255,0.3);
-}
-
-/* Dropdown Menu */
-.dropdown-menu {
-    position: fixed;
-    top: 58px;
-    left: 16px;
-    right: 16px;
-    background: var(--bg-secondary);
-    border-radius: 12px;
-    box-shadow: 0 4px 20px var(--shadow-medium);
-    z-index: 1050;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    max-height: calc(100vh - 80px);
-    overflow-y: auto;
-    transition: opacity 0.2s, transform 0.2s;
-}
-
-.dropdown-menu.hidden {
-    display: none;
-}
-
-.menu-section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.menu-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-}
-
-.menu-count {
-    border-top: 1px solid var(--border-light);
-    padding-top: 14px;
-    display: flex;
-    justify-content: center;
-}
-
-/* Overlay for closing menu */
-.menu-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.3);
-    z-index: 1040;
-}
-
+/* Search Suggestions */
 .suggestion-item {
     padding: 10px 15px;
     cursor: pointer;
@@ -326,307 +181,199 @@ header h1 {
     color: var(--text-muted);
 }
 
-/* Dropdowns */
-.city-select,
-.sort-select {
-    padding: 9px 14px;
-    border: 1px solid var(--border-color);
-    border-radius: 18px;
-    font-size: 13px;
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
-    cursor: pointer;
-    min-width: 130px;
-    transition: border-color 0.2s, background-color 0.3s;
-}
-
-.city-select:focus,
-.sort-select:focus {
-    outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.2);
-}
-
-/* Location Count Badge */
-.count-badge {
-    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-light) 100%);
-    color: white;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: bold;
-    box-shadow: 0 2px 8px rgba(21, 101, 192, 0.3);
-}
-
-/* Filter Buttons */
-.filters {
+/* Basemap Toggle Button */
+.basemap-toggle-btn {
+    background: var(--bg-secondary);
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 4px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
     display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.filter-btn {
-    padding: 8px 14px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
-    border-radius: 18px;
+    align-items: center;
+    justify-content: center;
+    color: #333;
     cursor: pointer;
-    font-size: 13px;
-    font-family: inherit;
+    box-shadow: 0 2px 10px var(--shadow-medium);
     transition: all 0.2s;
-    white-space: nowrap;
 }
 
-.filter-btn:hover {
-    background-color: var(--bg-tertiary);
-    border-color: var(--accent-light);
+.basemap-toggle-btn svg {
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
-.filter-btn:focus {
+.basemap-toggle-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+}
+
+.basemap-toggle-btn:focus {
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
 }
 
-.filter-btn.active,
-.filter-btn[aria-pressed="true"] {
-    background-color: var(--accent-primary);
-    color: white;
-    border-color: var(--accent-primary);
+/* Custom Marker Clusters */
+.marker-cluster {
+    background-clip: padding-box;
+    border-radius: 50%;
 }
 
-/* Favorites Filter Button */
-.favorites-filter-btn {
-    padding: 8px 14px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
-    border-radius: 18px;
-    cursor: pointer;
-    font-size: 13px;
-    font-family: inherit;
-    transition: all 0.2s;
-    white-space: nowrap;
-}
-
-.favorites-filter-btn:hover {
-    background-color: #fce4ec;
-    border-color: var(--favorite-color);
-}
-
-.favorites-filter-btn[aria-pressed="true"] {
-    background-color: var(--favorite-color);
-    color: white;
-    border-color: var(--favorite-color);
-}
-
-.favorites-filter-btn:focus {
-    outline: 2px solid var(--favorite-color);
-    outline-offset: 2px;
-}
-
-/* Find Nearest Button (in header) */
-.nearest-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* View Toggle */
-.view-toggle {
-    display: flex;
-    gap: 2px;
-    background: var(--bg-tertiary);
-    padding: 4px;
-    border-radius: 20px;
-    border: 1px solid var(--border-light);
-}
-
-.view-btn {
-    padding: 8px 14px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 16px;
-    cursor: pointer;
-    font-size: 13px;
-    font-family: inherit;
-    transition: all 0.2s;
-    white-space: nowrap;
-}
-
-.view-btn:hover {
-    background: rgba(255,255,255,0.6);
-}
-
-.view-btn.active,
-.view-btn[aria-selected="true"] {
-    background: var(--bg-secondary);
-    color: var(--accent-primary);
-    font-weight: 500;
-    box-shadow: 0 2px 6px var(--shadow-light);
-}
-
-.view-btn:focus {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 2px;
-}
-
-/* Main Content Container */
-.main-content {
-    display: flex;
-    position: relative;
-    height: 100vh;
-}
-
-/* Map container */
-#map {
-    flex: 1;
-    height: 100%;
-    width: 100%;
-    transition: filter 0.3s;
-    cursor: default;
-}
-
-/* Map cursor states */
-#map.leaflet-container {
-    cursor: grab;
-}
-
-#map.leaflet-container:active {
-    cursor: grabbing;
-}
-
-/* Dark mode map filter */
-[data-theme="dark"] #map {
-    filter: invert(90%) hue-rotate(180deg);
-}
-
-[data-theme="dark"] #map .leaflet-control-layers {
-    filter: invert(90%) hue-rotate(180deg);
-}
-
-/* List View */
-.list-view {
-    flex: 1;
-    height: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-primary);
-}
-
-.list-header {
-    padding: 12px 20px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-light);
-    display: flex;
-    justify-content: flex-end;
-}
-
-.list-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-/* Location Card */
-.location-card {
-    background: var(--card-bg);
-    border-radius: 12px;
-    padding: 15px;
-    box-shadow: 0 2px 8px var(--shadow-light);
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    border: 2px solid transparent;
-}
-
-.location-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px var(--shadow-medium);
-}
-
-.location-card:focus {
-    outline: none;
-    border-color: var(--accent-primary);
-}
-
-.location-card.highlighted {
-    border-color: var(--accent-primary);
-    background: var(--bg-tertiary);
-}
-
-.card-icon {
-    flex-shrink: 0;
+.marker-cluster div {
     width: 32px;
-    height: 48px;
+    height: 32px;
+    margin-left: 4px;
+    margin-top: 4px;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: bold;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
 }
 
-.card-content {
-    flex: 1;
-    min-width: 0;
+.marker-cluster-small {
+    background-color: rgba(21, 101, 192, 0.6);
 }
 
-.card-header {
+.marker-cluster-small div {
+    background-color: rgba(21, 101, 192, 0.9);
+}
+
+.marker-cluster-medium {
+    background-color: rgba(255, 152, 0, 0.6);
+}
+
+.marker-cluster-medium div {
+    background-color: rgba(255, 152, 0, 0.9);
+}
+
+.marker-cluster-large {
+    background-color: rgba(211, 47, 47, 0.6);
+}
+
+.marker-cluster-large div {
+    background-color: rgba(211, 47, 47, 0.9);
+}
+
+/* Custom Battery Markers */
+.battery-marker {
+    cursor: pointer !important;
+    transition: transform 0.2s ease;
+}
+
+.battery-marker:hover {
+    transform: scale(1.15);
+}
+
+.battery-marker svg {
+    filter: drop-shadow(2px 3px 3px rgba(0,0,0,0.3));
+    transition: filter 0.2s ease;
+}
+
+.battery-marker:hover svg {
+    filter: drop-shadow(2px 3px 5px rgba(0,0,0,0.4));
+}
+
+/* Popup styling */
+.leaflet-popup-content {
+    direction: rtl;
+    text-align: right;
+}
+
+.leaflet-popup-content-wrapper {
+    border-radius: 12px;
+    box-shadow: 0 4px 20px var(--shadow-medium);
+}
+
+.leaflet-popup-content {
+    margin: 14px 18px;
+    line-height: 1.5;
+}
+
+.leaflet-popup-content h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: var(--accent-primary);
+    font-size: 16px;
+}
+
+.popup-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 6px;
 }
 
-.card-name {
-    font-weight: 600;
-    color: var(--text-primary);
-    font-size: 15px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.popup-icon {
+    width: 20px;
+    height: 20px;
 }
 
-.card-favorite-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 18px;
-    padding: 2px;
-    transition: transform 0.2s;
-}
-
-.card-favorite-btn:hover {
-    transform: scale(1.2);
-}
-
-.card-favorite-btn.active {
-    color: var(--favorite-color);
-}
-
-.card-address {
+.popup-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 6px 0;
     font-size: 13px;
     color: var(--text-secondary);
-    margin-bottom: 4px;
 }
 
-.card-meta {
-    display: flex;
-    gap: 15px;
-    font-size: 12px;
-    color: var(--text-muted);
+.popup-row .icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
 }
 
-.card-type {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.card-distance {
+.distance {
     color: var(--accent-action);
-    font-weight: 500;
+    font-weight: bold;
+}
+
+/* Navigation links in popup */
+.nav-links {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+}
+
+.nav-btn {
+    flex: 1;
+    padding: 8px 12px;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-btn.google {
+    background-color: #4285f4;
+    color: white;
+}
+
+.nav-btn.google:hover {
+    background-color: #3367d6;
+}
+
+.nav-btn.waze {
+    background-color: #33ccff;
+    color: white;
+}
+
+.nav-btn.waze:hover {
+    background-color: #00b3e6;
 }
 
 /* Sidebar */
@@ -641,7 +388,7 @@ header h1 {
     z-index: 1001;
     display: flex;
     flex-direction: column;
-    transition: transform 0.3s ease, background-color 0.3s;
+    transition: transform 0.3s ease;
     overflow: hidden;
 }
 
@@ -714,29 +461,6 @@ header h1 {
     display: inline-block;
 }
 
-.sidebar-favorite-btn {
-    background: none;
-    border: 2px solid var(--border-color);
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 22px;
-    transition: all 0.2s;
-}
-
-.sidebar-favorite-btn:hover {
-    border-color: var(--favorite-color);
-    background: #fce4ec;
-    transform: scale(1.05);
-}
-
-.sidebar-favorite-btn.active {
-    background: var(--favorite-color);
-    border-color: var(--favorite-color);
-    color: white;
-}
-
 .sidebar-info {
     display: flex;
     flex-direction: column;
@@ -789,6 +513,7 @@ header h1 {
     align-items: center;
     justify-content: center;
     gap: 8px;
+    cursor: pointer;
 }
 
 .sidebar-nav-btn:hover {
@@ -804,370 +529,6 @@ header h1 {
 .sidebar-nav-btn.waze {
     background: linear-gradient(135deg, #33ccff 0%, #00a3cc 100%);
     color: white;
-}
-
-/* Popup styling */
-.leaflet-popup-content {
-    direction: rtl;
-    text-align: right;
-}
-
-.leaflet-popup-content-wrapper {
-    border-radius: 12px;
-    box-shadow: 0 4px 20px var(--shadow-medium);
-}
-
-.leaflet-popup-content {
-    margin: 14px 18px;
-    line-height: 1.5;
-}
-
-.leaflet-popup-content h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    color: var(--accent-primary);
-    font-size: 16px;
-}
-
-.popup-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-}
-
-.popup-favorite-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 20px;
-    padding: 2px;
-    transition: transform 0.2s;
-}
-
-.popup-favorite-btn:hover {
-    transform: scale(1.2);
-}
-
-.popup-favorite-btn.active {
-    color: var(--favorite-color);
-}
-
-.popup-icon {
-    width: 20px;
-    height: 20px;
-}
-
-.popup-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    margin: 6px 0;
-    font-size: 13px;
-    color: var(--text-secondary);
-}
-
-.popup-row .icon {
-    flex-shrink: 0;
-    width: 16px;
-    text-align: center;
-}
-
-/* Distance in popup */
-.distance {
-    color: var(--accent-action);
-    font-weight: bold;
-}
-
-/* Navigation links in popup */
-.nav-links {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border-light);
-}
-
-.nav-btn {
-    flex: 1;
-    padding: 8px 12px;
-    text-align: center;
-    text-decoration: none;
-    border-radius: 5px;
-    font-size: 13px;
-    font-weight: bold;
-}
-
-.nav-btn.google {
-    background-color: #4285f4;
-    color: white;
-}
-
-.nav-btn.google:hover {
-    background-color: #3367d6;
-}
-
-.nav-btn.waze {
-    background-color: #33ccff;
-    color: white;
-}
-
-.nav-btn.waze:hover {
-    background-color: #00b3e6;
-}
-
-/* Mobile Responsive */
-@media (max-width: 768px) {
-    header {
-        padding: 10px 12px;
-        gap: 8px;
-    }
-
-    header h1 {
-        font-size: 0.95rem;
-    }
-
-    .header-search {
-        max-width: 140px;
-    }
-
-    .header-search #search-input {
-        padding: 7px 12px;
-        font-size: 13px;
-    }
-
-    .header-btn {
-        width: 34px;
-        height: 34px;
-        font-size: 16px;
-    }
-
-    .dropdown-menu {
-        top: 54px;
-        left: 10px;
-        right: 10px;
-    }
-
-    .filters {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    .main-content {
-        height: 100vh;
-        flex-direction: column;
-    }
-
-    #map {
-        height: 100%;
-    }
-
-    .city-select {
-        width: 100%;
-    }
-
-    .view-toggle {
-        width: 100%;
-        justify-content: center;
-    }
-
-    /* Mobile Sidebar (Bottom Drawer) */
-    .sidebar {
-        width: 100%;
-        height: 60%;
-        top: auto;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        border-radius: 20px 20px 0 0;
-    }
-
-    .sidebar.hidden {
-        transform: translateY(100%);
-    }
-
-    .sidebar-close {
-        top: 15px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 50px;
-        height: 6px;
-        border-radius: 3px;
-        background: var(--border-color);
-        font-size: 0;
-    }
-
-    .sidebar-content {
-        padding-top: 30px;
-    }
-}
-
-@media (max-width: 480px) {
-    header h1 {
-        font-size: 0.85rem;
-    }
-
-    .header-search {
-        max-width: 100px;
-    }
-
-    .header-actions {
-        gap: 4px;
-    }
-
-    .header-btn {
-        width: 32px;
-        height: 32px;
-        font-size: 15px;
-    }
-
-    .install-btn {
-        padding: 6px 10px;
-        font-size: 11px;
-    }
-}
-
-/* Custom Marker Clusters */
-.marker-cluster {
-    background-clip: padding-box;
-    border-radius: 50%;
-}
-
-.marker-cluster div {
-    width: 32px;
-    height: 32px;
-    margin-left: 4px;
-    margin-top: 4px;
-    text-align: center;
-    border-radius: 50%;
-    font-weight: bold;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
-}
-
-.marker-cluster-small {
-    background-color: rgba(21, 101, 192, 0.6);
-}
-
-.marker-cluster-small div {
-    background-color: rgba(21, 101, 192, 0.9);
-}
-
-.marker-cluster-medium {
-    background-color: rgba(255, 152, 0, 0.6);
-}
-
-.marker-cluster-medium div {
-    background-color: rgba(255, 152, 0, 0.9);
-}
-
-.marker-cluster-large {
-    background-color: rgba(211, 47, 47, 0.6);
-}
-
-.marker-cluster-large div {
-    background-color: rgba(211, 47, 47, 0.9);
-}
-
-/* Map Search Control */
-.map-search-container {
-    position: relative;
-}
-
-.map-search-input {
-    width: 220px;
-    padding: 10px 14px;
-    border: 2px solid rgba(0,0,0,0.2);
-    border-radius: 8px;
-    font-size: 14px;
-    font-family: inherit;
-    direction: rtl;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    box-shadow: 0 2px 10px var(--shadow-medium);
-    transition: all 0.2s;
-}
-
-.map-search-input:focus {
-    outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 2px 15px var(--shadow-medium);
-}
-
-.map-search-input::placeholder {
-    color: var(--text-muted);
-}
-
-.map-search-container .search-suggestions {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    left: 0;
-    margin-top: 4px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    max-height: 300px;
-    overflow-y: auto;
-    z-index: 1200;
-    display: none;
-    box-shadow: 0 4px 12px var(--shadow-medium);
-}
-
-.map-search-container .search-suggestions.active {
-    display: block;
-}
-
-[data-theme="dark"] .map-search-input {
-    filter: invert(90%) hue-rotate(180deg);
-}
-
-[data-theme="dark"] .map-search-container .search-suggestions {
-    filter: invert(90%) hue-rotate(180deg);
-}
-
-/* Basemap Toggle Button */
-.basemap-toggle-btn {
-    background: var(--bg-secondary);
-    border: 2px solid rgba(0,0,0,0.2);
-    border-radius: 4px;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #333;
-    cursor: pointer;
-    box-shadow: 0 2px 10px var(--shadow-medium);
-    transition: all 0.2s;
-}
-
-.basemap-toggle-btn svg {
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.basemap-toggle-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--accent-primary);
-}
-
-.basemap-toggle-btn:focus {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 2px;
-}
-
-[data-theme="dark"] .basemap-toggle-btn {
-    filter: invert(90%) hue-rotate(180deg);
 }
 
 /* Loading Overlay */
@@ -1274,49 +635,6 @@ header h1 {
     outline-offset: 2px;
 }
 
-/* Custom Battery Markers */
-.battery-marker {
-    cursor: pointer !important;
-    transition: transform 0.2s ease;
-}
-
-.battery-marker:hover {
-    transform: scale(1.15);
-}
-
-/* Interactive element hover states */
-.filter-btn,
-.view-btn,
-.nearest-btn,
-.favorites-filter-btn,
-.install-btn,
-.theme-toggle-btn,
-.sidebar-nav-btn,
-.nav-btn {
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.filter-btn:hover,
-.view-btn:hover {
-    transform: translateY(-1px);
-}
-
-.nearest-btn:hover,
-.favorites-filter-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px var(--shadow-medium);
-}
-
-.battery-marker svg {
-    filter: drop-shadow(2px 3px 3px rgba(0,0,0,0.3));
-    transition: filter 0.2s ease;
-}
-
-.battery-marker:hover svg {
-    filter: drop-shadow(2px 3px 5px rgba(0,0,0,0.4));
-}
-
 /* Notification Toast */
 .notification {
     position: fixed;
@@ -1339,7 +657,47 @@ header h1 {
     opacity: 1;
 }
 
-/* Mobile styles */
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .main-content {
+        height: 100vh;
+        flex-direction: column;
+    }
+
+    #map {
+        height: 100%;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: 60%;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 20px 20px 0 0;
+    }
+
+    .sidebar.hidden {
+        transform: translateY(100%);
+    }
+
+    .sidebar-close {
+        top: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50px;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--border-color);
+        font-size: 0;
+    }
+
+    .sidebar-content {
+        padding-top: 30px;
+    }
+}
+
 @media (max-width: 600px) {
     .empty-state {
         width: 85%;
@@ -1366,12 +724,6 @@ select:focus-visible {
     :root {
         --border-color: #000000;
         --text-muted: #555555;
-    }
-
-    .filter-btn,
-    .favorites-filter-btn,
-    .view-btn {
-        border-width: 2px;
     }
 }
 

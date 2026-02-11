@@ -203,6 +203,9 @@ const markerCluster = L.markerClusterGroup({
 });
 map.addLayer(markerCluster);
 
+// Pre-computed city counts for O(1) lookup in autocomplete
+const cityCounts = new Map();
+
 // Current state
 let currentSearch = '';
 let selectedLocationId = null;
@@ -472,7 +475,7 @@ function setupAutocomplete() {
                 matches.unshift({
                     type: 'city',
                     name: location.city,
-                    count: allLocations.filter(l => l.city === location.city).length
+                    count: cityCounts.get(location.city) || 0
                 });
             }
         });
@@ -631,6 +634,11 @@ fetch('locations.json')
     .then(data => {
         allLocations = data.locations;
         totalLocations = allLocations.length;
+
+        // Pre-compute city counts for fast autocomplete
+        allLocations.forEach(loc => {
+            cityCounts.set(loc.city, (cityCounts.get(loc.city) || 0) + 1);
+        });
 
         const loadingText = document.getElementById('loading-text');
         if (loadingText) {
