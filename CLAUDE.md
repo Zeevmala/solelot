@@ -35,6 +35,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Nice to Have
 - [ ] Add `aria-label` to Leaflet marker/cluster divs (e.g. location name) — framework generates `role="button"` divs without accessible names
+- [ ] Replace "רחובות" streets basemap with HERE Maps tiles — requires free API key from https://platform.here.com/sign-up (URL: `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png8?style=explore.day&apiKey=KEY`)
 
 ## File Structure
 | File | Purpose |
