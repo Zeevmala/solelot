@@ -78,15 +78,15 @@ body {
     flex: 1;
     height: 100%;
     width: 100%;
-    cursor: crosshair;
+    cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><circle cx='16' cy='16' r='6' fill='none' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='2' x2='16' y2='10' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='22' x2='16' y2='30' stroke='%23333' stroke-width='1.2'/><line x1='2' y1='16' x2='10' y2='16' stroke='%23333' stroke-width='1.2'/><line x1='22' y1='16' x2='30' y2='16' stroke='%23333' stroke-width='1.2'/></svg>") 16 16, crosshair;
 }
 
 #map.leaflet-container {
-    cursor: crosshair;
+    cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><circle cx='16' cy='16' r='6' fill='none' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='2' x2='16' y2='10' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='22' x2='16' y2='30' stroke='%23333' stroke-width='1.2'/><line x1='2' y1='16' x2='10' y2='16' stroke='%23333' stroke-width='1.2'/><line x1='22' y1='16' x2='30' y2='16' stroke='%23333' stroke-width='1.2'/></svg>") 16 16, crosshair;
 }
 
 #map.leaflet-container:active {
-    cursor: crosshair;
+    cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><circle cx='16' cy='16' r='6' fill='none' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='2' x2='16' y2='10' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='22' x2='16' y2='30' stroke='%23333' stroke-width='1.2'/><line x1='2' y1='16' x2='10' y2='16' stroke='%23333' stroke-width='1.2'/><line x1='22' y1='16' x2='30' y2='16' stroke='%23333' stroke-width='1.2'/></svg>") 16 16, crosshair;
 }
 
 /* Map Search Control */
@@ -340,6 +340,7 @@ body {
 
 .battery-marker:hover {
     transform: scale(1.15);
+    opacity: 0.5;
 }
 
 .battery-marker svg {
