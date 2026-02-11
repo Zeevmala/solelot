@@ -19,6 +19,9 @@ function showNotification(message, duration = 2000) {
     }, duration);
 }
 
+// Report form URL — replace with your Google Form URL
+const REPORT_FORM_URL = 'https://forms.gle/YOUR_FORM_ID';
+
 // === HTML ESCAPING ===
 function escapeHtml(str) {
     if (!str) return '';
@@ -241,6 +244,16 @@ function getDistance(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
+// Build report URL with pre-filled location info
+function getReportUrl(location) {
+    const params = new URLSearchParams({
+        'entry.1': location.name,
+        'entry.2': location.address,
+        'entry.3': location.city
+    });
+    return `${REPORT_FORM_URL}?${params.toString()}`;
+}
+
 // Create popup content for a location
 function createPopupContent(location) {
     const typeIcon = batterySvg.store.replace('width="32" height="44"', 'width="20" height="28"');
@@ -285,11 +298,14 @@ function createPopupContent(location) {
     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
     const wazeUrl = `https://waze.com/ul?ll=${location.lat},${location.lng}&navigate=yes`;
 
+    const reportUrl = getReportUrl(location);
+
     content += `
         <div class="nav-links">
             <a href="${googleMapsUrl}" target="_blank" class="nav-btn google">🗺️ Google</a>
             <a href="${wazeUrl}" target="_blank" class="nav-btn waze">🚗 Waze</a>
         </div>
+        <a href="${reportUrl}" target="_blank" class="report-link">דווח על בעיה</a>
     `;
 
     return content;
@@ -357,6 +373,10 @@ function createSidebarContent(location) {
                 🚗 נווט ב-Waze
             </a>
         </div>
+
+        <a href="${getReportUrl(location)}" target="_blank" class="report-link">
+            ⚠️ דווח על בעיה בנקודה זו
+        </a>
     `;
 }
 
