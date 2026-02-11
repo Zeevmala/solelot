@@ -14,17 +14,24 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - **Facilities**: Batte-Re (Dimona), RE-CAR (Arad), MILI
 
 ## Current Features
-- Interactive Leaflet map centered on Israel
-- Custom SVG battery pin markers (green = collection points, red = facilities)
+- Interactive Leaflet map centered on Israel (CartoDB Light default basemap)
+- Custom SVG battery pin markers (green, uniform for all locations)
 - Marker clustering for performance
-- Search with autocomplete suggestions
-- "Find nearest" via GPS geolocation
-- Navigation links (Google Maps / Waze) in popups
+- Search with autocomplete suggestions (city + location)
+- GPS geolocation ("find my location" button, shows distance in popups)
+- Navigation links (Google Maps / Waze) in popups and sidebar
 - Location detail sidebar
+- "Report a problem" link in popups/sidebar (Google Form)
+- Empty state with clear/retry when search has no results
 - PWA support (installable, offline via service worker)
-- Multiple basemap options (streets, light, satellite)
+- Multiple basemap options (light, streets)
 - Accessibility (ARIA labels, keyboard navigation, skip links)
-- Loading spinner overlay
+- Open Graph + Twitter Card meta tags for social sharing
+- XSS protection (HTML escaping on all location data)
+- Loading spinner overlay with error retry
+
+## TODO
+- [ ] Create Google Form for "Report a problem" and replace placeholder URL in `app.js` (`REPORT_FORM_URL`)
 
 ## File Structure
 | File | Purpose |
