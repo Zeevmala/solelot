@@ -31,7 +31,7 @@ function escapeHtml(str) {
 }
 
 // === MAP INITIALIZATION ===
-const map = L.map('map').setView([31.5, 34.9], 8);
+const map = L.map('map').setView([31.5, 34.9], 7);
 
 // Define multiple basemap options
 const baseMaps = {
@@ -44,8 +44,8 @@ const baseMaps = {
 };
 
 // Track current basemap
-let currentBasemapName = 'רחובות';
-baseMaps['רחובות'].addTo(map);
+let currentBasemapName = 'בהיר';
+baseMaps['בהיר'].addTo(map);
 
 // Create toggle button for basemap with layers icon
 const basemapToggle = L.control({ position: 'bottomleft' });
@@ -54,19 +54,19 @@ basemapToggle.onAdd = function() {
     btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
     </svg>`;
-    btn.title = 'החלף ל: בהיר';
+    btn.title = 'החלף ל: רחובות';
 
     L.DomEvent.disableClickPropagation(btn);
 
     btn.onclick = function() {
         map.removeLayer(baseMaps[currentBasemapName]);
 
-        if (currentBasemapName === 'רחובות') {
-            currentBasemapName = 'בהיר';
-            btn.title = 'החלף ל: רחובות';
-        } else {
+        if (currentBasemapName === 'בהיר') {
             currentBasemapName = 'רחובות';
             btn.title = 'החלף ל: בהיר';
+        } else {
+            currentBasemapName = 'בהיר';
+            btn.title = 'החלף ל: רחובות';
         }
 
         baseMaps[currentBasemapName].addTo(map);
@@ -196,7 +196,7 @@ let totalLocations = 0;
 // Marker cluster group
 const markerCluster = L.markerClusterGroup({
     chunkedLoading: true,
-    maxClusterRadius: 50,
+    maxClusterRadius: 35,
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
     iconCreateFunction: function(cluster) {
