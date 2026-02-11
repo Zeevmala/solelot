@@ -19,6 +19,17 @@ function showNotification(message, duration = 2000) {
     }, duration);
 }
 
+// === HTML ESCAPING ===
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // === MAP INITIALIZATION ===
 const map = L.map('map').setView([31.5, 34.9], 8);
 
@@ -145,7 +156,7 @@ function createBatteryIcon(type) {
 
 const icons = {
     store: createBatteryIcon('store'),
-    facility: createBatteryIcon('store'),
+    facility: createBatteryIcon('facility'),
     user: createBatteryIcon('user')
 };
 
@@ -246,22 +257,23 @@ function getDistance(lat1, lng1, lat2, lng2) {
 
 // Create popup content for a location
 function createPopupContent(location) {
-    const typeIcon = batterySvg.store.replace('width="32" height="44"', 'width="20" height="28"');
+    const svgType = location.type === 'facility' ? 'facility' : 'store';
+    const typeIcon = batterySvg[svgType].replace('width="32" height="44"', 'width="20" height="28"');
 
     let content = `
         <div class="popup-header">
             <h3>
                 <span class="popup-icon">${typeIcon}</span>
-                ${location.name}
+                ${escapeHtml(location.name)}
             </h3>
         </div>
         <div class="popup-row">
             <span class="icon">📍</span>
-            <span>${location.address}</span>
+            <span>${escapeHtml(location.address)}</span>
         </div>
         <div class="popup-row">
             <span class="icon">🕐</span>
-            <span>${location.hours}</span>
+            <span>${escapeHtml(location.hours || 'לא צוין')}</span>
         </div>
     `;
 
@@ -269,7 +281,7 @@ function createPopupContent(location) {
         content += `
         <div class="popup-row">
             <span class="icon">ℹ️</span>
-            <span>${location.description}</span>
+            <span>${escapeHtml(location.description)}</span>
         </div>`;
     }
 
@@ -300,7 +312,8 @@ function createPopupContent(location) {
 
 // Create sidebar content for a location
 function createSidebarContent(location) {
-    const typeIcon = batterySvg.store.replace('width="32" height="44"', 'width="36" height="50"');
+    const svgType = location.type === 'facility' ? 'facility' : 'store';
+    const typeIcon = batterySvg[svgType].replace('width="32" height="44"', 'width="36" height="50"');
     const chain = detectChain(location.name);
     const chainName = chainNames[chain] || '';
 
@@ -325,28 +338,28 @@ function createSidebarContent(location) {
         <div class="sidebar-header">
             <div class="sidebar-icon">${typeIcon}</div>
             <div class="sidebar-title">
-                <h2>${location.name}</h2>
-                <span class="type-badge">${typeNames[location.type]}${chainName ? ' - ' + chainName : ''}</span>
+                <h2>${escapeHtml(location.name)}</h2>
+                <span class="type-badge">${escapeHtml(typeNames[location.type])}${chainName ? ' - ' + escapeHtml(chainName) : ''}</span>
             </div>
         </div>
 
         <div class="sidebar-info">
             <div class="info-row">
                 <span class="info-icon">📍</span>
-                <span class="info-text">${location.address}</span>
+                <span class="info-text">${escapeHtml(location.address)}</span>
             </div>
             <div class="info-row">
                 <span class="info-icon">🏙️</span>
-                <span class="info-text">${location.city}</span>
+                <span class="info-text">${escapeHtml(location.city)}</span>
             </div>
             <div class="info-row">
                 <span class="info-icon">🕐</span>
-                <span class="info-text">${location.hours}</span>
+                <span class="info-text">${escapeHtml(location.hours || 'לא צוין')}</span>
             </div>
             ${location.description ? `
             <div class="info-row">
                 <span class="info-icon">ℹ️</span>
-                <span class="info-text">${location.description}</span>
+                <span class="info-text">${escapeHtml(location.description)}</span>
             </div>
             ` : ''}
             ${distanceHtml}
@@ -411,6 +424,16 @@ function updateMarkers() {
     markerCluster.clearLayers();
     markerCluster.addLayers(visibleMarkers);
 
+    // Show/hide empty state
+    const emptyState = document.getElementById('empty-state');
+    if (emptyState) {
+        if (visibleMarkers.length === 0 && currentSearch !== '') {
+            emptyState.style.display = 'block';
+        } else {
+            emptyState.style.display = 'none';
+        }
+    }
+
     return visibleMarkers;
 }
 
@@ -445,13 +468,25 @@ function setupAutocomplete() {
 
     let highlightedIndex = -1;
 
+    let searchTimeout;
     searchInput.addEventListener('input', () => {
         const query = searchInput.value.trim();
+
+        // Debounced marker update when suggestions aren't showing
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            currentSearch = query;
+            if (!suggestions.classList.contains('active')) {
+                updateMarkers();
+            }
+        }, 300);
 
         if (query.length < 2) {
             suggestions.classList.remove('active');
             suggestions.innerHTML = '';
             highlightedIndex = -1;
+            currentSearch = query;
+            updateMarkers();
             return;
         }
 
@@ -494,11 +529,11 @@ function setupAutocomplete() {
                     <div class="suggestion-item"
                          role="option"
                          data-type="city"
-                         data-value="${match.name}"
+                         data-value="${escapeHtml(match.name)}"
                          tabindex="-1">
                         <span class="suggestion-icon">🏙️</span>
                         <div class="suggestion-text">
-                            <div class="suggestion-name">${match.name}</div>
+                            <div class="suggestion-name">${escapeHtml(match.name)}</div>
                             <div class="suggestion-city">${match.count} נקודות</div>
                         </div>
                     </div>
@@ -513,8 +548,8 @@ function setupAutocomplete() {
                          tabindex="-1">
                         <span class="suggestion-icon">${icon}</span>
                         <div class="suggestion-text">
-                            <div class="suggestion-name">${match.name}</div>
-                            <div class="suggestion-city">${match.city}</div>
+                            <div class="suggestion-name">${escapeHtml(match.name)}</div>
+                            <div class="suggestion-city">${escapeHtml(match.city)}</div>
                         </div>
                     </div>
                 `;
@@ -603,6 +638,64 @@ function focusOnLocation(locationId) {
 }
 window.focusOnLocation = focusOnLocation;
 
+// === GPS GEOLOCATION ===
+const locateControl = L.control({ position: 'bottomleft' });
+locateControl.onAdd = function() {
+    const btn = L.DomUtil.create('button', 'locate-btn');
+    btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+    </svg>`;
+    btn.title = 'מצא את מיקומי';
+    btn.setAttribute('aria-label', 'מצא את מיקומי');
+
+    L.DomEvent.disableClickPropagation(btn);
+
+    btn.onclick = function() {
+        if (!navigator.geolocation) {
+            showNotification('הדפדפן לא תומך באיתור מיקום');
+            return;
+        }
+
+        btn.classList.add('loading');
+        showNotification('מאתר מיקום...');
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                btn.classList.remove('loading');
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+
+                userLocation = { lat, lng };
+
+                // Place/update user marker
+                if (userMarker) {
+                    userMarker.setLatLng([lat, lng]);
+                } else {
+                    userMarker = L.marker([lat, lng], { icon: icons.user })
+                        .addTo(map)
+                        .bindPopup('המיקום שלך');
+                }
+
+                map.flyTo([lat, lng], 14, { duration: 0.8 });
+                showNotification('מיקום נמצא');
+            },
+            (error) => {
+                btn.classList.remove('loading');
+                let msg = 'שגיאה באיתור מיקום';
+                if (error.code === 1) msg = 'גישה למיקום נדחתה';
+                else if (error.code === 2) msg = 'מיקום לא זמין';
+                else if (error.code === 3) msg = 'זמן איתור מיקום עבר';
+                showNotification(msg);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+    };
+
+    return btn;
+};
+locateControl.addTo(map);
+
 // Loading functions
 function showLoading(text) {
     const overlay = document.getElementById('loading-overlay');
@@ -627,55 +720,71 @@ function hideLoading() {
 }
 
 // === INITIALIZATION ===
-showLoading('טוען נקודות מיחזור...');
+function loadLocations() {
+    showLoading('טוען נקודות מיחזור...');
 
-fetch('locations.json')
-    .then(response => response.json())
-    .then(data => {
-        allLocations = data.locations;
-        totalLocations = allLocations.length;
+    fetch('locations.json')
+        .then(response => response.json())
+        .then(data => {
+            allLocations = data.locations;
+            totalLocations = allLocations.length;
 
-        // Pre-compute city counts for fast autocomplete
-        allLocations.forEach(loc => {
-            cityCounts.set(loc.city, (cityCounts.get(loc.city) || 0) + 1);
-        });
-
-        const loadingText = document.getElementById('loading-text');
-        if (loadingText) {
-            loadingText.textContent = `טוען ${totalLocations} נקודות...`;
-        }
-
-        allLocations.forEach(location => {
-            const icon = icons[location.type] || icons.store;
-            const marker = L.marker([location.lat, location.lng], { icon: icon });
-
-            marker.bindPopup(createPopupContent(location));
-
-            marker.on('click', () => {
-                showSidebar(location);
+            // Pre-compute city counts for fast autocomplete
+            cityCounts.clear();
+            allLocations.forEach(loc => {
+                cityCounts.set(loc.city, (cityCounts.get(loc.city) || 0) + 1);
             });
 
-            allMarkers.push({ marker, location });
-        });
+            const loadingText = document.getElementById('loading-text');
+            if (loadingText) {
+                loadingText.textContent = `טוען ${totalLocations} נקודות...`;
+            }
 
-        setupAutocomplete();
-        updateMarkers();
+            // Clear previous markers if retrying
+            allMarkers = [];
+            markerCluster.clearLayers();
 
-        setTimeout(() => {
+            allLocations.forEach(location => {
+                const icon = icons[location.type] || icons.store;
+                const marker = L.marker([location.lat, location.lng], { icon: icon });
+
+                marker.bindPopup(createPopupContent(location));
+
+                marker.on('click', () => {
+                    showSidebar(location);
+                });
+
+                allMarkers.push({ marker, location });
+            });
+
+            setupAutocomplete();
+            updateMarkers();
+
+            // Hide error state if it was showing
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) emptyState.style.display = 'none';
+
+            setTimeout(() => {
+                hideLoading();
+            }, 300);
+        })
+        .catch(error => {
+            console.error('Error loading locations:', error);
             hideLoading();
-        }, 300);
 
-        console.log('Loaded', allLocations.length, 'locations');
-    })
-    .catch(error => {
-        console.error('Error loading locations:', error);
-        hideLoading();
+            // Show empty state with retry option
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) {
+                emptyState.querySelector('h3').textContent = 'שגיאה בטעינת הנתונים';
+                emptyState.querySelector('p').textContent = 'בדוק את החיבור לאינטרנט ונסה שוב';
+                const retryBtn = emptyState.querySelector('.clear-filters-btn');
+                if (retryBtn) retryBtn.textContent = 'נסה שוב';
+                emptyState.style.display = 'block';
+            }
+        });
+}
 
-        const loadingText = document.getElementById('loading-text');
-        if (loadingText) {
-            loadingText.textContent = 'שגיאה בטעינת הנתונים';
-        }
-    });
+loadLocations();
 
 // === EVENT LISTENERS ===
 
@@ -683,6 +792,23 @@ fetch('locations.json')
 const sidebarClose = document.getElementById('sidebar-close');
 if (sidebarClose) {
     sidebarClose.addEventListener('click', hideSidebar);
+}
+
+// Clear filters / empty state / retry
+const clearFiltersBtn = document.getElementById('clear-filters');
+if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener('click', () => {
+        if (allLocations.length === 0) {
+            // No data loaded — this is a retry
+            loadLocations();
+        } else {
+            // Clear search filters
+            currentSearch = '';
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) searchInput.value = '';
+            updateMarkers();
+        }
+    });
 }
 
 // Close sidebar and autocomplete on Escape key
@@ -695,18 +821,3 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Search Box (basic filtering, autocomplete handles the rest)
-const searchInput = document.getElementById('search-input');
-if (searchInput) {
-    let searchTimeout;
-    searchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            currentSearch = searchInput.value.trim();
-            const suggestions = document.getElementById('search-suggestions');
-            if (!suggestions || !suggestions.classList.contains('active')) {
-                updateMarkers();
-            }
-        }, 300);
-    });
-}

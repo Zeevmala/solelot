@@ -1,6 +1,6 @@
 // Service Worker for Battery Recycling Map
-const CACHE_NAME = 'battery-recycling-v5';
-const STATIC_CACHE = 'static-v5';
+const CACHE_NAME = 'battery-recycling-v6';
+const STATIC_CACHE = 'static-v6';
 const TILES_CACHE = 'tiles-v1';
 
 // Files to cache immediately (app shell)
