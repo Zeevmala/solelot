@@ -58,6 +58,7 @@ basemapToggle.onAdd = function() {
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
     </svg>`;
     btn.title = 'החלף ל: רחובות';
+    btn.setAttribute('aria-label', 'החלף סגנון מפה');
 
     L.DomEvent.disableClickPropagation(btn);
 
@@ -84,7 +85,7 @@ const searchControl = L.control({ position: 'topright' });
 searchControl.onAdd = function() {
     const container = L.DomUtil.create('div', 'map-search-container');
     container.innerHTML = `
-        <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." autocomplete="off">
+        <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" autocomplete="off">
         <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
     `;
 
