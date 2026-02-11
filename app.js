@@ -121,6 +121,7 @@ searchControl.onAdd = function() {
     const container = L.DomUtil.create('div', 'map-search-container');
     container.innerHTML = `
         <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" autocomplete="off">
+        <button id="search-clear" class="search-clear-btn" aria-label="נקה חיפוש" type="button">✕</button>
         <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
     `;
 
@@ -129,6 +130,24 @@ searchControl.onAdd = function() {
 
     const input = container.querySelector('#search-input');
     L.DomEvent.on(input, 'keydown keyup keypress', L.DomEvent.stopPropagation);
+
+    // Clear search button — show/hide based on input content
+    const clearBtn = container.querySelector('#search-clear');
+    input.addEventListener('input', () => {
+        clearBtn.style.display = input.value.length > 0 ? 'flex' : 'none';
+    });
+    clearBtn.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        currentSearch = '';
+        updateMarkers();
+        const suggestions = document.getElementById('search-suggestions');
+        if (suggestions) {
+            suggestions.classList.remove('active');
+            suggestions.innerHTML = '';
+        }
+        input.focus();
+    });
 
     return container;
 };
