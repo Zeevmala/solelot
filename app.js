@@ -870,7 +870,10 @@ function loadLocations() {
                 const icon = icons[location.type] || icons.store;
                 const marker = L.marker([location.lat, location.lng], { icon: icon });
 
-                marker.bindPopup(createPopupContent(location));
+                // Only show popups on desktop; mobile uses sidebar only
+                if (window.innerWidth > 768) {
+                    marker.bindPopup(createPopupContent(location), { maxWidth: 300 });
+                }
 
                 marker.on('click', () => {
                     showSidebar(location);
