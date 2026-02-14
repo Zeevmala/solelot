@@ -45,11 +45,18 @@
     <!-- Skip to main content link for accessibility -->
     <a href="#map" class="skip-link" aria-label="דלג לתוכן המפה">דלג למפה</a>
 
-    <!-- Loading Spinner Overlay -->
+    <!-- Loading Skeleton Overlay -->
     <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">
-        <div class="loading-content">
-            <div class="loading-spinner" aria-hidden="true"></div>
-            <p id="loading-text">טוען נקודות מיחזור...</p>
+        <div class="skeleton-container" aria-hidden="true">
+            <div class="skeleton-search"></div>
+            <div class="skeleton-map">
+                <div class="skeleton-pin" style="top: 25%; right: 40%"></div>
+                <div class="skeleton-pin" style="top: 45%; right: 35%"></div>
+                <div class="skeleton-pin" style="top: 55%; right: 42%"></div>
+                <div class="skeleton-pin" style="top: 70%; right: 38%"></div>
+                <div class="skeleton-cluster" style="top: 35%; right: 38%"></div>
+            </div>
+            <p id="loading-text" class="skeleton-text">טוען נקודות מיחזור...</p>
         </div>
     </div>
 
