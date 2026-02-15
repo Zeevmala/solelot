@@ -322,7 +322,8 @@ function getReportUrl(location) {
     const params = new URLSearchParams({
         'entry.1466478113': location.name,
         'entry.1234054889': location.address,
-        'entry.1388870063': location.city
+        'entry.1388870063': location.city,
+        'hl': 'he'
     });
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
