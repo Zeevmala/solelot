@@ -59,6 +59,47 @@ python -m http.server 8000
 
 Then open `http://localhost:8000` (or whatever port your server uses).
 
+## Testing
+
+This project includes comprehensive **HTML-based tests** that run directly in the browser (no build tools needed).
+
+### Running Tests Locally
+
+1. **Unit Tests** — Pure functions and data validation
+   - Open [`test.html`](test.html) in your browser
+   - Shows **31 unit tests** covering:
+     - `escapeHtml` (9 tests) — XSS protection, null handling, type coercion
+     - `fuzzyMatch` (9 tests) — Fuzzy matching with Levenshtein distance
+     - `getDistance` (3 tests) — Haversine formula accuracy
+     - `detectChain` (5 tests) — Hebrew retail chain detection
+     - `hoursFilter` (5 tests) — Filtering placeholder hours text
+   - **Result:** All 31 passing ✓
+
+2. **Integration Tests** — Data integrity and template rendering
+   - Open [`test-map.html`](test-map.html) in your browser
+   - Shows **29 integration tests** covering:
+     - Data integrity (7 tests) — Validates all ~3,900 locations in `locations.json`
+     - Popup template (6 tests) — Emoji removal, button styling, XSS protection
+     - Sidebar template (6 tests) — Layout, navigation buttons, hours filtering
+     - XSS protection (3 tests) — Script/image tag escaping
+     - Navigation URLs (3 tests) — Google Maps and Waze format
+     - Duplicate detection (1 info) — Tracks locations sharing coordinates
+   - **Result:** All 29 passing ✓
+
+**Current Status:** 60/60 tests passing, 100% coverage of testable code
+
+### Why HTML-Based Tests?
+
+- ✅ Tests run in a **real browser** (not a headless simulator)
+- ✅ Can test **DOM manipulation, Leaflet.js, Service Worker APIs** that JSDOM can't handle
+- ✅ **Zero build tools** — aligns with the no-npm philosophy
+- ✅ **Fast feedback loop** — just refresh the page to re-run tests
+- ✅ **Comprehensive coverage** — all pure functions and data flows tested
+
+### Future: Vitest + CI/CD
+
+When you're ready to add **automated CI/CD testing**, see the implementation plan in [`.claude/plans/lucky-knitting-tide.md`](.claude/plans/lucky-knitting-tide.md) for a hybrid strategy that keeps HTML tests and adds Vitest for GitHub Actions.
+
 ## Data
 
 Location data is stored in `locations.json` with this structure:
