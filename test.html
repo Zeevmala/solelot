@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>Unit Tests - Battery Recycling Map</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f5f5f5; direction: ltr; }
+        h1 { margin-bottom: 20px; }
+        .test { padding: 8px 12px; margin: 4px 0; border-radius: 6px; font-size: 14px; }
+        .pass { background: #e8f5e9; color: #2e7d32; }
+        .fail { background: #ffebee; color: #c62828; }
+        .summary { margin-top: 20px; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        .summary.all-pass { background: #c8e6c9; color: #1b5e20; }
+        .summary.has-fail { background: #ef9a9a; color: #b71c1c; }
+    </style>
+</head>
+<body>
+    <h1>Unit Tests</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script>
+    // === Minimal test runner ===
+    let passed = 0, failed = 0;
+    const results = document.getElementById('results');
+
+    function assert(condition, name) {
+        const div = document.createElement('div');
+        div.className = 'test ' + (condition ? 'pass' : 'fail');
+        div.textContent = (condition ? '\u2705' : '\u274C') + ' ' + name;
+        results.appendChild(div);
+        condition ? passed++ : failed++;
+    }
+
+    // === Import functions from app.js (copy the pure functions) ===
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function fuzzyMatch(text, query, maxDist = 2) {
+        if (!text || !query) return false;
+        if (text.includes(query)) return true;
+        if (query.length <= 2) return false;
+        const qLen = query.length;
+        const tLen = text.length;
+        let prev = new Array(qLen + 1);
+        for (let j = 0; j <= qLen; j++) prev[j] = j;
+        for (let i = 1; i <= tLen; i++) {
+            const curr = new Array(qLen + 1);
+            curr[0] = 0;
+            for (let j = 1; j <= qLen; j++) {
+                const cost = text[i - 1] === query[j - 1] ? 0 : 1;
+                curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+            }
+            if (curr[qLen] <= maxDist) return true;
+            prev = curr;
+        }
+        return false;
+    }
+
+    function getDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function detectChain(name) {
+        const n = name.toLowerCase();
+        if (n.includes('\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD') || n.includes('\u05E1\u05D5\u05E4\u05E8-\u05E4\u05D0\u05E8\u05DD')) return 'superpharm';
+        if (n.includes('\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC')) return 'shufersal';
+        if (n.includes('\u05E8\u05DE\u05D9 \u05DC\u05D5\u05D9')) return 'rami_levy';
+        if (n.includes('\u05D5\u05D9\u05E7\u05D8\u05D5\u05E8\u05D9')) return 'victory';
+        if (n.includes('\u05D0\u05D9\u05E7\u05D0\u05D4') || n.includes('ikea')) return 'ikea';
+        if (n.includes('\u05D4\u05D5\u05DD \u05E1\u05E0\u05D8\u05E8')) return 'home_center';
+        if (n.includes('\u05D0\u05D5\u05E4\u05D9\u05E1 \u05D3\u05D9\u05E4\u05D5')) return 'office_depot';
+        if (n.includes('\u05E4\u05DC\u05D0\u05E4\u05D5\u05DF')) return 'pelephone';
+        if (n.includes('\u05E1\u05DC\u05E7\u05D5\u05DD')) return 'cellcom';
+        if (n.includes('\u05E4\u05E8\u05D8\u05E0\u05E8')) return 'partner';
+        return 'other';
+    }
+
+    // === escapeHtml tests ===
+    assert(escapeHtml('hello') === 'hello', 'escapeHtml: plain text unchanged');
+    assert(escapeHtml('<script>') === '&lt;script&gt;', 'escapeHtml: escapes angle brackets');
+    assert(escapeHtml('"quotes"') === '&quot;quotes&quot;', 'escapeHtml: escapes double quotes');
+    assert(escapeHtml("it's") === "it&#039;s", 'escapeHtml: escapes single quotes');
+    assert(escapeHtml('a&b') === 'a&amp;b', 'escapeHtml: escapes ampersand');
+    assert(escapeHtml('') === '', 'escapeHtml: empty string returns empty');
+    assert(escapeHtml(null) === '', 'escapeHtml: null returns empty');
+    assert(escapeHtml(undefined) === '', 'escapeHtml: undefined returns empty');
+    assert(escapeHtml(123) === '123', 'escapeHtml: number converted to string');
+
+    // === fuzzyMatch tests ===
+    assert(fuzzyMatch('\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD', '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD') === true, 'fuzzyMatch: exact match');
+    assert(fuzzyMatch('\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD', '\u05D9\u05E8\u05D5\u05E9\u05DC') === true, 'fuzzyMatch: substring match');
+    assert(fuzzyMatch('\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD', '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DE') === true, 'fuzzyMatch: 1 char difference');
+    assert(fuzzyMatch('hello', 'xyz') === false, 'fuzzyMatch: no match');
+    assert(fuzzyMatch('', 'test') === false, 'fuzzyMatch: empty text');
+    assert(fuzzyMatch('test', '') === false, 'fuzzyMatch: empty query');
+    assert(fuzzyMatch(null, 'test') === false, 'fuzzyMatch: null text');
+    assert(fuzzyMatch('abc', 'ab') === true, 'fuzzyMatch: short query substring');
+    assert(fuzzyMatch('abc', 'xz') === false, 'fuzzyMatch: short query no match (skips fuzzy)');
+
+    // === getDistance tests ===
+    const d1 = getDistance(32.0853, 34.7818, 31.7683, 35.2137); // Tel Aviv to Jerusalem
+    assert(d1 > 50 && d1 < 70, 'getDistance: Tel Aviv to Jerusalem ~60km (got ' + d1.toFixed(1) + ')');
+    const d2 = getDistance(32.0853, 34.7818, 32.0853, 34.7818); // Same point
+    assert(d2 === 0, 'getDistance: same point = 0');
+    const d3 = getDistance(31.2530, 34.7915, 31.0461, 35.1489); // Beer Sheva to Arad
+    assert(d3 > 30 && d3 < 50, 'getDistance: Beer Sheva to Arad ~40km (got ' + d3.toFixed(1) + ')');
+
+    // === detectChain tests ===
+    assert(detectChain('\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD \u05EA\u05DC \u05D0\u05D1\u05D9\u05D1') === 'superpharm', 'detectChain: Superpharm');
+    assert(detectChain('\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC \u05D3\u05D9\u05DC') === 'shufersal', 'detectChain: Shufersal');
+    assert(detectChain('\u05E4\u05DC\u05D0\u05E4\u05D5\u05DF \u05D7\u05D9\u05E4\u05D4') === 'pelephone', 'detectChain: Pelephone');
+    assert(detectChain('\u05E1\u05DC\u05E7\u05D5\u05DD \u05D4\u05E8\u05E6\u05DC\u05D9\u05D4') === 'cellcom', 'detectChain: Cellcom');
+    assert(detectChain('\u05EA\u05D7\u05E0\u05EA \u05D3\u05DC\u05E7') === 'other', 'detectChain: unknown returns other');
+
+    // === "hours" filter logic ===
+    const hoursFilter = (hours) => hours && hours !== '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8';
+    assert(hoursFilter('\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8') === false, 'hoursFilter: filters out "\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8"');
+    assert(hoursFilter('08:00-20:00') === true, 'hoursFilter: keeps real hours');
+    assert(!hoursFilter(''), 'hoursFilter: filters empty string');
+    assert(!hoursFilter(null), 'hoursFilter: filters null');
+    assert(!hoursFilter(undefined), 'hoursFilter: filters undefined');
+
+    // === Summary ===
+    const summary = document.getElementById('summary');
+    summary.className = 'summary ' + (failed === 0 ? 'all-pass' : 'has-fail');
+    summary.textContent = passed + ' passed, ' + failed + ' failed out of ' + (passed + failed) + ' tests';
+    </script>
+</body>
+</html>
