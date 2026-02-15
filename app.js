@@ -19,8 +19,8 @@ function showNotification(message, duration = 2000) {
     }, duration);
 }
 
-// Report form URL — replace with your Google Form URL
-const REPORT_FORM_URL = 'https://forms.gle/YOUR_FORM_ID';
+// Report form URL
+const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
 
 // === HTML ESCAPING ===
 function escapeHtml(str) {
@@ -314,12 +314,10 @@ function getDistance(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-// Build report URL with pre-filled location info
+// Build report URL with pre-filled location name
 function getReportUrl(location) {
     const params = new URLSearchParams({
-        'entry.1': location.name,
-        'entry.2': location.address,
-        'entry.3': location.city
+        'entry.1466478113': location.name
     });
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
