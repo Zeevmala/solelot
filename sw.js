@@ -1,16 +1,19 @@
 // Service Worker for Battery Recycling Map
-const CACHE_NAME = 'battery-recycling-v13';
-const STATIC_CACHE = 'static-v13';
+const STATIC_CACHE = 'static-v14';
 const TILES_CACHE = 'tiles-v1';
 
-// Files to cache immediately (app shell)
-const STATIC_ASSETS = [
+// Critical assets — must cache for app to work (install fails if any are unreachable)
+const CRITICAL_ASSETS = [
     '/',
     '/index.html',
     '/style.css',
     '/app.js',
+    '/manifest.json'
+];
+
+// Optional assets — best-effort caching (install continues if these fail)
+const OPTIONAL_ASSETS = [
     '/locations.json',
-    '/manifest.json',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
     'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
@@ -26,15 +29,19 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(STATIC_CACHE)
             .then((cache) => {
-                console.log('Caching static assets');
-                return cache.addAll(STATIC_ASSETS);
+                console.log('Caching critical assets');
+                return cache.addAll(CRITICAL_ASSETS).then(() => {
+                    console.log('Caching optional assets (best-effort)');
+                    return Promise.allSettled(
+                        OPTIONAL_ASSETS.map(url => cache.add(url))
+                    );
+                });
             })
             .then(() => {
-                // Skip waiting to activate immediately
                 return self.skipWaiting();
             })
             .catch((error) => {
-                console.error('Failed to cache static assets:', error);
+                console.error('Failed to cache critical assets:', error);
             })
     );
 });
@@ -64,6 +71,9 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+    // Only intercept GET requests
+    if (event.request.method !== 'GET') return;
+
     const url = new URL(event.request.url);
 
     // Handle tile requests separately (cache with limit)
@@ -112,14 +122,25 @@ async function handleTileRequest(request) {
             cache.put(request, responseToCache).then(() => {
                 // Clean up old tiles if cache is too large
                 limitCacheSize(TILES_CACHE, 200);
+            }).catch(err => {
+                // Handle storage quota exceeded
+                if (err.name === 'QuotaExceededError') {
+                    limitCacheSize(TILES_CACHE, 100);
+                }
             });
         }
 
         return networkResponse;
     } catch (error) {
-        // Return a placeholder or error for tiles
+        // Return transparent 1x1 PNG fallback instead of blank square
         console.log('Tile fetch failed:', error);
-        return new Response('', { status: 408 });
+        const TRANSPARENT_PIXEL = Uint8Array.from(atob(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualEQAAAABJRU5ErkJggg=='
+        ), c => c.charCodeAt(0));
+        return new Response(TRANSPARENT_PIXEL, {
+            status: 200,
+            headers: { 'Content-Type': 'image/png' }
+        });
     }
 }
 
