@@ -31,7 +31,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Loading spinner overlay with error retry
 
 ## TODO
-- [ ] Create Google Form for "Report a problem" and replace placeholder URL in `app.js` (`REPORT_FORM_URL`)
+- [x] Create Google Form for "Report a problem" and replace placeholder URL in `app.js` (`REPORT_FORM_URL`)
 
 ## Nice to Have
 - [ ] Add `aria-label` to Leaflet marker/cluster divs (e.g. location name) — framework generates `role="button"` divs without accessible names
@@ -47,6 +47,8 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `scraper.js` | Script for collecting/updating location data |
 | `sw.js` | Service worker for offline/PWA support |
 | `manifest.json` | PWA manifest |
+| `test.html` | Unit tests (pure function tests, runs in browser) |
+| `test-map.html` | Integration tests (map/UI tests, runs in browser) |
 | `icons/` | App icons in various sizes |
 
 ## Conventions
