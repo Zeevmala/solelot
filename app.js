@@ -317,10 +317,12 @@ function getDistance(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-// Build report URL with pre-filled location name
+// Build report URL with pre-filled location name, address, and city
 function getReportUrl(location) {
     const params = new URLSearchParams({
-        'entry.1466478113': location.name
+        'entry.1466478113': location.name,
+        'entry.1234054889': location.address,
+        'entry.1388870063': location.city
     });
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
