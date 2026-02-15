@@ -267,8 +267,12 @@ const markerCluster = L.markerClusterGroup({
         if (count > 100) size = 'large';
         else if (count > 20) size = 'medium';
 
+        // Hebrew plural: 1 מיקום, 2+ מיקומים
+        const locationText = count === 1 ? 'מיקום' : 'מיקומים';
+        const ariaLabel = `${count} ${locationText}`;
+
         return L.divIcon({
-            html: `<div><span>${count}</span></div>`,
+            html: `<div aria-label="${ariaLabel}"><span>${count}</span></div>`,
             className: `marker-cluster marker-cluster-${size}`,
             iconSize: L.point(40, 40)
         });
@@ -893,6 +897,15 @@ function loadLocations() {
 
                 marker.on('click', () => {
                     showSidebar(location);
+                });
+
+                // Add aria-label when marker is added to map
+                marker.on('add', () => {
+                    const element = marker.getElement();
+                    if (element) {
+                        const ariaLabel = `${escapeHtml(location.name)} - ${typeNames[location.type]}`;
+                        element.setAttribute('aria-label', ariaLabel);
+                    }
                 });
 
                 allMarkers.push({ marker, location });
