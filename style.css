@@ -8,16 +8,13 @@
     --text-muted: #888888;
     --accent-primary: #1565C0;
     --accent-dark: #0D47A1;
-    --accent-light: #42A5F5;
     --accent-action: #1976D2;
-    --accent-eco: #4CAF50;
     --accent-red: #d32f2f;
     --border-color: #cccccc;
     --border-light: #eeeeee;
     --shadow-light: rgba(0,0,0,0.1);
     --shadow-medium: rgba(0,0,0,0.15);
     --shadow-strong: rgba(0,0,0,0.2);
-    --overlay-bg: rgba(255, 255, 255, 0.95);
     --accent-teal: #00796B;
 }
 
@@ -219,7 +216,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #333;
+    color: var(--text-primary);
     cursor: pointer;
     box-shadow: 0 2px 10px var(--shadow-medium);
     transition: all 0.2s;
@@ -254,7 +251,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #333;
+    color: var(--text-primary);
     cursor: pointer;
     box-shadow: 0 2px 10px var(--shadow-medium);
     transition: all 0.2s;
@@ -337,7 +334,6 @@ body {
 
 /* Custom Battery Markers */
 .battery-marker {
-    cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><line x1='16' y1='2' x2='16' y2='14' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='18' x2='16' y2='30' stroke='%23333' stroke-width='1.2'/><line x1='2' y1='16' x2='14' y2='16' stroke='%23333' stroke-width='1.2'/><line x1='18' y1='16' x2='30' y2='16' stroke='%23333' stroke-width='1.2'/></svg>") 16 16, crosshair !important;
     transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
@@ -359,16 +355,13 @@ body {
 .leaflet-popup-content {
     direction: rtl;
     text-align: right;
+    margin: 20px 22px;
+    line-height: 1.6;
 }
 
 .leaflet-popup-content-wrapper {
     border-radius: 12px;
     box-shadow: 0 4px 20px var(--shadow-medium);
-}
-
-.leaflet-popup-content {
-    margin: 20px 22px;
-    line-height: 1.6;
 }
 
 .leaflet-popup-content h3 {
@@ -461,11 +454,6 @@ body {
 .nav-btn:hover {
     background: var(--accent-teal);
     color: white;
-}
-
-.nav-btn.google,
-.nav-btn.waze {
-    background: transparent;
 }
 
 .nav-btn.google:hover,
@@ -620,11 +608,6 @@ body {
     box-shadow: 0 6px 16px var(--shadow-medium);
     background: var(--accent-teal);
     color: white;
-}
-
-.sidebar-nav-btn.google,
-.sidebar-nav-btn.waze {
-    background: transparent;
 }
 
 .sidebar-nav-btn.google:hover,
