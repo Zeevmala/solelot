@@ -46,9 +46,14 @@
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
-    const REPORT_FORM_URL = 'https://forms.gle/YOUR_FORM_ID';
+    const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
     function getReportUrl(location) {
-        const params = new URLSearchParams({ 'entry.1': location.name, 'entry.2': location.address, 'entry.3': location.city });
+        const params = new URLSearchParams({
+            'entry.1466478113': location.name,
+            'entry.1234054889': location.address,
+            'entry.1388870063': location.city,
+            'hl': 'he'
+        });
         return REPORT_FORM_URL + '?' + params.toString();
     }
 

@@ -48,6 +48,7 @@
         if (!text || !query) return false;
         if (text.includes(query)) return true;
         if (query.length <= 2) return false;
+        if (Math.abs(text.length - query.length) > 3) return false;
         const qLen = query.length;
         const tLen = text.length;
         let prev = new Array(qLen + 1);
@@ -112,6 +113,7 @@
     assert(fuzzyMatch(null, 'test') === false, 'fuzzyMatch: null text');
     assert(fuzzyMatch('abc', 'ab') === true, 'fuzzyMatch: short query substring');
     assert(fuzzyMatch('abc', 'xz') === false, 'fuzzyMatch: short query no match (skips fuzzy)');
+    assert(fuzzyMatch('abcdefgh', 'abcd') === false, 'fuzzyMatch: length difference > 3 returns false');
 
     // === getDistance tests ===
     const d1 = getDistance(32.0853, 34.7818, 31.7683, 35.2137); // Tel Aviv to Jerusalem
