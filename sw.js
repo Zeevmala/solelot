@@ -1,20 +1,20 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v15';
+const STATIC_CACHE = 'static-v14';
 const TILES_CACHE = 'tiles-v1';
 let tileCacheCount = 0;
 
 // Critical assets — must cache for app to work (install fails if any are unreachable)
 const CRITICAL_ASSETS = [
-    './',
-    './index.html',
-    './style.css',
-    './app.js',
-    './manifest.json'
+    '/',
+    '/index.html',
+    '/style.css',
+    '/app.js',
+    '/manifest.json'
 ];
 
 // Optional assets — best-effort caching (install continues if these fail)
 const OPTIONAL_ASSETS = [
-    './locations.json',
+    '/locations.json',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
     'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
@@ -205,7 +205,7 @@ async function handleStaticRequest(request) {
         // Return offline page for navigation requests
         if (request.mode === 'navigate') {
             const cache = await caches.open(STATIC_CACHE);
-            return cache.match('./index.html');
+            return cache.match('/index.html');
         }
 
         return new Response('Offline', { status: 503 });
@@ -227,19 +227,15 @@ async function fetchAndCache(request) {
 
 // Limit cache size by removing oldest entries
 async function limitCacheSize(cacheName, maxItems) {
-    try {
-        const cache = await caches.open(cacheName);
-        const keys = await cache.keys();
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
 
-        if (keys.length > maxItems) {
-            // Delete oldest entries (first in list)
-            const deleteCount = keys.length - maxItems;
-            for (let i = 0; i < deleteCount; i++) {
-                await cache.delete(keys[i]);
-            }
+    if (keys.length > maxItems) {
+        // Delete oldest entries (first in list)
+        const deleteCount = keys.length - maxItems;
+        for (let i = 0; i < deleteCount; i++) {
+            await cache.delete(keys[i]);
         }
-    } catch (error) {
-        console.error('Failed to limit cache size:', error);
     }
 }
 

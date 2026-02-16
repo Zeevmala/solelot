@@ -31,7 +31,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Loading spinner overlay with error retry
 
 ## Nice to Have
-- [x] Add `aria-label` to Leaflet marker/cluster divs (e.g. location name) — framework generates `role="button"` divs without accessible names
+- [ ] Add `aria-label` to Leaflet marker/cluster divs (e.g. location name) — framework generates `role="button"` divs without accessible names
 - [ ] Replace "רחובות" streets basemap with HERE Maps tiles — requires free API key from https://platform.here.com/sign-up (URL: `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png8?style=explore.day&apiKey=KEY`)
 - [ ] Add testing hooks (setup/teardown/beforeEach/afterEach) — only needed when implementing Phase 2 (Vitest) or testing async functions/Leaflet operations; current HTML tests don't require them since pure functions have no side effects
 
