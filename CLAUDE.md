@@ -30,9 +30,6 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - XSS protection (HTML escaping on all location data)
 - Loading spinner overlay with error retry
 
-## TODO
-- [x] Create Google Form for "Report a problem" and replace placeholder URL in `app.js` (`REPORT_FORM_URL`)
-
 ## Nice to Have
 - [ ] Add `aria-label` to Leaflet marker/cluster divs (e.g. location name) — framework generates `role="button"` divs without accessible names
 - [ ] Replace "רחובות" streets basemap with HERE Maps tiles — requires free API key from https://platform.here.com/sign-up (URL: `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png8?style=explore.day&apiKey=KEY`)
@@ -49,6 +46,11 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `manifest.json` | PWA manifest |
 | `test.html` | Unit tests (pure function tests, runs in browser) |
 | `test-map.html` | Integration tests (map/UI tests, runs in browser) |
+| `CLAUDE.md` | Project instructions for Claude Code |
+| `README.md` | Project documentation |
+| `spec.md` | Project specification |
+| `favicon.ico` | Browser tab icon |
+| `.gitignore` | Git ignore rules |
 | `icons/` | App icons in various sizes |
 
 ## Conventions
