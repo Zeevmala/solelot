@@ -1,6 +1,7 @@
 // Service Worker for Battery Recycling Map
 const STATIC_CACHE = 'static-v14';
 const TILES_CACHE = 'tiles-v1';
+let tileCacheCount = 0;
 
 // Critical assets — must cache for app to work (install fails if any are unreachable)
 const CRITICAL_ASSETS = [
@@ -120,8 +121,11 @@ async function handleTileRequest(request) {
 
             // Cache the tile (don't await to not block response)
             cache.put(request, responseToCache).then(() => {
-                // Clean up old tiles if cache is too large
-                limitCacheSize(TILES_CACHE, 200);
+                // Clean up old tiles periodically (every 20 caches)
+                tileCacheCount++;
+                if (tileCacheCount % 20 === 0) {
+                    limitCacheSize(TILES_CACHE, 200);
+                }
             }).catch(err => {
                 // Handle storage quota exceeded
                 if (err.name === 'QuotaExceededError') {

@@ -18,6 +18,7 @@
     --shadow-medium: rgba(0,0,0,0.15);
     --shadow-strong: rgba(0,0,0,0.2);
     --overlay-bg: rgba(255, 255, 255, 0.95);
+    --accent-teal: #00796B;
 }
 
 /* Reset and base styles */
@@ -271,9 +272,9 @@ body {
 }
 
 .locate-btn.active {
-    background: #00796B;
+    background: var(--accent-teal);
     color: white;
-    border-color: #00796B;
+    border-color: var(--accent-teal);
 }
 
 .locate-btn.loading {
@@ -452,13 +453,13 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    border: 2px solid #00796B;
+    border: 2px solid var(--accent-teal);
     background: transparent;
-    color: #00796B;
+    color: var(--accent-teal);
 }
 
 .nav-btn:hover {
-    background: #00796B;
+    background: var(--accent-teal);
     color: white;
 }
 
@@ -469,7 +470,7 @@ body {
 
 .nav-btn.google:hover,
 .nav-btn.waze:hover {
-    background: #00796B;
+    background: var(--accent-teal);
     color: white;
 }
 
@@ -535,9 +536,6 @@ body {
     border-bottom: 2px solid var(--border-light);
 }
 
-.sidebar-icon {
-    flex-shrink: 0;
-}
 
 .sidebar-title {
     flex: 1;
@@ -612,15 +610,15 @@ body {
     justify-content: center;
     gap: 8px;
     cursor: pointer;
-    border: 2px solid #00796B;
+    border: 2px solid var(--accent-teal);
     background: transparent;
-    color: #00796B;
+    color: var(--accent-teal);
 }
 
 .sidebar-nav-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 16px var(--shadow-medium);
-    background: #00796B;
+    background: var(--accent-teal);
     color: white;
 }
 
@@ -631,7 +629,7 @@ body {
 
 .sidebar-nav-btn.google:hover,
 .sidebar-nav-btn.waze:hover {
-    background: #00796B;
+    background: var(--accent-teal);
     color: white;
 }
 

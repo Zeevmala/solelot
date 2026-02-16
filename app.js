@@ -890,9 +890,12 @@ function loadLocations() {
                 const icon = icons[location.type] || icons.store;
                 const marker = L.marker([location.lat, location.lng], { icon: icon });
 
-                // Only show popups on desktop; mobile uses sidebar only
+                // Lazy-load popup HTML on first open (desktop only)
                 if (window.innerWidth > 768) {
-                    marker.bindPopup(createPopupContent(location), { maxWidth: 300 });
+                    marker.once('popupopen', () => {
+                        marker.setPopupContent(createPopupContent(location));
+                    });
+                    marker.bindPopup('', { maxWidth: 300 });
                 }
 
                 marker.on('click', () => {
@@ -929,8 +932,10 @@ function loadLocations() {
             // Show empty state with retry option
             const emptyState = document.getElementById('empty-state');
             if (emptyState) {
-                emptyState.querySelector('h3').textContent = 'שגיאה בטעינת הנתונים';
-                emptyState.querySelector('p').textContent = 'בדוק את החיבור לאינטרנט ונסה שוב';
+                const h3 = emptyState.querySelector('h3');
+                const p = emptyState.querySelector('p');
+                if (h3) h3.textContent = 'שגיאה בטעינת הנתונים';
+                if (p) p.textContent = 'בדוק את החיבור לאינטרנט ונסה שוב';
                 const retryBtn = emptyState.querySelector('.clear-filters-btn');
                 if (retryBtn) retryBtn.textContent = 'נסה שוב';
                 emptyState.style.display = 'block';
