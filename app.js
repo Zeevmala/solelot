@@ -24,6 +24,11 @@ function showNotification(message, duration = 2000) {
 // Report form URL
 const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
 
+// Named constants
+const MOBILE_BREAKPOINT = 768;
+const EARTH_RADIUS_KM = 6371;
+const SWIPE_THRESHOLD_PX = 80;
+
 // === HTML ESCAPING ===
 function escapeHtml(str) {
     if (!str) return '';
@@ -287,30 +292,36 @@ const cityCounts = new Map();
 let currentSearch = '';
 let selectedLocationId = null;
 
-// Chain detection from name
+// Chain detection from name — data-driven lookup
+const CHAIN_PATTERNS = [
+    { patterns: ['סופר פארם', 'סופר-פארם'], chain: 'superpharm' },
+    { patterns: ['שופרסל'], chain: 'shufersal' },
+    { patterns: ['רמי לוי'], chain: 'rami_levy' },
+    { patterns: ['ויקטורי'], chain: 'victory' },
+    { patterns: ['איקאה', 'ikea'], chain: 'ikea' },
+    { patterns: ['הום סנטר'], chain: 'home_center' },
+    { patterns: ['אופיס דיפו'], chain: 'office_depot' },
+    { patterns: ['פלאפון'], chain: 'pelephone' },
+    { patterns: ['סלקום'], chain: 'cellcom' },
+    { patterns: ['פרטנר'], chain: 'partner' },
+    { patterns: ['מדטון'], chain: 'medton' },
+    { patterns: ['ביג אלקטריק'], chain: 'big_electric' },
+    { patterns: ['באג'], chain: 'bug' },
+    { patterns: ['עיריי', 'מועצה', 'רשות מקומית'], chain: 'municipality' },
+    { patterns: ['בית ספר', 'ביה"ס'], chain: 'school' },
+];
+
 function detectChain(name) {
     const n = name.toLowerCase();
-    if (n.includes('סופר פארם') || n.includes('סופר-פארם')) return 'superpharm';
-    if (n.includes('שופרסל')) return 'shufersal';
-    if (n.includes('רמי לוי')) return 'rami_levy';
-    if (n.includes('ויקטורי')) return 'victory';
-    if (n.includes('איקאה') || n.includes('ikea')) return 'ikea';
-    if (n.includes('הום סנטר')) return 'home_center';
-    if (n.includes('אופיס דיפו')) return 'office_depot';
-    if (n.includes('פלאפון')) return 'pelephone';
-    if (n.includes('סלקום')) return 'cellcom';
-    if (n.includes('פרטנר')) return 'partner';
-    if (n.includes('מדטון')) return 'medton';
-    if (n.includes('ביג אלקטריק')) return 'big_electric';
-    if (n.includes('באג')) return 'bug';
-    if (n.includes('עיריי') || n.includes('מועצה') || n.includes('רשות מקומית')) return 'municipality';
-    if (n.includes('בית ספר') || n.includes('ביה"ס')) return 'school';
+    for (const { patterns, chain } of CHAIN_PATTERNS) {
+        if (patterns.some(p => n.includes(p))) return chain;
+    }
     return 'other';
 }
 
 // Calculate distance between two points (in km)
 function getDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371;
+    const R = EARTH_RADIUS_KM;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
     const a =
@@ -494,8 +505,8 @@ function hideSidebar() {
 function updateMarkers() {
     const visibleMarkers = [];
 
-    allMarkers.forEach((item, index) => {
-        const location = allLocations[index];
+    allMarkers.forEach((item) => {
+        const location = item.location;
 
         const searchMatch = currentSearch === '' ||
             location.city.includes(currentSearch) ||
@@ -692,7 +703,7 @@ function setupAutocomplete() {
             const visibleMarkers = updateMarkers();
             zoomToVisibleMarkers(visibleMarkers);
         } else {
-            const locationId = parseInt(item.dataset.id);
+            const locationId = parseInt(item.dataset.id, 10);
             if (isNaN(locationId)) return;
             searchInput.value = '';
             focusOnLocation(locationId);
@@ -891,7 +902,7 @@ function loadLocations() {
                 const marker = L.marker([location.lat, location.lng], { icon: icon });
 
                 // Lazy-load popup HTML on first open (desktop only)
-                if (window.innerWidth > 768) {
+                if (window.innerWidth > MOBILE_BREAKPOINT) {
                     marker.once('popupopen', () => {
                         marker.setPopupContent(createPopupContent(location));
                     });
@@ -961,7 +972,7 @@ if (sidebarEl) {
     let isSwiping = false;
 
     sidebarEl.addEventListener('touchstart', (e) => {
-        if (window.innerWidth > 768) return;
+        if (window.innerWidth > MOBILE_BREAKPOINT) return;
         touchStartY = e.touches[0].clientY;
         isSwiping = true;
         sidebarEl.style.transition = 'none';
@@ -982,7 +993,7 @@ if (sidebarEl) {
         isSwiping = false;
         sidebarEl.style.transition = '';
         const deltaY = touchCurrentY - touchStartY;
-        if (deltaY > 80) {
+        if (deltaY > SWIPE_THRESHOLD_PX) {
             hideSidebar();
         } else {
             sidebarEl.style.transform = '';
