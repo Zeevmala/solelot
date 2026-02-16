@@ -3,6 +3,7 @@ node_modules/
 
 # Debug/temp files
 raw_markers.json
+locations.backup.json
 
 # OS files
 .DS_Store
