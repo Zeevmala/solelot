@@ -7,6 +7,7 @@ raw_markers.json
 # OS files
 .DS_Store
 Thumbs.db
+nul
 
 # IDE
 .vscode/
