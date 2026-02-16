@@ -80,17 +80,9 @@ body {
     width: 100%;
 }
 
-/* Force aim cursor everywhere on the map — override all Leaflet cursor classes */
+/* Force aim cursor everywhere on the map — single rule instead of per-class overrides */
 #map,
-#map.leaflet-container,
-#map .leaflet-grab,
-#map.leaflet-grab,
-#map .leaflet-interactive,
-#map .leaflet-marker-icon,
-#map .leaflet-marker-shadow,
-#map.leaflet-container:active,
-#map .leaflet-dragging .leaflet-grab,
-#map .leaflet-dragging .leaflet-interactive {
+#map * {
     cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><line x1='16' y1='2' x2='16' y2='14' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='18' x2='16' y2='30' stroke='%23333' stroke-width='1.2'/><line x1='2' y1='16' x2='14' y2='16' stroke='%23333' stroke-width='1.2'/><line x1='18' y1='16' x2='30' y2='16' stroke='%23333' stroke-width='1.2'/></svg>") 16 16, crosshair !important;
 }
 
@@ -287,6 +279,7 @@ body {
 .locate-btn.loading {
     color: var(--accent-primary);
     animation: pulse 1s ease-in-out infinite;
+    will-change: opacity;
 }
 
 @keyframes pulse {
@@ -298,6 +291,7 @@ body {
 .marker-cluster {
     background-clip: padding-box;
     border-radius: 50%;
+    contain: layout style paint;
 }
 
 .marker-cluster div {
@@ -492,6 +486,7 @@ body {
     display: flex;
     flex-direction: column;
     transition: transform 0.3s ease;
+    will-change: transform;
     overflow: hidden;
 }
 

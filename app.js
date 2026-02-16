@@ -3,15 +3,17 @@
 // ============================================
 
 // === NOTIFICATION SYSTEM ===
+let notificationTimeout;
 function showNotification(message, duration = 2000) {
     const notification = document.getElementById('notification');
     if (!notification) return;
 
+    clearTimeout(notificationTimeout);
     notification.textContent = message;
     notification.style.display = 'block';
     notification.classList.add('show');
 
-    setTimeout(() => {
+    notificationTimeout = setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => {
             notification.style.display = 'none';
@@ -40,6 +42,7 @@ function fuzzyMatch(text, query, maxDist = 2) {
     if (!text || !query) return false;
     if (text.includes(query)) return true;
     if (query.length <= 2) return false; // too short for fuzzy
+    if (Math.abs(text.length - query.length) > 3) return false; // too different to match
 
     // Sliding window Levenshtein: check if any substring of text
     // of length ~query.length is within maxDist edits
@@ -264,8 +267,12 @@ const markerCluster = L.markerClusterGroup({
         if (count > 100) size = 'large';
         else if (count > 20) size = 'medium';
 
+        // Hebrew plural: 1 מיקום, 2+ מיקומים
+        const locationText = count === 1 ? 'מיקום' : 'מיקומים';
+        const ariaLabel = `${count} ${locationText}`;
+
         return L.divIcon({
-            html: `<div><span>${count}</span></div>`,
+            html: `<div aria-label="${ariaLabel}"><span>${count}</span></div>`,
             className: `marker-cluster marker-cluster-${size}`,
             iconSize: L.point(40, 40)
         });
@@ -314,17 +321,21 @@ function getDistance(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-// Build report URL with pre-filled location name
+// Build report URL with pre-filled location name, address, and city
 function getReportUrl(location) {
     const params = new URLSearchParams({
-        'entry.1466478113': location.name
+        'entry.1466478113': location.name,
+        'entry.1234054889': location.address,
+        'entry.1388870063': location.city,
+        'hl': 'he'
     });
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
 // Create popup content for a location
 function createPopupContent(location) {
-    const typeIcon = markerSvg[location.type].replace('width="36" height="48"', 'width="20" height="28"');
+    const safeType = ['store', 'facility'].includes(location.type) ? location.type : 'store';
+    const typeIcon = markerSvg[safeType].replace('width="36" height="48"', 'width="20" height="28"');
 
     let content = `
         <div class="popup-header">
@@ -373,10 +384,10 @@ function createPopupContent(location) {
 
     content += `
         <div class="nav-links">
-            <a href="${googleMapsUrl}" target="_blank" class="nav-btn google">Google Maps</a>
-            <a href="${wazeUrl}" target="_blank" class="nav-btn waze">Waze</a>
+            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn google">Google Maps</a>
+            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">Waze</a>
         </div>
-        <a href="${reportUrl}" target="_blank" class="report-link">דווח על בעיה</a>
+        <a href="${reportUrl}" target="_blank" rel="noopener noreferrer" class="report-link">דווח על בעיה</a>
     `;
 
     return content;
@@ -436,44 +447,44 @@ function createSidebarContent(location) {
         </div>
 
         <div class="sidebar-nav">
-            <a href="${googleMapsUrl}" target="_blank" class="sidebar-nav-btn google">
+            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn google">
                 נווט ב-Google
             </a>
-            <a href="${wazeUrl}" target="_blank" class="sidebar-nav-btn waze">
+            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn waze">
                 נווט ב-Waze
             </a>
         </div>
 
-        <a href="${getReportUrl(location)}" target="_blank" class="report-link">
+        <a href="${getReportUrl(location)}" target="_blank" rel="noopener noreferrer" class="report-link">
             ⚠️ דווח על בעיה בנקודה זו
         </a>
     `;
 }
 
+// Cached sidebar DOM references (set once after DOMContentLoaded)
+const cachedSidebar = document.getElementById('sidebar');
+const cachedSidebarContent = document.getElementById('sidebar-content');
+const cachedSidebarClose = document.getElementById('sidebar-close');
+
 // Show sidebar with location details
 function showSidebar(location) {
-    const sidebar = document.getElementById('sidebar');
-    const sidebarContent = document.getElementById('sidebar-content');
-
-    if (!sidebar || !sidebarContent) return;
+    if (!cachedSidebar || !cachedSidebarContent) return;
 
     map.closePopup();
     selectedLocationId = location.id;
-    sidebarContent.innerHTML = createSidebarContent(location);
-    sidebar.style.display = 'flex';
-    sidebar.classList.remove('hidden');
+    cachedSidebarContent.innerHTML = createSidebarContent(location);
+    cachedSidebar.style.display = 'flex';
+    cachedSidebar.classList.remove('hidden');
 
-    const closeBtn = document.getElementById('sidebar-close');
-    if (closeBtn) closeBtn.focus();
+    if (cachedSidebarClose) cachedSidebarClose.focus();
 }
 
 // Hide sidebar
 function hideSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    if (sidebar) {
-        sidebar.classList.add('hidden');
+    if (cachedSidebar) {
+        cachedSidebar.classList.add('hidden');
         setTimeout(() => {
-            sidebar.style.display = 'none';
+            cachedSidebar.style.display = 'none';
         }, 300);
     }
     selectedLocationId = null;
@@ -539,7 +550,11 @@ function zoomToVisibleMarkers(visibleMarkers) {
 }
 
 // === AUTOCOMPLETE SEARCH ===
+let autocompleteInitialized = false;
 function setupAutocomplete() {
+    if (autocompleteInitialized) return;
+    autocompleteInitialized = true;
+
     const searchInput = document.getElementById('search-input');
     const suggestions = document.getElementById('search-suggestions');
     if (!searchInput || !suggestions) return;
@@ -678,6 +693,7 @@ function setupAutocomplete() {
             zoomToVisibleMarkers(visibleMarkers);
         } else {
             const locationId = parseInt(item.dataset.id);
+            if (isNaN(locationId)) return;
             searchInput.value = '';
             focusOnLocation(locationId);
         }
@@ -767,6 +783,9 @@ locateControl.onAdd = function() {
             return;
         }
 
+        // Prevent concurrent geolocation requests
+        if (btn.classList.contains('loading')) return;
+
         btn.classList.add('loading');
         showNotification('מאתר מיקום...');
 
@@ -843,7 +862,13 @@ function loadLocations() {
     fetch('locations.json')
         .then(response => response.json())
         .then(data => {
-            allLocations = data.locations;
+            // Validate and filter location data
+            allLocations = data.locations.filter(loc => {
+                if (!loc.id || !loc.name || !loc.address || !loc.city || !loc.type) return false;
+                if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
+                if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
+                return true;
+            });
             totalLocations = allLocations.length;
 
             // Pre-compute city counts for fast autocomplete
@@ -872,6 +897,15 @@ function loadLocations() {
 
                 marker.on('click', () => {
                     showSidebar(location);
+                });
+
+                // Add aria-label when marker is added to map
+                marker.on('add', () => {
+                    const element = marker.getElement();
+                    if (element) {
+                        const ariaLabel = `${escapeHtml(location.name)} - ${typeNames[location.type]}`;
+                        element.setAttribute('aria-label', ariaLabel);
+                    }
                 });
 
                 allMarkers.push({ marker, location });
