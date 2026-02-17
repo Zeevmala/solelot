@@ -476,8 +476,6 @@ function createSidebarContent(location) {
         <div class="sidebar-header">
             <div class="sidebar-title">
                 <h2>${escapeHtml(location.name)}</h2>
-                ${chain !== 'other' && chainName ? `<span class="type-badge" role="button" tabindex="0" aria-expanded="false">${escapeHtml(chainName)}</span>
-                <p class="type-explanation">${escapeHtml(chainExplanations[chain] || '')}</p>` : ''}
             </div>
         </div>
 
@@ -529,23 +527,6 @@ function showSidebar(location) {
     cachedSidebarContent.innerHTML = createSidebarContent(location);
     cachedSidebar.style.display = 'flex';
     cachedSidebar.classList.remove('hidden');
-
-    // Wire up type-badge toggle for explanation
-    const badge = cachedSidebarContent.querySelector('.type-badge');
-    const explanation = cachedSidebarContent.querySelector('.type-explanation');
-    if (badge && explanation) {
-        const toggle = () => {
-            const expanded = explanation.classList.toggle('visible');
-            badge.setAttribute('aria-expanded', String(expanded));
-        };
-        badge.addEventListener('click', toggle);
-        badge.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggle();
-            }
-        });
-    }
 
     if (cachedSidebarClose) cachedSidebarClose.focus();
 }
