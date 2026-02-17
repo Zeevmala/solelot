@@ -476,8 +476,8 @@ function createSidebarContent(location) {
         <div class="sidebar-header">
             <div class="sidebar-title">
                 <h2>${escapeHtml(location.name)}</h2>
-                <span class="type-badge" role="button" tabindex="0" aria-expanded="false">${chainName ? escapeHtml(chainName) : escapeHtml(typeNames[location.type])}</span>
-                <p class="type-explanation">${escapeHtml(chainExplanations[chain] || tagExplanations[location.type] || '')}</p>
+                ${chain !== 'other' && chainName ? `<span class="type-badge" role="button" tabindex="0" aria-expanded="false">${escapeHtml(chainName)}</span>
+                <p class="type-explanation">${escapeHtml(chainExplanations[chain] || '')}</p>` : ''}
             </div>
         </div>
 
