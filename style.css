@@ -655,20 +655,61 @@ body {
     color: white;
 }
 
-/* Report Problem Link */
-.report-link {
-    display: block;
-    text-align: center;
+/* Feedback Like/Dislike Buttons */
+.feedback-row {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
     margin-top: 16px;
-    padding: 8px;
-    font-size: 12px;
-    color: var(--text-muted);
-    text-decoration: none;
-    transition: color 0.2s;
+    padding-top: 8px;
 }
 
-.report-link:hover {
+.feedback-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.feedback-btn:hover {
+    border-color: var(--accent-teal);
+    color: var(--accent-teal);
+    box-shadow: 0 2px 8px var(--shadow-light);
+}
+
+.feedback-btn:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.like-btn.liked {
+    color: var(--accent-teal);
+    border-color: var(--accent-teal);
+    background: rgba(0, 121, 107, 0.08);
+}
+
+.dislike-btn:hover {
+    border-color: var(--accent-red);
     color: var(--accent-red);
+}
+
+@keyframes pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.35); }
+    70% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+}
+
+.feedback-btn.pop {
+    animation: pop 0.4s ease-out;
 }
 
 /* Loading Overlay — Skeleton */

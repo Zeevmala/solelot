@@ -75,7 +75,10 @@
 
         content += '<div class="nav-links"><a href="' + googleMapsUrl + '" target="_blank" class="nav-btn google">Google Maps</a>';
         content += '<a href="' + wazeUrl + '" target="_blank" class="nav-btn waze">Waze</a></div>';
-        content += '<a href="' + reportUrl + '" target="_blank" class="report-link">\u05D3\u05D5\u05D5\u05D7 \u05E2\u05DC \u05D1\u05E2\u05D9\u05D4</a>';
+        content += '<div class="feedback-row">';
+        content += '<button class="feedback-btn like-btn" data-id="' + location.id + '" onclick="handleLike(' + location.id + ')">\uD83D\uDC4D</button>';
+        content += '<button class="feedback-btn dislike-btn" onclick="handleDislike(\'' + reportUrl + '\')">\uD83D\uDC4E</button>';
+        content += '</div>';
 
         return content;
     }
@@ -164,7 +167,9 @@
             assert(popup.includes('Waze'), 'Popup: Waze button text (no emoji)');
             assert(popup.includes('nav-btn google'), 'Popup: Google button has correct class');
             assert(popup.includes('nav-btn waze'), 'Popup: Waze button has correct class');
-            assert(popup.includes('\u05D3\u05D5\u05D5\u05D7 \u05E2\u05DC \u05D1\u05E2\u05D9\u05D4'), 'Popup: report link present');
+            assert(popup.includes('feedback-row'), 'Popup: feedback buttons row present');
+            assert(popup.includes('like-btn'), 'Popup: like button present');
+            assert(popup.includes('dislike-btn'), 'Popup: dislike button present');
             assert(popup.includes('08:00-22:00'), 'Popup: real hours shown');
 
             const testLocBadHours = { id: 2, name: '\u05EA\u05D7\u05E0\u05D4', address: '\u05DB\u05EA\u05D5\u05D1\u05EA', city: '\u05E2\u05D9\u05E8', lat: 32.0, lng: 34.8, type: 'store', hours: '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8' };
