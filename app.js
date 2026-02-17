@@ -27,7 +27,6 @@ const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq
 // Named constants
 const MOBILE_BREAKPOINT = 768;
 const EARTH_RADIUS_KM = 6371;
-const SWIPE_THRESHOLD_PX = 80;
 
 // === HTML ESCAPING ===
 function escapeHtml(str) {
@@ -253,6 +252,50 @@ const chainNames = {
     other: 'אחר'
 };
 
+// Hebrew explanations for location types
+const tagExplanations = {
+    store: 'נקודת איסוף שבה ניתן להשאיר סוללות משומשות למיחזור',
+    facility: 'מתקן תעשייתי המעבד ומפרק סוללות לחומרי גלם'
+};
+
+// Chain-specific descriptions
+const chainExplanations = {
+    superpharm: 'רשת בתי מרקחת עם עמדות איסוף סוללות בסניפים',
+    shufersal: 'רשת סופרמרקטים עם מכלי איסוף סוללות בכניסה',
+    rami_levy: 'רשת מזון עם נקודות איסוף סוללות',
+    victory: 'רשת מזון עם נקודות איסוף סוללות',
+    ikea: 'חנות רהיטים עם עמדת מיחזור סוללות',
+    home_center: 'רשת לבית ולגינה עם נקודות איסוף סוללות',
+    office_depot: 'רשת ציוד משרדי עם נקודות איסוף סוללות',
+    pelephone: 'רשת סלולר המקבלת סוללות ומכשירים ישנים',
+    cellcom: 'רשת סלולר המקבלת סוללות ומכשירים ישנים',
+    partner: 'רשת סלולר המקבלת סוללות ומכשירים ישנים',
+    medton: 'חברת איסוף וטיפול בפסולת אלקטרונית',
+    big_electric: 'רשת מוצרי חשמל עם נקודות איסוף סוללות',
+    bug: 'רשת מוצרי חשמל עם נקודות איסוף סוללות',
+    municipality: 'נקודת איסוף עירונית בניהול הרשות המקומית',
+    school: 'נקודת איסוף סוללות בבית ספר',
+    other: 'נקודת איסוף סוללות'
+};
+
+// Small battery icons for popups (20×20, no pin shape)
+const popupBatterySvg = {
+    store: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+        <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#00796B"/>
+        <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#26A69A"/>
+        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
+        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
+        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
+    </svg>`,
+    facility: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+        <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#EF6C00"/>
+        <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#FFA726"/>
+        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
+        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
+        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
+    </svg>`
+};
+
 // Store all locations and markers
 let allLocations = [];
 let allMarkers = [];
@@ -346,7 +389,9 @@ function getReportUrl(location) {
 // Create popup content for a location
 function createPopupContent(location) {
     const safeType = ['store', 'facility'].includes(location.type) ? location.type : 'store';
-    const typeIcon = markerSvg[safeType].replace('width="36" height="48"', 'width="20" height="28"');
+    const typeIcon = popupBatterySvg[safeType];
+
+    const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
 
     let content = `
         <div class="popup-header">
@@ -355,9 +400,9 @@ function createPopupContent(location) {
                 ${escapeHtml(location.name)}
             </h3>
         </div>
-        <div class="popup-row">
+        ${hasAddress ? `<div class="popup-row">
             <span>${escapeHtml(location.address)}</span>
-        </div>
+        </div>` : ''}
     `;
 
     if (location.hours && location.hours !== 'בדוק באתר') {
@@ -408,6 +453,7 @@ function createPopupContent(location) {
 function createSidebarContent(location) {
     const chain = detectChain(location.name);
     const chainName = chainNames[chain] || '';
+    const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
 
     let distanceHtml = '';
     if (userLocation) {
@@ -430,18 +476,15 @@ function createSidebarContent(location) {
         <div class="sidebar-header">
             <div class="sidebar-title">
                 <h2>${escapeHtml(location.name)}</h2>
-                <span class="type-badge">${escapeHtml(typeNames[location.type])}${chainName ? ' - ' + escapeHtml(chainName) : ''}</span>
+                <span class="type-badge" role="button" tabindex="0" aria-expanded="false">${escapeHtml(typeNames[location.type])}${chainName ? ' - ' + escapeHtml(chainName) : ''}</span>
+                <p class="type-explanation">${escapeHtml(chainExplanations[chain] || tagExplanations[location.type] || '')}</p>
             </div>
         </div>
 
         <div class="sidebar-info">
-            <div class="info-row">
+            ${hasAddress ? `<div class="info-row">
                 <span class="info-text">${escapeHtml(location.address)}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-icon">🏙️</span>
-                <span class="info-text">${escapeHtml(location.city)}</span>
-            </div>
+            </div>` : ''}
             ${location.hours && location.hours !== 'בדוק באתר' ? `
             <div class="info-row">
                 <span class="info-icon">🕐</span>
@@ -486,6 +529,23 @@ function showSidebar(location) {
     cachedSidebarContent.innerHTML = createSidebarContent(location);
     cachedSidebar.style.display = 'flex';
     cachedSidebar.classList.remove('hidden');
+
+    // Wire up type-badge toggle for explanation
+    const badge = cachedSidebarContent.querySelector('.type-badge');
+    const explanation = cachedSidebarContent.querySelector('.type-explanation');
+    if (badge && explanation) {
+        const toggle = () => {
+            const expanded = explanation.classList.toggle('visible');
+            badge.setAttribute('aria-expanded', String(expanded));
+        };
+        badge.addEventListener('click', toggle);
+        badge.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggle();
+            }
+        });
+    }
 
     if (cachedSidebarClose) cachedSidebarClose.focus();
 }
@@ -966,34 +1026,48 @@ if (sidebarClose) {
 
 // Sidebar swipe-to-close on mobile
 const sidebarEl = document.getElementById('sidebar');
-if (sidebarEl) {
+const sidebarContentEl = document.getElementById('sidebar-content');
+if (sidebarEl && sidebarContentEl) {
     let touchStartY = 0;
     let touchCurrentY = 0;
-    let isSwiping = false;
+    let isDragging = false;
 
     sidebarEl.addEventListener('touchstart', (e) => {
         if (window.innerWidth > MOBILE_BREAKPOINT) return;
         touchStartY = e.touches[0].clientY;
-        isSwiping = true;
-        sidebarEl.style.transition = 'none';
+        touchCurrentY = touchStartY;
+        isDragging = false;
     }, { passive: true });
 
     sidebarEl.addEventListener('touchmove', (e) => {
-        if (!isSwiping) return;
+        if (window.innerWidth > MOBILE_BREAKPOINT) return;
         touchCurrentY = e.touches[0].clientY;
         const deltaY = touchCurrentY - touchStartY;
-        // Only allow swipe down (positive delta)
+
+        // Only start drag when content is scrolled to top AND swiping down
+        if (!isDragging) {
+            if (sidebarContentEl.scrollTop <= 0 && deltaY > 0) {
+                isDragging = true;
+                sidebarEl.style.transition = 'none';
+            } else {
+                return; // let normal scroll happen
+            }
+        }
+
+        // Block scroll and pull-to-refresh during drag
+        e.preventDefault();
         if (deltaY > 0) {
             sidebarEl.style.transform = `translateY(${deltaY}px)`;
         }
-    }, { passive: true });
+    }, { passive: false });
 
     sidebarEl.addEventListener('touchend', () => {
-        if (!isSwiping) return;
-        isSwiping = false;
+        if (!isDragging) return;
+        isDragging = false;
         sidebarEl.style.transition = '';
         const deltaY = touchCurrentY - touchStartY;
-        if (deltaY > SWIPE_THRESHOLD_PX) {
+        const threshold = sidebarEl.offsetHeight * 0.4;
+        if (deltaY > threshold) {
             hideSidebar();
         } else {
             sidebarEl.style.transform = '';

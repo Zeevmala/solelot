@@ -369,10 +369,12 @@ body {
     align-items: center;
     gap: 8px;
     margin-bottom: 14px;
-    color: #1a1a1a;
+    color: var(--accent-teal);
     font-size: 18px;
     font-weight: 700;
     padding-left: 24px;
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 10px;
 }
 
 .popup-header {
@@ -384,15 +386,18 @@ body {
 .popup-icon {
     width: 20px;
     height: 20px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
 }
 
 .popup-row {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    margin: 10px 0;
+    margin: 6px 0;
     font-size: 14px;
-    color: #333333;
+    color: var(--text-secondary);
 }
 
 .popup-row .icon {
@@ -402,7 +407,7 @@ body {
 }
 
 .distance {
-    color: var(--accent-action);
+    color: var(--accent-teal);
     font-weight: bold;
 }
 
@@ -543,6 +548,40 @@ body {
     color: var(--text-secondary);
     border-radius: 12px;
     display: inline-block;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+}
+
+.sidebar-title .type-badge:hover,
+.sidebar-title .type-badge:focus {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.sidebar-title .type-badge[aria-expanded="true"] {
+    background: var(--accent-teal);
+    color: white;
+}
+
+.type-explanation {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.type-explanation.visible {
+    max-height: 80px;
+    opacity: 1;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-top: 8px;
 }
 
 .sidebar-info {
@@ -790,6 +829,11 @@ body {
     opacity: 1;
 }
 
+/* Drag zone — hidden on desktop, visible on mobile */
+.sidebar-drag-zone {
+    display: none;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
     .main-content {
@@ -816,6 +860,7 @@ body {
         left: 0;
         right: 0;
         border-radius: 20px 20px 0 0;
+        overscroll-behavior: none;
     }
 
     .sidebar.hidden {
@@ -823,18 +868,29 @@ body {
     }
 
     .sidebar-close {
-        top: 15px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 50px;
-        height: 6px;
+        display: none;
+    }
+
+    .sidebar-drag-zone {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 28px;
+        flex-shrink: 0;
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .sidebar-drag-zone::after {
+        content: '';
+        width: 40px;
+        height: 5px;
         border-radius: 3px;
         background: var(--border-color);
-        font-size: 0;
     }
 
     .sidebar-content {
-        padding-top: 30px;
+        padding-top: 8px;
     }
 
     .leaflet-popup-content-wrapper {
