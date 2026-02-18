@@ -18,7 +18,7 @@
 </head>
 <body>
     <h1>Map Integration Tests</h1>
-    <p class="note">Tests locations.json data integrity and HTML template output</p>
+    <p class="note">Tests locations.json data integrity, HTML template output, search logic, sidebar state, and PWA shortcuts</p>
     <div id="results"></div>
     <div id="summary"></div>
 
@@ -40,10 +40,44 @@
         results.appendChild(h2);
     }
 
-    // === Import pure functions ===
+    // === Import pure functions (synced from app.js) ===
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function fuzzyMatch(text, query, maxDist) {
+        if (maxDist === undefined) maxDist = 2;
+        if (!text || !query) return false;
+        if (text.includes(query)) return true;
+        if (query.length <= 2) return false;
+        if (Math.abs(text.length - query.length) > 3) return false;
+        var qLen = query.length;
+        var tLen = text.length;
+        var prev = new Array(qLen + 1);
+        for (var j = 0; j <= qLen; j++) prev[j] = j;
+        for (var i = 1; i <= tLen; i++) {
+            var curr = new Array(qLen + 1);
+            curr[0] = 0;
+            for (var jj = 1; jj <= qLen; jj++) {
+                var cost = text[i - 1] === query[jj - 1] ? 0 : 1;
+                curr[jj] = Math.min(prev[jj] + 1, curr[jj - 1] + 1, prev[jj - 1] + cost);
+            }
+            if (curr[qLen] <= maxDist) return true;
+            prev = curr;
+        }
+        return false;
+    }
+
+    function getDistance(lat1, lng1, lat2, lng2) {
+        var R = 6371;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLng = (lng2 - lng1) * Math.PI / 180;
+        var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
     }
 
     const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
@@ -57,10 +91,17 @@
         return REPORT_FORM_URL + '?' + params.toString();
     }
 
-    // Popup template (matches app.js createPopupContent)
+    // userLocation mock — toggled per test
+    var userLocation = null;
+
+    // Popup template (synced from app.js createPopupContent — uses data-* attrs, no inline onclick)
     function createPopupContent(location) {
-        let content = '<div class="popup-header"><h3><span class="popup-icon">ICON</span>' + escapeHtml(location.name) + '</h3></div>';
-        content += '<div class="popup-row"><span>' + escapeHtml(location.address) + '</span></div>';
+        var hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
+
+        var content = '<div class="popup-header"><h3><span class="popup-icon">ICON</span>' + escapeHtml(location.name) + '</h3></div>';
+        if (hasAddress) {
+            content += '<div class="popup-row"><span>' + escapeHtml(location.address) + '</span></div>';
+        }
 
         if (location.hours && location.hours !== '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8') {
             content += '<div class="popup-row"><span class="icon">\uD83D\uDD50</span><span>' + escapeHtml(location.hours) + '</span></div>';
@@ -69,23 +110,28 @@
             content += '<div class="popup-row"><span class="icon">\u2139\uFE0F</span><span>' + escapeHtml(location.description) + '</span></div>';
         }
 
-        const googleMapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + location.lat + ',' + location.lng;
-        const wazeUrl = 'https://waze.com/ul?ll=' + location.lat + ',' + location.lng + '&navigate=yes';
-        const reportUrl = getReportUrl(location);
+        if (userLocation) {
+            var distance = getDistance(userLocation.lat, userLocation.lng, location.lat, location.lng);
+            content += '<div class="popup-row distance"><span class="icon">\uD83D\uDCCF</span><span>' + distance.toFixed(1) + ' \u05E7"\u05DE \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA</span></div>';
+        }
+
+        var googleMapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + location.lat + ',' + location.lng;
+        var wazeUrl = 'https://waze.com/ul?ll=' + location.lat + ',' + location.lng + '&navigate=yes';
+        var reportUrl = getReportUrl(location);
 
         content += '<div class="nav-links"><a href="' + googleMapsUrl + '" target="_blank" class="nav-btn google">Google Maps</a>';
         content += '<a href="' + wazeUrl + '" target="_blank" class="nav-btn waze">Waze</a></div>';
         content += '<div class="feedback-row">';
-        content += '<button class="feedback-btn like-btn" data-id="' + location.id + '" onclick="handleLike(' + location.id + ')">\uD83D\uDC4D</button>';
-        content += '<button class="feedback-btn dislike-btn" onclick="handleDislike(\'' + reportUrl + '\')">\uD83D\uDC4E</button>';
+        content += '<button class="feedback-btn like-btn" data-like-id="' + location.id + '" aria-label="\u05D0\u05D4\u05D1\u05EA\u05D9 \u05E0\u05E7\u05D5\u05D3\u05D4 \u05D6\u05D5">LIKE</button>';
+        content += '<button class="feedback-btn dislike-btn" data-report-url="' + escapeHtml(reportUrl) + '" aria-label="\u05D3\u05D5\u05D5\u05D7 \u05E2\u05DC \u05D1\u05E2\u05D9\u05D4">DISLIKE</button>';
         content += '</div>';
 
         return content;
     }
 
-    // Sidebar template (matches app.js createSidebarContent)
+    // Sidebar template (synced from app.js createSidebarContent — uses data-* attrs)
     function createSidebarContent(location) {
-        let html = '<div class="sidebar-header"><div class="sidebar-title"><h2>' + escapeHtml(location.name) + '</h2></div></div>';
+        var html = '<div class="sidebar-header"><div class="sidebar-title"><h2>' + escapeHtml(location.name) + '</h2></div></div>';
         html += '<div class="sidebar-info"><div class="info-row"><span class="info-text">' + escapeHtml(location.address) + '</span></div>';
         html += '<div class="info-row"><span class="info-icon">\uD83C\uDFD9\uFE0F</span><span class="info-text">' + escapeHtml(location.city) + '</span></div>';
 
@@ -94,33 +140,54 @@
         }
         html += '</div>';
 
-        const googleMapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + location.lat + ',' + location.lng;
-        const wazeUrl = 'https://waze.com/ul?ll=' + location.lat + ',' + location.lng + '&navigate=yes';
+        var googleMapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + location.lat + ',' + location.lng;
+        var wazeUrl = 'https://waze.com/ul?ll=' + location.lat + ',' + location.lng + '&navigate=yes';
         html += '<div class="sidebar-nav"><a href="' + googleMapsUrl + '" class="sidebar-nav-btn google">\u05E0\u05D5\u05D5\u05D8 \u05D1-Google</a>';
         html += '<a href="' + wazeUrl + '" class="sidebar-nav-btn waze">\u05E0\u05D5\u05D5\u05D8 \u05D1-Waze</a></div>';
 
         return html;
     }
 
+    // === Search match logic (synced from app.js updateMarkers, lines 611-617) ===
+    function searchMatch(location, query) {
+        if (query === '') return true;
+        return location.city.includes(query) ||
+            location.name.includes(query) ||
+            location.address.includes(query) ||
+            fuzzyMatch(location.city, query) ||
+            fuzzyMatch(location.name, query) ||
+            fuzzyMatch(location.address, query);
+    }
+
+    // === Empty state logic (synced from app.js updateMarkers, lines 629-634) ===
+    function shouldShowEmptyState(visibleCount, currentSearch) {
+        return visibleCount === 0 && currentSearch !== '';
+    }
+
+    // === PWA shortcut logic (synced from app.js, line 1081) ===
+    function shouldTriggerNearest(searchParams) {
+        return searchParams.get('action') === 'nearest';
+    }
+
     // === Load and test locations.json ===
     fetch('locations.json')
-        .then(r => r.json())
-        .then(data => {
-            const locations = data.locations;
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var locations = data.locations;
 
             // --- Data integrity ---
             section('Data Integrity');
             assert(Array.isArray(locations), 'locations is an array');
             assert(locations.length > 0, 'locations has entries (' + locations.length + ')');
 
-            let missingFields = 0;
-            let invalidCoords = 0;
-            let invalidTypes = 0;
-            let emptyNames = 0;
-            let emptyCities = 0;
-            let badHoursCount = 0;
+            var missingFields = 0;
+            var invalidCoords = 0;
+            var invalidTypes = 0;
+            var emptyNames = 0;
+            var emptyCities = 0;
+            var badHoursCount = 0;
 
-            locations.forEach((loc, i) => {
+            locations.forEach(function(loc) {
                 if (!loc.name || !loc.address || !loc.city || !loc.type || loc.lat === undefined || loc.lng === undefined) missingFields++;
                 if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') invalidCoords++;
                 if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) invalidCoords++;
@@ -136,71 +203,72 @@
             assert(emptyNames === 0, 'No empty location names');
             assert(emptyCities === 0, 'No empty city names');
 
-            // Info only (not a fail)
-            const infoDiv = document.createElement('div');
+            var infoDiv = document.createElement('div');
             infoDiv.className = 'test pass';
             infoDiv.textContent = '\u2139\uFE0F ' + badHoursCount + ' locations have "\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8" hours (filtered out in UI)';
             results.appendChild(infoDiv);
 
             // --- Duplicate check ---
             section('Duplicate Detection');
-            const coordSet = new Set();
-            let dupeCoords = 0;
-            locations.forEach(loc => {
-                const key = loc.lat + ',' + loc.lng;
+            var coordSet = new Set();
+            var dupeCoords = 0;
+            locations.forEach(function(loc) {
+                var key = loc.lat + ',' + loc.lng;
                 if (coordSet.has(key)) dupeCoords++;
                 coordSet.add(key);
             });
-            // Some duplicate coords are expected (multiple stores in same building)
-            const dupeInfo = document.createElement('div');
+            var dupeInfo = document.createElement('div');
             dupeInfo.className = 'test pass';
             dupeInfo.textContent = '\u2139\uFE0F ' + dupeCoords + ' locations share coordinates with another (e.g. same building)';
             results.appendChild(dupeInfo);
 
             // --- Popup template tests ---
             section('Popup Template');
-            const testLoc = { id: 1, name: '\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD', address: '\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E8\u05E6\u05DC 10', city: '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1', lat: 32.08, lng: 34.78, type: 'store', hours: '08:00-22:00' };
-            const popup = createPopupContent(testLoc);
+            var testLoc = { id: 1, name: '\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD', address: '\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E8\u05E6\u05DC 10', city: '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1', lat: 32.08, lng: 34.78, type: 'store', hours: '08:00-22:00' };
+            var popup = createPopupContent(testLoc);
 
             assert(!popup.includes('\uD83D\uDCCD'), 'Popup: no pin emoji in address row');
-            assert(popup.includes('Google Maps'), 'Popup: Google Maps button text (no emoji)');
-            assert(popup.includes('Waze'), 'Popup: Waze button text (no emoji)');
+            assert(popup.includes('Google Maps'), 'Popup: Google Maps button text');
+            assert(popup.includes('Waze'), 'Popup: Waze button text');
             assert(popup.includes('nav-btn google'), 'Popup: Google button has correct class');
             assert(popup.includes('nav-btn waze'), 'Popup: Waze button has correct class');
             assert(popup.includes('feedback-row'), 'Popup: feedback buttons row present');
             assert(popup.includes('like-btn'), 'Popup: like button present');
             assert(popup.includes('dislike-btn'), 'Popup: dislike button present');
+            assert(popup.includes('data-like-id'), 'Popup: like button uses data-like-id (no inline onclick)');
+            assert(popup.includes('data-report-url'), 'Popup: dislike button uses data-report-url (no inline onclick)');
+            assert(!popup.includes('onclick'), 'Popup: no inline onclick handlers');
             assert(popup.includes('08:00-22:00'), 'Popup: real hours shown');
 
-            const testLocBadHours = { id: 2, name: '\u05EA\u05D7\u05E0\u05D4', address: '\u05DB\u05EA\u05D5\u05D1\u05EA', city: '\u05E2\u05D9\u05E8', lat: 32.0, lng: 34.8, type: 'store', hours: '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8' };
-            const popupBad = createPopupContent(testLocBadHours);
+            var testLocBadHours = { id: 2, name: '\u05EA\u05D7\u05E0\u05D4', address: '\u05DB\u05EA\u05D5\u05D1\u05EA', city: '\u05E2\u05D9\u05E8', lat: 32.0, lng: 34.8, type: 'store', hours: '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8' };
+            var popupBad = createPopupContent(testLocBadHours);
             assert(!popupBad.includes('\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8'), 'Popup: "\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8" filtered out');
 
-            const testLocNoHours = { id: 3, name: '\u05D7\u05E0\u05D5\u05EA', address: '\u05DB\u05EA\u05D5\u05D1\u05EA', city: '\u05E2\u05D9\u05E8', lat: 32.0, lng: 34.8, type: 'store' };
-            const popupNoHours = createPopupContent(testLocNoHours);
+            var testLocNoHours = { id: 3, name: '\u05D7\u05E0\u05D5\u05EA', address: '\u05DB\u05EA\u05D5\u05D1\u05EA', city: '\u05E2\u05D9\u05E8', lat: 32.0, lng: 34.8, type: 'store' };
+            var popupNoHours = createPopupContent(testLocNoHours);
             assert(!popupNoHours.includes('\uD83D\uDD50'), 'Popup: no clock icon when no hours');
 
             // --- Sidebar template tests ---
             section('Sidebar Template');
-            const sidebar = createSidebarContent(testLoc);
+            var sidebar = createSidebarContent(testLoc);
 
             assert(!sidebar.includes('sidebar-icon'), 'Sidebar: no pin icon div');
-            assert(sidebar.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Google'), 'Sidebar: Google nav text (no emoji)');
-            assert(sidebar.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Waze'), 'Sidebar: Waze nav text (no emoji)');
+            assert(sidebar.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Google'), 'Sidebar: Google nav text');
+            assert(sidebar.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Waze'), 'Sidebar: Waze nav text');
             assert(sidebar.includes('sidebar-nav-btn google'), 'Sidebar: Google button has correct class');
             assert(sidebar.includes('sidebar-nav-btn waze'), 'Sidebar: Waze button has correct class');
             assert(!sidebar.includes('\uD83D\uDCCD'), 'Sidebar: no pin emoji in address');
 
-            const sidebarBad = createSidebarContent(testLocBadHours);
+            var sidebarBad = createSidebarContent(testLocBadHours);
             assert(!sidebarBad.includes('\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8'), 'Sidebar: "\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8" filtered out');
 
             // --- XSS protection ---
             section('XSS Protection');
-            const xssLoc = { id: 99, name: '<scr' + 'ipt>alert(1)<\/scr' + 'ipt>', address: '"><img onerror=alert(1)>', city: 'test', lat: 32.0, lng: 34.8, type: 'store' };
-            const xssPopup = createPopupContent(xssLoc);
+            var xssLoc = { id: 99, name: '<scr' + 'ipt>alert(1)<\/scr' + 'ipt>', address: '"><img onerror=alert(1)>', city: 'test', lat: 32.0, lng: 34.8, type: 'store' };
+            var xssPopup = createPopupContent(xssLoc);
             assert(!xssPopup.includes('<scr' + 'ipt>'), 'XSS: script tag escaped in popup');
             assert(!xssPopup.includes('<img'), 'XSS: img tag escaped in popup');
-            const xssSidebar = createSidebarContent(xssLoc);
+            var xssSidebar = createSidebarContent(xssLoc);
             assert(!xssSidebar.includes('<scr' + 'ipt>'), 'XSS: script tag escaped in sidebar');
 
             // --- Navigation URLs ---
@@ -209,18 +277,138 @@
             assert(popup.includes('waze.com/ul'), 'Nav: Waze URL present');
             assert(popup.includes('destination=32.08,34.78'), 'Nav: correct coordinates in URL');
 
+            // ======================================
+            // NEW INTEGRATION TESTS
+            // ======================================
+
+            // --- Search Filtering Logic ---
+            section('Search Filtering Logic');
+            var searchLoc = { name: '\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD \u05EA\u05DC \u05D0\u05D1\u05D9\u05D1', address: '\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E8\u05E6\u05DC 10', city: '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1' };
+
+            assert(searchMatch(searchLoc, '') === true, 'Search: empty query matches everything');
+            assert(searchMatch(searchLoc, '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1') === true, 'Search: exact city name matches');
+            assert(searchMatch(searchLoc, '\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD') === true, 'Search: location name substring matches');
+            assert(searchMatch(searchLoc, '\u05D4\u05E8\u05E6\u05DC') === true, 'Search: address substring matches');
+            assert(searchMatch(searchLoc, '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1\u05D9') === true, 'Search: fuzzy match (1-char typo) matches');
+            assert(searchMatch(searchLoc, '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD') === false, 'Search: non-matching query returns false');
+            assert(searchMatch(searchLoc, 'xyz') === false, 'Search: English nonsense returns false');
+
+            var searchLoc2 = { name: '\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC \u05D3\u05D9\u05DC', address: '\u05D9\u05D2\u05D0\u05DC 5', city: '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD' };
+            assert(searchMatch(searchLoc2, '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD') === true, 'Search: Hebrew city "\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD" matches');
+            assert(searchMatch(searchLoc2, '\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC') === true, 'Search: chain name matches in name field');
+
+            // Test filtering a list (simulates updateMarkers loop)
+            var testLocations = [
+                { name: '\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD', address: '\u05E8\u05D7\u05D5\u05D1', city: '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1' },
+                { name: '\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC', address: '\u05D4\u05E8\u05E6\u05DC', city: '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD' },
+                { name: '\u05D0\u05D5\u05E4\u05D9\u05E1 \u05D3\u05D9\u05E4\u05D5', address: '\u05D4\u05E0\u05E9\u05D9\u05D0', city: '\u05D7\u05D9\u05E4\u05D4' }
+            ];
+            var filtered = testLocations.filter(function(loc) { return searchMatch(loc, '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD'); });
+            assert(filtered.length === 1, 'Search: filtering list by city returns 1 match');
+            assert(filtered[0].city === '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD', 'Search: filtered result is the correct city');
+
+            var filteredAll = testLocations.filter(function(loc) { return searchMatch(loc, ''); });
+            assert(filteredAll.length === 3, 'Search: empty query returns all locations');
+
+            // --- Sidebar State Machine ---
+            section('Sidebar State Machine');
+            var mockSidebar = document.createElement('aside');
+            mockSidebar.style.display = 'none';
+            mockSidebar.classList.add('hidden');
+            var mockSidebarContent = document.createElement('div');
+            var selectedLocationId = null;
+
+            // Simulate showSidebar
+            function testShowSidebar(location) {
+                selectedLocationId = location.id;
+                mockSidebarContent.innerHTML = createSidebarContent(location);
+                mockSidebar.style.display = 'flex';
+                mockSidebar.classList.remove('hidden');
+            }
+
+            // Simulate hideSidebar
+            function testHideSidebar() {
+                mockSidebar.classList.add('hidden');
+                mockSidebar.style.display = 'none';
+                selectedLocationId = null;
+            }
+
+            testShowSidebar(testLoc);
+            assert(mockSidebar.style.display === 'flex', 'Sidebar: showSidebar sets display to flex');
+            assert(!mockSidebar.classList.contains('hidden'), 'Sidebar: showSidebar removes hidden class');
+            assert(mockSidebarContent.innerHTML.length > 0, 'Sidebar: showSidebar populates content');
+            assert(selectedLocationId === 1, 'Sidebar: showSidebar sets selectedLocationId');
+
+            testHideSidebar();
+            assert(mockSidebar.classList.contains('hidden'), 'Sidebar: hideSidebar adds hidden class');
+            assert(selectedLocationId === null, 'Sidebar: hideSidebar clears selectedLocationId');
+
+            // Show twice — content should be replaced
+            testShowSidebar(testLoc);
+            var firstContent = mockSidebarContent.innerHTML;
+            var testLoc2 = { id: 7, name: '\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC \u05D3\u05D9\u05DC', address: '\u05D9\u05D2\u05D0\u05DC 5', city: '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD', lat: 31.77, lng: 35.21, type: 'store', hours: '07:00-23:00' };
+            testShowSidebar(testLoc2);
+            assert(mockSidebarContent.innerHTML !== firstContent, 'Sidebar: calling showSidebar twice replaces content');
+            assert(selectedLocationId === 7, 'Sidebar: second showSidebar updates selectedLocationId');
+
+            // --- GPS Distance Integration ---
+            section('GPS Distance Integration');
+
+            // Without userLocation — no distance row
+            userLocation = null;
+            var popupNoDist = createPopupContent(testLoc);
+            assert(!popupNoDist.includes('\u05E7"\u05DE \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: no distance row without userLocation');
+
+            // With userLocation — distance row present
+            userLocation = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv center
+            var popupWithDist = createPopupContent(testLoc);
+            assert(popupWithDist.includes('\u05E7"\u05DE \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: distance row present with userLocation');
+            assert(popupWithDist.includes('distance'), 'GPS: distance row has "distance" class');
+
+            // Distance value is reasonable
+            var expectedDist = getDistance(32.0853, 34.7818, 32.08, 34.78);
+            assert(expectedDist < 1, 'GPS: distance to nearby point is < 1 km (got ' + expectedDist.toFixed(2) + ')');
+            assert(popupWithDist.includes(expectedDist.toFixed(1)), 'GPS: popup shows correct distance value');
+
+            // Distance to Jerusalem
+            var jlmLoc = { id: 10, name: 'Test', address: 'Test', city: 'Test', lat: 31.7683, lng: 35.2137, type: 'store' };
+            var popupJlm = createPopupContent(jlmLoc);
+            var jlmDist = getDistance(32.0853, 34.7818, 31.7683, 35.2137);
+            assert(jlmDist > 50 && jlmDist < 70, 'GPS: TLV to Jerusalem distance ~60km (got ' + jlmDist.toFixed(1) + ')');
+            assert(popupJlm.includes(jlmDist.toFixed(1)), 'GPS: Jerusalem popup shows correct distance');
+
+            // Reset userLocation
+            userLocation = null;
+
+            // --- Empty State Logic ---
+            section('Empty State & Error Recovery');
+            assert(shouldShowEmptyState(0, '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD') === true, 'Empty: 0 results + active search \u2192 show empty state');
+            assert(shouldShowEmptyState(0, '') === false, 'Empty: 0 results + empty search \u2192 hide (initial load)');
+            assert(shouldShowEmptyState(5, '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1') === false, 'Empty: >0 results + active search \u2192 hide');
+            assert(shouldShowEmptyState(100, '') === false, 'Empty: >0 results + empty search \u2192 hide');
+            assert(shouldShowEmptyState(0, ' ') === true, 'Empty: 0 results + whitespace search \u2192 show');
+
+            // --- PWA ?action=nearest ---
+            section('PWA ?action=nearest Shortcut');
+            assert(shouldTriggerNearest(new URLSearchParams('?action=nearest')) === true, 'PWA: ?action=nearest triggers locate');
+            assert(shouldTriggerNearest(new URLSearchParams('?action=other')) === false, 'PWA: ?action=other does not trigger');
+            assert(shouldTriggerNearest(new URLSearchParams('')) === false, 'PWA: no params does not trigger');
+            assert(shouldTriggerNearest(new URLSearchParams('?action=nearest&foo=bar')) === true, 'PWA: extra params ignored, still triggers');
+            assert(shouldTriggerNearest(new URLSearchParams('?action=')) === false, 'PWA: empty action value does not trigger');
+            assert(shouldTriggerNearest(new URLSearchParams('?nearest=true')) === false, 'PWA: wrong param name does not trigger');
+
             // --- Summary ---
-            const summary = document.getElementById('summary');
+            var summary = document.getElementById('summary');
             summary.className = 'summary ' + (failed === 0 ? 'all-pass' : 'has-fail');
             summary.textContent = passed + ' passed, ' + failed + ' failed out of ' + (passed + failed) + ' tests';
         })
-        .catch(err => {
-            const div = document.createElement('div');
+        .catch(function(err) {
+            var div = document.createElement('div');
             div.className = 'test fail';
             div.textContent = '\u274C Failed to load locations.json: ' + err.message;
             results.appendChild(div);
 
-            const summary = document.getElementById('summary');
+            var summary = document.getElementById('summary');
             summary.className = 'summary has-fail';
             summary.textContent = 'Tests could not run - locations.json failed to load';
         });
