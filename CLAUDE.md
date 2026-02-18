@@ -85,28 +85,17 @@ Intentionally deferred — not a bug. When ready, add manually (MAI scraper API 
 
 **~~MEDIUM — `autocompleteInitialized` guard not reset on retry (`app.js` ~line 970)~~ FIXED**
 
-**MEDIUM — Touch listeners never removed from sidebar (`app.js` lines 1016–1055)**
-`touchstart/touchmove/touchend` accumulate on repeated calls. Use named functions
-+ `removeEventListener`, or an `AbortController` signal.
+**~~MEDIUM — Touch listeners never removed from sidebar~~ NOT A BUG** — listeners are added once at module load on a persistent DOM element, not inside a repeated function.
 
-**MEDIUM — `?action=nearest` PWA shortcut unimplemented (`manifest.json`)**
-Add at `app.js` startup:
-```js
-if (new URLSearchParams(location.search).get('action') === 'nearest') { /* trigger geo */ }
-```
+**~~MEDIUM — `?action=nearest` PWA shortcut unimplemented~~ FIXED**
 
-**MEDIUM — `limitCacheSize()` not awaited in QuotaExceededError handler (`sw.js` ~line 132)**
-Cache eviction is fire-and-forget; next write still hits quota. Restructure as `async/await`.
+**~~MEDIUM — `limitCacheSize()` not awaited in QuotaExceededError handler (`sw.js`)~~ FIXED**
 
-**LOW — `typeNames[location.type]` can be `undefined` (`app.js` ~line 961)**
-Use `typeNames[location.type] || location.type` to guard aria-label.
+**~~LOW — `typeNames[location.type]` can be `undefined` (`app.js`)~~ FIXED**
 
-**LOW — Inner fade-out timer not cancelled in `showNotification()` (`app.js` line 18)**
-Rapid calls leave orphaned 300ms timers. Add a second `notificationDisplayTimeout` ref and
-`clearTimeout` it at the top of `showNotification()`.
+**~~LOW — Inner fade-out timer not cancelled in `showNotification()`~~ FIXED**
 
-**LOW — No `showLoading()` on retry (`app.js` ~line 1067)**
-Call `showLoading()` inside the retry click handler before `loadLocations()`.
+**~~LOW — No `showLoading()` on retry~~ NOT A BUG** — `loadLocations()` already calls `showLoading()` as its first action.
 
 ### Anti-Patterns — Avoid
 - Do NOT use `parseFloat(x) || 0` for coordinates. Zero looks valid but is wrong.
@@ -129,5 +118,5 @@ Call `showLoading()` inside the retry click handler before `loadLocations()`.
 
 ### Spec Drift
 - M2 (facility locations): **DEFERRED** — 0 facility entries in `locations.json` (intentional).
-- M5 PWA shortcut (`?action=nearest`): **NOT MET** — manifest defines it, `app.js` ignores it.
+- M5 PWA shortcut (`?action=nearest`): **FIXED** — handler added in `app.js`.
 - M1–M8 all other requirements: fully implemented and tested.
