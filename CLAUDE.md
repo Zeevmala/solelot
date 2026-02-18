@@ -120,3 +120,23 @@ Intentionally deferred — not a bug. When ready, add manually (MAI scraper API 
 - M2 (facility locations): **DEFERRED** — 0 facility entries in `locations.json` (intentional).
 - M5 PWA shortcut (`?action=nearest`): **FIXED** — handler added in `app.js`.
 - M1–M8 all other requirements: fully implemented and tested.
+
+### UX Audit Findings (2025-02 Senior Dev Review)
+
+**~~HIGH — Search clear button too small (`style.css` `.search-clear-btn`)~~ FIXED**
+Was 22×22px. Now 28×28px + 8px padding = 44px hit area.
+
+**~~HIGH — Leaflet zoom controls too small (`style.css`)~~ FIXED**
+Was 30×30px (Leaflet default). Now overridden to 44×44px.
+
+**~~MEDIUM — Sidebar action buttons 40×40px (`style.css`)~~ FIXED**
+Was 40×40px. Now 44×44px.
+
+**LOW — Search input height 37px (`style.css`)**
+Slightly under 44px touch target. Consider increasing to 44px.
+
+### Performance Notes (at 3,969 locations)
+- **Search**: Full scan (7 string ops × 3,969 markers) per debounce tick. Fine at 4K. At 10K+, pre-build a `Map<city, locations[]>` index.
+- **Markers**: 3,969 markers × 3 event listeners = 11,907 closures in memory. Fine at 4K. At 10K+, switch to virtual markers (create on `moveend` for visible bounds only).
+- **Clustering**: `chunkedLoading: true` + `maxClusterRadius: 35` handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
+- **Tiles**: 200-tile cache cap with cleanup every 20 puts. Adequate. At high zoom/pan frequency, reduce cleanup interval to 10.
