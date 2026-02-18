@@ -16,7 +16,13 @@ function fetchMarkers() {
     return new Promise((resolve, reject) => {
         console.log('Fetching data from MAI API...');
 
-        https.get(API_URL, (res) => {
+        const req = https.get(API_URL, (res) => {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+                res.resume(); // drain response to free socket
+                reject(new Error('HTTP ' + res.statusCode));
+                return;
+            }
+
             let data = '';
 
             res.on('data', chunk => {
@@ -28,10 +34,15 @@ function fetchMarkers() {
                     const json = JSON.parse(data);
                     resolve(json);
                 } catch (e) {
-                    reject(e);
+                    reject(new Error('Invalid JSON: ' + e.message));
                 }
             });
-        }).on('error', reject);
+        });
+
+        req.on('error', reject);
+        req.setTimeout(15000, () => {
+            req.destroy(new Error('Request timed out after 15s'));
+        });
     });
 }
 
@@ -136,6 +147,10 @@ function determineChain(name) {
 
 // Transform marker to our format
 function transformMarker(marker, index) {
+    const lat = parseFloat(marker.lat);
+    const lng = parseFloat(marker.lng);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+
     return {
         id: index + 1,
         name: marker.title || 'נקודת איסוף',
@@ -143,8 +158,8 @@ function transformMarker(marker, index) {
         city: extractCity(marker.address),
         type: determineType(marker),
         chain: determineChain(marker.title),
-        lat: parseFloat(marker.lat) || 0,
-        lng: parseFloat(marker.lng) || 0,
+        lat: lat,
+        lng: lng,
         hours: 'בדוק באתר', // Hours not available from API
         description: marker.description || undefined
     };
@@ -170,7 +185,7 @@ async function main() {
         console.log(`Filtered to ${batteryLocations.length} battery-related locations`);
 
         // Transform to our format
-        const locations = batteryLocations.map(transformMarker);
+        const locations = batteryLocations.map(transformMarker).filter(Boolean);
 
         // Save raw data for debugging
         fs.writeFileSync('raw_markers.json', JSON.stringify(markers, null, 2), 'utf8');

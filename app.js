@@ -909,10 +909,14 @@ function hideLoading() {
 
 // === INITIALIZATION ===
 function loadLocations() {
+    autocompleteInitialized = false;
     showLoading('טוען נקודות מיחזור...');
 
     fetch('locations.json')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+        })
         .then(data => {
             // Validate and filter location data
             allLocations = data.locations.filter(loc => {
