@@ -1,5 +1,5 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v16';
+const STATIC_CACHE = 'static-v17';
 const TILES_CACHE = 'tiles-v1';
 let tileCacheCount = 0;
 
@@ -124,12 +124,12 @@ async function handleTileRequest(request) {
                 // Clean up old tiles periodically (every 20 caches)
                 tileCacheCount++;
                 if (tileCacheCount % 20 === 0) {
-                    limitCacheSize(TILES_CACHE, 200);
+                    return limitCacheSize(TILES_CACHE, 200);
                 }
-            }).catch(err => {
-                // Handle storage quota exceeded
+            }).catch(async (err) => {
+                // Handle storage quota exceeded — await so eviction completes before next write
                 if (err.name === 'QuotaExceededError') {
-                    limitCacheSize(TILES_CACHE, 100);
+                    await limitCacheSize(TILES_CACHE, 100);
                 }
             });
         }

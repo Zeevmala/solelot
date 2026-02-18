@@ -25,7 +25,7 @@
 ### M2: Real Location Data ✅
 - [x] Create locations data file (JSON)
 - [x] Add all store locations (Superpharm, Shufersal, etc.)
-- [x] Add recycling facilities (Batte-Re, RE-CAR, MILI)
+- [ ] Add recycling facilities (Batte-Re, RE-CAR, MILI) *(deferred)*
 - [x] Different marker icons by location type
 - [x] Location details in popups
 

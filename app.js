@@ -4,18 +4,20 @@
 
 // === NOTIFICATION SYSTEM ===
 let notificationTimeout;
+let notificationFadeTimeout;
 function showNotification(message, duration = 2000) {
     const notification = document.getElementById('notification');
     if (!notification) return;
 
     clearTimeout(notificationTimeout);
+    clearTimeout(notificationFadeTimeout);
     notification.textContent = message;
     notification.style.display = 'block';
     notification.classList.add('show');
 
     notificationTimeout = setTimeout(() => {
         notification.classList.remove('show');
-        setTimeout(() => {
+        notificationFadeTimeout = setTimeout(() => {
             notification.style.display = 'none';
         }, 300);
     }, duration);
@@ -966,10 +968,14 @@ function hideLoading() {
 
 // === INITIALIZATION ===
 function loadLocations() {
+    autocompleteInitialized = false;
     showLoading('טוען נקודות מיחזור...');
 
     fetch('locations.json')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+        })
         .then(data => {
             // Validate and filter location data
             allLocations = data.locations.filter(loc => {
@@ -1015,7 +1021,7 @@ function loadLocations() {
                 marker.on('add', () => {
                     const element = marker.getElement();
                     if (element) {
-                        const ariaLabel = `${escapeHtml(location.name)} - ${typeNames[location.type]}`;
+                        const ariaLabel = `${escapeHtml(location.name)} - ${typeNames[location.type] || location.type}`;
                         element.setAttribute('aria-label', ariaLabel);
                     }
                 });
@@ -1053,6 +1059,12 @@ function loadLocations() {
 }
 
 loadLocations();
+
+// Handle PWA shortcut: ?action=nearest
+if (new URLSearchParams(window.location.search).get('action') === 'nearest') {
+    const locateBtn = document.querySelector('.locate-btn');
+    if (locateBtn) locateBtn.click();
+}
 
 // === EVENT LISTENERS ===
 
