@@ -26,6 +26,47 @@ function showNotification(message, duration = 2000) {
 // Report form URL
 const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
 
+// === FEEDBACK SYSTEM (Like / Dislike) ===
+
+// Play a short positive "ding" sound using Web Audio API
+function playLikeSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+        oscillator.frequency.setValueAtTime(1108.73, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.3);
+    } catch (e) {
+        // Web Audio not supported
+    }
+}
+
+// Handle like button click
+function handleLike(locationId) {
+    playLikeSound();
+    var btns = document.querySelectorAll('.like-btn[data-id="' + locationId + '"]');
+    btns.forEach(function(btn) {
+        btn.classList.add('liked');
+        btn.classList.add('pop');
+        setTimeout(function() { btn.classList.remove('pop'); }, 400);
+    });
+    showNotification('תודה על המשוב! 👍');
+}
+window.handleLike = handleLike;
+
+// Handle dislike button click — open report form
+function handleDislike(reportUrl) {
+    window.open(reportUrl, '_blank', 'noopener,noreferrer');
+}
+window.handleDislike = handleDislike;
+
 // Named constants
 const MOBILE_BREAKPOINT = 768;
 const EARTH_RADIUS_KM = 6371;
@@ -298,6 +339,10 @@ const popupBatterySvg = {
     </svg>`
 };
 
+// Inline SVG icons for like/dislike buttons (18×18, stroke-based)
+const thumbsUpSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3m7-2V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>';
+const thumbsDownSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17m-7 2v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/></svg>';
+
 // Store all locations and markers
 let allLocations = [];
 let allMarkers = [];
@@ -445,7 +490,14 @@ function createPopupContent(location) {
             <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn google">Google Maps</a>
             <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">Waze</a>
         </div>
-        <a href="${reportUrl}" target="_blank" rel="noopener noreferrer" class="report-link">דווח על בעיה</a>
+        <div class="feedback-row">
+            <button class="feedback-btn like-btn" data-id="${location.id}" onclick="handleLike(${location.id})" aria-label="אהבתי נקודה זו">
+                ${thumbsUpSvg}
+            </button>
+            <button class="feedback-btn dislike-btn" onclick="handleDislike('${reportUrl.replace(/'/g, "\\'")}')" aria-label="דווח על בעיה">
+                ${thumbsDownSvg}
+            </button>
+        </div>
     `;
 
     return content;
@@ -509,9 +561,14 @@ function createSidebarContent(location) {
             </a>
         </div>
 
-        <a href="${getReportUrl(location)}" target="_blank" rel="noopener noreferrer" class="report-link">
-            ⚠️ דווח על בעיה בנקודה זו
-        </a>
+        <div class="feedback-row">
+            <button class="feedback-btn like-btn" data-id="${location.id}" onclick="handleLike(${location.id})" aria-label="אהבתי נקודה זו">
+                ${thumbsUpSvg}
+            </button>
+            <button class="feedback-btn dislike-btn" onclick="handleDislike('${getReportUrl(location).replace(/'/g, "\\'")}')" aria-label="דווח על בעיה">
+                ${thumbsDownSvg}
+            </button>
+        </div>
     `;
 }
 
