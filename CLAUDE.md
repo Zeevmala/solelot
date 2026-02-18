@@ -108,7 +108,8 @@ Intentionally deferred — not a bug. When ready, add manually (MAI scraper API 
 ### Testing Notes
 - `detectChain` in `test.html` must stay character-for-character identical to `app.js`. It uses the same `CHAIN_PATTERNS` array.
 - XSS tests only cover `<script>` and `<img>`. Missing: SVG onclick, `javascript:` URLs, `data:` URIs.
-- No integration tests for: map init, search logic, GPS, sidebar state, `?action=nearest`.
+- `test-map.html` covers: data integrity, template output, search filtering, sidebar state, GPS distance, empty state logic, `?action=nearest`.
+- Not yet tested: Leaflet map init (requires Leaflet in test env), real GPS callback, live event delegation.
 
 ### Data Integrity Notes
 - `scraper.js` is a one-shot collector, not a live sync. Run it to refresh, then manually review output.
