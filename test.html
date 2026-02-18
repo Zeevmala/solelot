@@ -77,18 +77,30 @@
         return R * c;
     }
 
+    // Chain detection from name — data-driven lookup (synced from app.js)
+    const CHAIN_PATTERNS = [
+        { patterns: ['\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD', '\u05E1\u05D5\u05E4\u05E8-\u05E4\u05D0\u05E8\u05DD'], chain: 'superpharm' },
+        { patterns: ['\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC'], chain: 'shufersal' },
+        { patterns: ['\u05E8\u05DE\u05D9 \u05DC\u05D5\u05D9'], chain: 'rami_levy' },
+        { patterns: ['\u05D5\u05D9\u05E7\u05D8\u05D5\u05E8\u05D9'], chain: 'victory' },
+        { patterns: ['\u05D0\u05D9\u05E7\u05D0\u05D4', 'ikea'], chain: 'ikea' },
+        { patterns: ['\u05D4\u05D5\u05DD \u05E1\u05E0\u05D8\u05E8'], chain: 'home_center' },
+        { patterns: ['\u05D0\u05D5\u05E4\u05D9\u05E1 \u05D3\u05D9\u05E4\u05D5'], chain: 'office_depot' },
+        { patterns: ['\u05E4\u05DC\u05D0\u05E4\u05D5\u05DF'], chain: 'pelephone' },
+        { patterns: ['\u05E1\u05DC\u05E7\u05D5\u05DD'], chain: 'cellcom' },
+        { patterns: ['\u05E4\u05E8\u05D8\u05E0\u05E8'], chain: 'partner' },
+        { patterns: ['\u05DE\u05D3\u05D8\u05D5\u05DF'], chain: 'medton' },
+        { patterns: ['\u05D1\u05D9\u05D2 \u05D0\u05DC\u05E7\u05D8\u05E8\u05D9\u05E7'], chain: 'big_electric' },
+        { patterns: ['\u05D1\u05D0\u05D2'], chain: 'bug' },
+        { patterns: ['\u05E2\u05D9\u05E8\u05D9\u05D9', '\u05DE\u05D5\u05E2\u05E6\u05D4', '\u05E8\u05E9\u05D5\u05EA \u05DE\u05E7\u05D5\u05DE\u05D9\u05EA'], chain: 'municipality' },
+        { patterns: ['\u05D1\u05D9\u05EA \u05E1\u05E4\u05E8', '\u05D1\u05D9\u05D4"\u05E1'], chain: 'school' },
+    ];
+
     function detectChain(name) {
         const n = name.toLowerCase();
-        if (n.includes('\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD') || n.includes('\u05E1\u05D5\u05E4\u05E8-\u05E4\u05D0\u05E8\u05DD')) return 'superpharm';
-        if (n.includes('\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC')) return 'shufersal';
-        if (n.includes('\u05E8\u05DE\u05D9 \u05DC\u05D5\u05D9')) return 'rami_levy';
-        if (n.includes('\u05D5\u05D9\u05E7\u05D8\u05D5\u05E8\u05D9')) return 'victory';
-        if (n.includes('\u05D0\u05D9\u05E7\u05D0\u05D4') || n.includes('ikea')) return 'ikea';
-        if (n.includes('\u05D4\u05D5\u05DD \u05E1\u05E0\u05D8\u05E8')) return 'home_center';
-        if (n.includes('\u05D0\u05D5\u05E4\u05D9\u05E1 \u05D3\u05D9\u05E4\u05D5')) return 'office_depot';
-        if (n.includes('\u05E4\u05DC\u05D0\u05E4\u05D5\u05DF')) return 'pelephone';
-        if (n.includes('\u05E1\u05DC\u05E7\u05D5\u05DD')) return 'cellcom';
-        if (n.includes('\u05E4\u05E8\u05D8\u05E0\u05E8')) return 'partner';
+        for (const { patterns, chain } of CHAIN_PATTERNS) {
+            if (patterns.some(p => n.includes(p))) return chain;
+        }
         return 'other';
     }
 
@@ -129,6 +141,11 @@
     assert(detectChain('\u05E4\u05DC\u05D0\u05E4\u05D5\u05DF \u05D7\u05D9\u05E4\u05D4') === 'pelephone', 'detectChain: Pelephone');
     assert(detectChain('\u05E1\u05DC\u05E7\u05D5\u05DD \u05D4\u05E8\u05E6\u05DC\u05D9\u05D4') === 'cellcom', 'detectChain: Cellcom');
     assert(detectChain('\u05EA\u05D7\u05E0\u05EA \u05D3\u05DC\u05E7') === 'other', 'detectChain: unknown returns other');
+    assert(detectChain('\u05DE\u05D3\u05D8\u05D5\u05DF \u05E7\u05DE\u05E2\u05D5\u05E0\u05D0\u05D5\u05EA \u05D1\u05E2"\u05DE') === 'medton', 'detectChain: Medton');
+    assert(detectChain('\u05D1\u05D9\u05D2 \u05D0\u05DC\u05E7\u05D8\u05E8\u05D9\u05E7 \u05E0\u05D4\u05E8\u05D9\u05D4') === 'big_electric', 'detectChain: Big Electric');
+    assert(detectChain('\u05D1\u05D0\u05D2 - \u05E1\u05E0\u05D9\u05E3 \u05D7\u05D9\u05E4\u05D4') === 'bug', 'detectChain: Bug');
+    assert(detectChain('\u05E2\u05D9\u05E8\u05D9\u05D9\u05EA \u05EA\u05DC \u05D0\u05D1\u05D9\u05D1') === 'municipality', 'detectChain: Municipality');
+    assert(detectChain('\u05D1\u05D9\u05EA \u05E1\u05E4\u05E8 \u05EA\u05D3\u05D4\u05E8') === 'school', 'detectChain: School');
 
     // === "hours" filter logic ===
     const hoursFilter = (hours) => hours && hours !== '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8';

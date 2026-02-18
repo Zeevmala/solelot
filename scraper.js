@@ -147,14 +147,26 @@ function determineChain(name) {
 
 // Transform marker to our format
 function transformMarker(marker, index) {
-    const lat = parseFloat(marker.lat);
-    const lng = parseFloat(marker.lng);
+    let lat = parseFloat(marker.lat);
+    let lng = parseFloat(marker.lng);
     if (!isFinite(lat) || !isFinite(lng)) return null;
+
+    // Detect inverted coordinates (lat in lng range and vice versa)
+    if (lat >= 34 && lat <= 36 && lng >= 29 && lng <= 34) {
+        console.warn(`Swapping likely inverted coords for: ${marker.title} (${lat}, ${lng})`);
+        [lat, lng] = [lng, lat];
+    }
+
+    // Israel bounds check
+    if (lat < 29 || lat > 34 || lng < 34 || lng > 36) {
+        console.warn(`Out-of-bounds, skipping: ${marker.title} (${lat}, ${lng})`);
+        return null;
+    }
 
     return {
         id: index + 1,
-        name: marker.title || 'נקודת איסוף',
-        address: marker.address || 'כתובת לא זמינה',
+        name: (marker.title || 'נקודת איסוף').substring(0, 200),
+        address: (marker.address || 'כתובת לא זמינה').substring(0, 300),
         city: extractCity(marker.address),
         type: determineType(marker),
         chain: determineChain(marker.title),
