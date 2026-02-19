@@ -170,7 +170,7 @@ const searchControl = L.control({ position: 'topright' });
 searchControl.onAdd = function() {
     const container = L.DomUtil.create('div', 'map-search-container');
     container.innerHTML = `
-        <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" autocomplete="off">
+        <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-owns="search-suggestions" autocomplete="off">
         <button id="search-clear" class="search-clear-btn" aria-label="נקה חיפוש" type="button">✕</button>
         <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
     `;
@@ -196,6 +196,7 @@ searchControl.onAdd = function() {
             suggestions.classList.remove('active');
             suggestions.innerHTML = '';
         }
+        input.setAttribute('aria-expanded', 'false');
         input.focus();
     });
 
@@ -491,10 +492,10 @@ function createPopupContent(location) {
             <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">Waze</a>
         </div>
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-id="${location.id}" onclick="handleLike(${location.id})" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
                 ${thumbsUpSvg}
             </button>
-            <button class="feedback-btn dislike-btn" onclick="handleDislike('${reportUrl.replace(/'/g, "\\'")}')" aria-label="דווח על בעיה">
+            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(reportUrl)}" aria-label="דווח על בעיה">
                 ${thumbsDownSvg}
             </button>
         </div>
@@ -562,10 +563,10 @@ function createSidebarContent(location) {
         </div>
 
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-id="${location.id}" onclick="handleLike(${location.id})" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
                 ${thumbsUpSvg}
             </button>
-            <button class="feedback-btn dislike-btn" onclick="handleDislike('${getReportUrl(location).replace(/'/g, "\\'")}')" aria-label="דווח על בעיה">
+            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דווח על בעיה">
                 ${thumbsDownSvg}
             </button>
         </div>
@@ -687,6 +688,7 @@ function setupAutocomplete() {
 
         if (query.length < 2) {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
             suggestions.innerHTML = '';
             highlightedIndex = -1;
             currentSearch = query;
@@ -725,6 +727,7 @@ function setupAutocomplete() {
 
         if (limitedMatches.length === 0) {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
             suggestions.innerHTML = '';
             return;
         }
@@ -763,6 +766,7 @@ function setupAutocomplete() {
         }).join('');
 
         suggestions.classList.add('active');
+        searchInput.setAttribute('aria-expanded', 'true');
         highlightedIndex = -1;
     });
 
@@ -783,14 +787,25 @@ function setupAutocomplete() {
             selectSuggestion(items[highlightedIndex]);
         } else if (e.key === 'Escape') {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
             highlightedIndex = -1;
         }
     });
 
     function updateHighlight(items) {
         items.forEach((item, index) => {
-            item.classList.toggle('highlighted', index === highlightedIndex);
+            const isActive = index === highlightedIndex;
+            item.classList.toggle('highlighted', isActive);
+            if (isActive) {
+                item.id = 'suggestion-active';
+                searchInput.setAttribute('aria-activedescendant', 'suggestion-active');
+            } else {
+                if (item.id === 'suggestion-active') item.removeAttribute('id');
+            }
         });
+        if (highlightedIndex < 0) {
+            searchInput.removeAttribute('aria-activedescendant');
+        }
     }
 
     function selectSuggestion(item) {
@@ -810,6 +825,7 @@ function setupAutocomplete() {
         }
 
         suggestions.classList.remove('active');
+        searchInput.setAttribute('aria-expanded', 'false');
         suggestions.innerHTML = '';
         highlightedIndex = -1;
     }
@@ -822,6 +838,7 @@ function setupAutocomplete() {
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
         }
     });
 }
@@ -1151,6 +1168,16 @@ document.addEventListener('keydown', (e) => {
 
         const suggestions = document.getElementById('search-suggestions');
         if (suggestions) suggestions.classList.remove('active');
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
     }
+});
+
+// Delegated click handler for feedback buttons (avoids inline onclick)
+document.addEventListener('click', (e) => {
+    const likeBtn = e.target.closest('[data-like-id]');
+    if (likeBtn) { handleLike(Number(likeBtn.dataset.likeId)); return; }
+    const dislikeBtn = e.target.closest('[data-report-url]');
+    if (dislikeBtn) { handleDislike(dislikeBtn.dataset.reportUrl); return; }
 });
 
