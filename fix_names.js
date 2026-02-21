@@ -6,10 +6,15 @@
  * - "Collection Point" → "נקודת איסוף - [street or city]"
  * - "נקודת איסוף" (bare) → "נקודת איסוף - [city]"
  *
- * Phase 2 (this update):
+ * Phase 2:
  * - Remove dead entries (לא פעיל / בוטל / כפול / כפילות)
  * - Shorten verbose names containing "רשות מקומית" boilerplate
  * - Fix entries with city="Unknown"
+ *
+ * Phase 3:
+ * - Deduplicate name+city by appending street (1,215 entries)
+ * - Prefix bare street-address names with "נקודת איסוף -" (24 entries)
+ * - Normalize city mismatches in address field (4 entries)
  *
  * Usage: bun fix_names.js
  */
@@ -158,6 +163,66 @@ function main() {
         }
     }
 
+    // --- Part D: Remove true duplicates (same name+city+address) ---
+    let removedDupes = 0;
+    const seenNCA = new Set();
+    locations = locations.filter(loc => {
+        const key = `${loc.name}\0${loc.city}\0${loc.address}`;
+        if (seenNCA.has(key)) {
+            removedDupes++;
+            return false;
+        }
+        seenNCA.add(key);
+        return true;
+    });
+
+    // --- Part E: Rule E — Deduplicate name+city by appending street ---
+    let ruleE = 0;
+    const nameCityCount = {};
+    for (const loc of locations) {
+        const key = `${loc.name}\0${loc.city}`;
+        nameCityCount[key] = (nameCityCount[key] || 0) + 1;
+    }
+    for (const loc of locations) {
+        const key = `${loc.name}\0${loc.city}`;
+        if (nameCityCount[key] > 1) {
+            const street = extractStreet(loc.address);
+            // Don't append if street is already in the name (would be redundant)
+            if (street && street !== loc.name && !loc.name.includes(street)) {
+                loc.name = `${loc.name} - ${street}`;
+                ruleE++;
+            }
+        }
+    }
+
+    // --- Part E: Rule F — Name = just a street address (prefix with נקודת איסוף) ---
+    let ruleF = 0;
+    for (const loc of locations) {
+        const street = extractStreet(loc.address);
+        if (street && loc.name === street) {
+            loc.name = `נקודת איסוף - ${loc.name}`;
+            ruleF++;
+        }
+    }
+
+    // --- Part F: Rule G — Normalize city mismatches in address ---
+    let ruleG = 0;
+    const cityNormalizations = {
+        'תל אביב יפו': 'תל אביב-יפו',
+        'מודיעין מכבים רעות': 'מודיעין-מכבים-רעות',
+        'בת-ים': 'בת ים',
+    };
+    for (const loc of locations) {
+        const addr = loc.address || '';
+        if (addr.includes(',')) {
+            const addrCity = addr.split(',').pop().trim();
+            if (cityNormalizations[addrCity]) {
+                loc.address = addr.replace(addrCity, cityNormalizations[addrCity]);
+                ruleG++;
+            }
+        }
+    }
+
     // Save
     data.locations = locations;
     fs.writeFileSync(INPUT_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -174,6 +239,10 @@ function main() {
     console.log(`Rule D (no-city prefix):    ${ruleD}`);
     console.log(`Phase 1 rules:              ${phase1}`);
     console.log(`City fixed:                 ${cityFixed}`);
+    console.log(`Removed true duplicates:    ${removedDupes}`);
+    console.log(`Rule E (dedup name+city):   ${ruleE}`);
+    console.log(`Rule F (bare address name): ${ruleF}`);
+    console.log(`Rule G (city normalize):    ${ruleG}`);
     console.log(`Unchanged:                  ${unchanged}`);
     console.log(`Total remaining:            ${locations.length}`);
 }
