@@ -74,7 +74,7 @@
         </div>
         <div class="header-search">
             <div class="map-search-container">
-                <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" autocomplete="off">
+                <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-owns="search-suggestions" autocomplete="off">
                 <button id="search-clear" class="search-clear-btn" aria-label="נקה חיפוש" type="button">&#10005;</button>
                 <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
             </div>
@@ -109,7 +109,7 @@
     <!-- Main Content Container -->
     <main class="main-content">
         <!-- The map -->
-        <div id="map" role="application" aria-label="מפת נקודות מיחזור סוללות בישראל" tabindex="0"></div>
+        <div id="map" role="application" aria-label="מפת נקודות מיחזור סוללות בישראל" aria-roledescription="מפה אינטראקטיבית" tabindex="0"></div>
 
         <!-- Location Sidebar -->
         <aside id="sidebar" class="sidebar" aria-label="פרטי נקודה נבחרת" style="display: none;">
