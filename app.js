@@ -165,24 +165,12 @@ basemapToggle.onAdd = function() {
 };
 basemapToggle.addTo(map);
 
-// Create search control on map
-const searchControl = L.control({ position: 'topright' });
-searchControl.onAdd = function() {
-    const container = L.DomUtil.create('div', 'map-search-container');
-    container.innerHTML = `
-        <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" autocomplete="off">
-        <button id="search-clear" class="search-clear-btn" aria-label="נקה חיפוש" type="button">✕</button>
-        <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
-    `;
+// Wire up header search (search bar lives in the HTML header, not a Leaflet control)
+(function initHeaderSearch() {
+    const input = document.getElementById('search-input');
+    const clearBtn = document.getElementById('search-clear');
+    if (!input || !clearBtn) return;
 
-    L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.disableScrollPropagation(container);
-
-    const input = container.querySelector('#search-input');
-    L.DomEvent.on(input, 'keydown keyup keypress', L.DomEvent.stopPropagation);
-
-    // Clear search button — show/hide based on input content
-    const clearBtn = container.querySelector('#search-clear');
     input.addEventListener('input', () => {
         clearBtn.style.display = input.value.length > 0 ? 'flex' : 'none';
     });
@@ -198,44 +186,59 @@ searchControl.onAdd = function() {
         }
         input.focus();
     });
+})();
 
-    return container;
-};
-searchControl.addTo(map);
-
-// Custom SVG Marker Icons — rounded Google-style pins
+// Custom SVG Marker Icons — high-fidelity rounded pins
 const markerSvg = {
     store: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="storeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#26A69A"/>
-                <stop offset="100%" stop-color="#00796B"/>
+                <stop offset="0%" stop-color="#2BB5A6"/>
+                <stop offset="40%" stop-color="#26A69A"/>
+                <stop offset="100%" stop-color="#00695C"/>
             </linearGradient>
+            <radialGradient id="storeSheen" cx="35%" cy="30%" r="60%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
             <filter id="storeShadow" x="-25%" y="-15%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.25"/>
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.28"/>
             </filter>
         </defs>
         <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#storeGrad)" filter="url(#storeShadow)"/>
-        <circle cx="18" cy="15" r="9" fill="white" opacity="0.95"/>
-        <rect x="15" y="9.5" width="6" height="2" rx="1" fill="#00796B"/>
-        <rect x="13" y="11.5" width="10" height="7" rx="1.5" fill="#26A69A"/>
-        <rect x="14.5" y="13" width="7" height="1.5" rx="0.5" fill="#80CBC4"/>
-        <rect x="14.5" y="15.5" width="7" height="1.5" rx="0.5" fill="#B2DFDB"/>
+        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#storeSheen)"/>
+        <circle cx="18" cy="15" r="9.5" fill="white" opacity="0.97"/>
+        <rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#00796B"/>
+        <rect x="13.5" y="10.5" width="9" height="7.5" rx="1.5" fill="#26A69A"/>
+        <rect x="15" y="11.5" width="6" height="1.2" rx="0.4" fill="#80CBC4"/>
+        <rect x="15" y="13.5" width="6" height="1.2" rx="0.4" fill="#A7D8D0"/>
+        <rect x="15" y="15.5" width="6" height="1.2" rx="0.4" fill="#B2DFDB"/>
+        <path d="M19 11l-1.5 3h1.5l-1 3 2.5-3.5h-1.5z" fill="white" opacity="0.45"/>
     </svg>`,
     facility: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="facilityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#FFA726"/>
-                <stop offset="100%" stop-color="#EF6C00"/>
+                <stop offset="0%" stop-color="#FFB74D"/>
+                <stop offset="40%" stop-color="#FFA726"/>
+                <stop offset="100%" stop-color="#E65100"/>
             </linearGradient>
+            <radialGradient id="facilitySheen" cx="35%" cy="30%" r="60%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
             <filter id="facilityShadow" x="-25%" y="-15%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.25"/>
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.28"/>
             </filter>
         </defs>
         <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#facilityGrad)" filter="url(#facilityShadow)"/>
-        <circle cx="18" cy="15" r="9" fill="white" opacity="0.95"/>
-        <path d="M13 18v-5l3.5 2.5L20 13v5h-1.5v-3l-2 1.5L14.5 15v3z" fill="#EF6C00"/>
-        <rect x="14" y="10" width="8" height="1.5" rx="0.5" fill="#FFA726"/>
+        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#facilitySheen)"/>
+        <circle cx="18" cy="15" r="9.5" fill="white" opacity="0.97"/>
+        <rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#EF6C00"/>
+        <rect x="13.5" y="10.5" width="9" height="7.5" rx="1.5" fill="#FFA726"/>
+        <rect x="15" y="11.5" width="6" height="1.2" rx="0.4" fill="#FFF3E0"/>
+        <rect x="15" y="13.5" width="6" height="1.2" rx="0.4" fill="#FFE0B2"/>
+        <rect x="15" y="15.5" width="6" height="1.2" rx="0.4" fill="#FFCC80"/>
+        <path d="M19 11l-1.5 3h1.5l-1 3 2.5-3.5h-1.5z" fill="white" opacity="0.45"/>
     </svg>`,
     user: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -326,16 +329,18 @@ const popupBatterySvg = {
     store: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
         <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#00796B"/>
         <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#26A69A"/>
-        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
-        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
+        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#80CBC4"/>
+        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#A7D8D0"/>
         <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
+        <path d="M11 5.5l-1.5 4h2l-1.5 4 3-4.5h-2z" fill="white" opacity="0.35"/>
     </svg>`,
     facility: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
         <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#EF6C00"/>
         <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#FFA726"/>
         <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
-        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
-        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
+        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#FFE0B2"/>
+        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#FFCC80"/>
+        <path d="M11 5.5l-1.5 4h2l-1.5 4 3-4.5h-2z" fill="white" opacity="0.35"/>
     </svg>`
 };
 

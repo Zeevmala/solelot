@@ -52,10 +52,39 @@
     <!-- Skip to main content link for accessibility -->
     <a href="#map" class="skip-link" aria-label="דלג לתוכן המפה">דלג למפה</a>
 
+    <!-- App Header -->
+    <header class="app-header" role="banner">
+        <div class="header-brand">
+            <svg class="header-battery-icon" viewBox="0 0 32 32" width="32" height="32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <defs>
+                    <linearGradient id="headerBattGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#2BB5A6"/>
+                        <stop offset="100%" stop-color="#00695C"/>
+                    </linearGradient>
+                </defs>
+                <rect x="11" y="2" width="10" height="4" rx="1.5" fill="#00796B"/>
+                <rect x="6" y="6" width="20" height="24" rx="4" fill="url(#headerBattGrad)"/>
+                <rect x="8" y="8" width="16" height="20" rx="2.5" fill="white" opacity="0.95"/>
+                <rect x="10" y="11" width="12" height="3.5" rx="1" fill="#26A69A"/>
+                <rect x="10" y="16.5" width="12" height="3.5" rx="1" fill="#4DB6AC"/>
+                <rect x="10" y="22" width="12" height="3.5" rx="1" fill="#80CBC4"/>
+                <path d="M17.5 10l-3 6.5h3l-2 6.5 5-7.5h-3.5z" fill="#00796B" opacity="0.18"/>
+            </svg>
+            <h1 class="header-title">מפת מיחזור סוללות</h1>
+        </div>
+        <div class="header-search">
+            <div class="map-search-container">
+                <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" autocomplete="off">
+                <button id="search-clear" class="search-clear-btn" aria-label="נקה חיפוש" type="button">&#10005;</button>
+                <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
+            </div>
+        </div>
+    </header>
+
     <!-- Loading Skeleton Overlay -->
     <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">
         <div class="skeleton-container" aria-hidden="true">
-            <div class="skeleton-search"></div>
+            <div class="skeleton-header"></div>
             <div class="skeleton-map">
                 <div class="skeleton-pin" style="top: 25%; right: 40%"></div>
                 <div class="skeleton-pin" style="top: 45%; right: 35%"></div>
