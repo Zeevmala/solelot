@@ -694,34 +694,54 @@ function setupAutocomplete() {
             return;
         }
 
-        const matches = [];
+        const cityMatches = [];
+        const locationMatches = [];
         const addedCities = new Set();
 
         allLocations.forEach(location => {
-            if (location.name.includes(query) ||
-                location.address.includes(query) ||
-                fuzzyMatch(location.name, query) ||
-                fuzzyMatch(location.address, query)) {
-                matches.push({
+            // Location matching — tag exact vs fuzzy
+            const exactLocation = location.name.includes(query) || location.address.includes(query);
+            const fuzzyLocation = !exactLocation && (fuzzyMatch(location.name, query) || fuzzyMatch(location.address, query));
+            if (exactLocation || fuzzyLocation) {
+                locationMatches.push({
                     type: 'location',
                     id: location.id,
                     name: location.name,
                     city: location.city,
-                    locationType: location.type
+                    locationType: location.type,
+                    exact: exactLocation
                 });
             }
 
-            if ((location.city.includes(query) || fuzzyMatch(location.city, query)) && !addedCities.has(location.city)) {
-                addedCities.add(location.city);
-                matches.unshift({
-                    type: 'city',
-                    name: location.city,
-                    count: cityCounts.get(location.city) || 0
-                });
+            // City matching — maxDist=1 for tighter fuzzy, tag exact vs fuzzy
+            if (!addedCities.has(location.city)) {
+                const exactCity = location.city.includes(query);
+                const fuzzyCity = !exactCity && fuzzyMatch(location.city, query, 1);
+                if (exactCity || fuzzyCity) {
+                    addedCities.add(location.city);
+                    cityMatches.push({
+                        type: 'city',
+                        name: location.city,
+                        count: cityCounts.get(location.city) || 0,
+                        exact: exactCity
+                    });
+                }
             }
         });
 
-        const limitedMatches = matches.slice(0, 8);
+        // Sort cities: exact first (by count desc), then fuzzy (by count desc)
+        cityMatches.sort((a, b) => {
+            if (a.exact !== b.exact) return a.exact ? -1 : 1;
+            return b.count - a.count;
+        });
+
+        // Sort locations: exact first, then fuzzy
+        locationMatches.sort((a, b) => {
+            if (a.exact !== b.exact) return a.exact ? -1 : 1;
+            return 0;
+        });
+
+        const limitedMatches = [...cityMatches, ...locationMatches].slice(0, 8);
 
         if (limitedMatches.length === 0) {
             suggestions.classList.remove('active');

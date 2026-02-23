@@ -114,6 +114,9 @@
     assert(fuzzyMatch('abc', 'ab') === true, 'fuzzyMatch: short query substring');
     assert(fuzzyMatch('abc', 'xz') === false, 'fuzzyMatch: short query no match (skips fuzzy)');
     assert(fuzzyMatch('abcdefgh', 'wxyz') === false, 'fuzzyMatch: length difference > 3 returns false');
+    assert(fuzzyMatch('בטחה', 'חיפה', 1) === false, 'fuzzyMatch: maxDist=1 rejects distant city');
+    assert(fuzzyMatch('חיפה', 'חיפה', 1) === true, 'fuzzyMatch: maxDist=1 exact match');
+    assert(fuzzyMatch('חיפה', 'חיפ', 1) === true, 'fuzzyMatch: maxDist=1 substring match');
 
     // === getDistance tests ===
     const d1 = getDistance(32.0853, 34.7818, 31.7683, 35.2137); // Tel Aviv to Jerusalem
