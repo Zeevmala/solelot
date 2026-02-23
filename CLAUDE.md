@@ -32,7 +32,6 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Nice to Have
 - [x] Add `aria-label` to Leaflet marker/cluster divs (e.g. location name) — framework generates `role="button"` divs without accessible names
-- [ ] Replace "רחובות" streets basemap with HERE Maps tiles — requires free API key from https://platform.here.com/sign-up (URL: `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png8?style=explore.day&apiKey=KEY`)
 - [ ] Add testing hooks (setup/teardown/beforeEach/afterEach) — only needed when implementing Phase 2 (Vitest) or testing async functions/Leaflet operations; current HTML tests don't require them since pure functions have no side effects
 
 ## File Structure
@@ -103,12 +102,14 @@ Intentionally deferred — not a bug. When ready, add manually (MAI scraper API 
 - Do NOT add event listeners inside functions callable multiple times without a cleanup path.
 - Do NOT add new `location.type` values without updating `typeNames` in `app.js` and tests.
 - Do NOT forget to bump `STATIC_CACHE` version in `sw.js` after changing any cached file.
+- Do NOT use inline `onclick` handlers in template strings. Use `data-*` attributes + event delegation.
+- Do NOT modify `CHAIN_PATTERNS` in `app.js` without syncing the copy in `test.html`.
 
 ### Testing Notes
-- `detectChain` is tested for only 5 of 13+ chains. Missing: Office Depot, Home Center,
-  Pelephone, Cellcom, IKEA, Rami Levy, municipality, RE-CAR, Batte-Re, MILI.
+- `detectChain` in `test.html` must stay character-for-character identical to `app.js`. It uses the same `CHAIN_PATTERNS` array.
 - XSS tests only cover `<script>` and `<img>`. Missing: SVG onclick, `javascript:` URLs, `data:` URIs.
-- No integration tests for: map init, search logic, GPS, sidebar state, `?action=nearest`.
+- `test-map.html` covers: data integrity, template output, search filtering, sidebar state, GPS distance, empty state logic, `?action=nearest`.
+- Not yet tested: Leaflet map init (requires Leaflet in test env), real GPS callback, live event delegation.
 
 ### Data Integrity Notes
 - `scraper.js` is a one-shot collector, not a live sync. Run it to refresh, then manually review output.

@@ -1,20 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#26A69A"/>
-      <stop offset="100%" stop-color="#00796B"/>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2BB5A6"/>
+      <stop offset="100%" stop-color="#00695C"/>
     </linearGradient>
+    <radialGradient id="bgSheen" cx="30%" cy="25%" r="70%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
   </defs>
 
   <!-- Background rounded square -->
   <rect x="32" y="32" width="448" height="448" rx="96" fill="url(#bgGrad)"/>
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="url(#bgSheen)"/>
 
   <!-- Pin shape (white silhouette) -->
-  <path d="M256 80c-66 0-120 54-120 120 0 84 120 240 120 240s120-156 120-240c0-66-54-120-120-120z" fill="white" opacity="0.95"/>
+  <path d="M256 80c-66 0-120 54-120 120 0 84 120 240 120 240s120-156 120-240c0-66-54-120-120-120z" fill="white" opacity="0.97"/>
 
-  <!-- Battery icon inside pin -->
-  <rect x="224" y="140" width="64" height="20" rx="6" fill="#00796B"/>
-  <rect x="208" y="160" width="96" height="70" rx="10" fill="#26A69A"/>
-  <rect x="218" y="170" width="76" height="16" rx="4" fill="#80CBC4"/>
-  <rect x="218" y="194" width="76" height="16" rx="4" fill="#B2DFDB"/>
+  <!-- Battery terminal -->
+  <rect x="224" y="134" width="64" height="22" rx="6" fill="#00796B"/>
+
+  <!-- Battery body -->
+  <rect x="206" y="156" width="100" height="76" rx="12" fill="#26A69A"/>
+
+  <!-- Charge bars -->
+  <rect x="218" y="166" width="76" height="14" rx="4" fill="#80CBC4"/>
+  <rect x="218" y="188" width="76" height="14" rx="4" fill="#A7D8D0"/>
+  <rect x="218" y="210" width="76" height="14" rx="4" fill="#B2DFDB"/>
+
+  <!-- Lightning bolt -->
+  <path d="M268 158l-16 36h16l-12 36 28-40h-18z" fill="white" opacity="0.25"/>
 </svg>
