@@ -51,7 +51,7 @@ function playLikeSound() {
 // Handle like button click
 function handleLike(locationId) {
     playLikeSound();
-    var btns = document.querySelectorAll('.like-btn[data-id="' + locationId + '"]');
+    const btns = document.querySelectorAll('.like-btn[data-id="' + locationId + '"]');
     btns.forEach(function(btn) {
         btn.classList.add('liked');
         btn.classList.add('pop');
@@ -295,31 +295,6 @@ const chainNames = {
     other: 'אחר'
 };
 
-// Hebrew explanations for location types
-const tagExplanations = {
-    store: 'נקודת איסוף שבה ניתן להשאיר סוללות משומשות למיחזור',
-    facility: 'מתקן תעשייתי המעבד ומפרק סוללות לחומרי גלם'
-};
-
-// Chain-specific descriptions
-const chainExplanations = {
-    superpharm: 'רשת בתי מרקחת עם עמדות איסוף סוללות בסניפים',
-    shufersal: 'רשת סופרמרקטים עם מכלי איסוף סוללות בכניסה',
-    rami_levy: 'רשת מזון עם נקודות איסוף סוללות',
-    victory: 'רשת מזון עם נקודות איסוף סוללות',
-    ikea: 'חנות רהיטים עם עמדת מיחזור סוללות',
-    home_center: 'רשת לבית ולגינה עם נקודות איסוף סוללות',
-    office_depot: 'רשת ציוד משרדי עם נקודות איסוף סוללות',
-    pelephone: 'רשת סלולר המקבלת סוללות ומכשירים ישנים',
-    cellcom: 'רשת סלולר המקבלת סוללות ומכשירים ישנים',
-    partner: 'רשת סלולר המקבלת סוללות ומכשירים ישנים',
-    medton: 'חברת איסוף וטיפול בפסולת אלקטרונית',
-    big_electric: 'רשת מוצרי חשמל עם נקודות איסוף סוללות',
-    bug: 'רשת מוצרי חשמל עם נקודות איסוף סוללות',
-    municipality: 'נקודת איסוף עירונית בניהול הרשות המקומית',
-    school: 'נקודת איסוף סוללות בבית ספר',
-    other: 'נקודת איסוף סוללות'
-};
 
 // Small battery icons for popups (20×20, no pin shape)
 const popupBatterySvg = {
@@ -487,8 +462,8 @@ function createPopupContent(location) {
 
     content += `
         <div class="nav-links">
-            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn google">Google Maps</a>
-            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">Waze</a>
+            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn google">נווט ב-Google</a>
+            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">נווט ב-Waze</a>
         </div>
         <div class="feedback-row">
             <button class="feedback-btn like-btn" data-id="${location.id}" onclick="handleLike(${location.id})" aria-label="אהבתי נקודה זו">
@@ -505,8 +480,6 @@ function createPopupContent(location) {
 
 // Create sidebar content for a location
 function createSidebarContent(location) {
-    const chain = detectChain(location.name);
-    const chainName = chainNames[chain] || '';
     const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
 
     let distanceHtml = '';

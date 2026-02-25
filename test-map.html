@@ -73,8 +73,8 @@
         const wazeUrl = 'https://waze.com/ul?ll=' + location.lat + ',' + location.lng + '&navigate=yes';
         const reportUrl = getReportUrl(location);
 
-        content += '<div class="nav-links"><a href="' + googleMapsUrl + '" target="_blank" class="nav-btn google">Google Maps</a>';
-        content += '<a href="' + wazeUrl + '" target="_blank" class="nav-btn waze">Waze</a></div>';
+        content += '<div class="nav-links"><a href="' + googleMapsUrl + '" target="_blank" class="nav-btn google">\u05E0\u05D5\u05D5\u05D8 \u05D1-Google</a>';
+        content += '<a href="' + wazeUrl + '" target="_blank" class="nav-btn waze">\u05E0\u05D5\u05D5\u05D8 \u05D1-Waze</a></div>';
         content += '<div class="feedback-row">';
         content += '<button class="feedback-btn like-btn" data-id="' + location.id + '" onclick="handleLike(' + location.id + ')">\uD83D\uDC4D</button>';
         content += '<button class="feedback-btn dislike-btn" onclick="handleDislike(\'' + reportUrl + '\')">\uD83D\uDC4E</button>';
@@ -163,8 +163,8 @@
             const popup = createPopupContent(testLoc);
 
             assert(!popup.includes('\uD83D\uDCCD'), 'Popup: no pin emoji in address row');
-            assert(popup.includes('Google Maps'), 'Popup: Google Maps button text (no emoji)');
-            assert(popup.includes('Waze'), 'Popup: Waze button text (no emoji)');
+            assert(popup.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Google'), 'Popup: Google nav button text in Hebrew');
+            assert(popup.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Waze'), 'Popup: Waze nav button text in Hebrew');
             assert(popup.includes('nav-btn google'), 'Popup: Google button has correct class');
             assert(popup.includes('nav-btn waze'), 'Popup: Waze button has correct class');
             assert(popup.includes('feedback-row'), 'Popup: feedback buttons row present');
