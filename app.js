@@ -28,23 +28,49 @@ const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq
 
 // === FEEDBACK SYSTEM (Like / Dislike) ===
 
-// Play a short positive "ding" sound using Web Audio API
+// Shared AudioContext — created once, reused (required for iOS Safari)
+let audioCtx = null;
+
+// Play a satisfying "ding" sound using Web Audio API
 function playLikeSound() {
     try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-        oscillator.frequency.setValueAtTime(1108.73, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + 0.3);
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        // iOS Safari requires resume() inside a user gesture
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
+        const now = audioCtx.currentTime;
+
+        // Main tone — warm sine
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(660, now);
+        osc1.frequency.setValueAtTime(880, now + 0.08);
+        gain1.gain.setValueAtTime(0.7, now);
+        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+        osc1.start(now);
+        osc1.stop(now + 0.35);
+
+        // Harmonic — adds brightness/richness
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1320, now);
+        osc2.frequency.setValueAtTime(1760, now + 0.08);
+        gain2.gain.setValueAtTime(0.25, now);
+        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc2.start(now);
+        osc2.stop(now + 0.25);
     } catch (e) {
-        // Web Audio not supported
+        // Web Audio not supported — fail silently
     }
 }
 
@@ -165,24 +191,12 @@ basemapToggle.onAdd = function() {
 };
 basemapToggle.addTo(map);
 
-// Create search control on map
-const searchControl = L.control({ position: 'topright' });
-searchControl.onAdd = function() {
-    const container = L.DomUtil.create('div', 'map-search-container');
-    container.innerHTML = `
-        <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" autocomplete="off">
-        <button id="search-clear" class="search-clear-btn" aria-label="נקה חיפוש" type="button">✕</button>
-        <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
-    `;
+// Wire up header search (search bar lives in the HTML header, not a Leaflet control)
+(function initHeaderSearch() {
+    const input = document.getElementById('search-input');
+    const clearBtn = document.getElementById('search-clear');
+    if (!input || !clearBtn) return;
 
-    L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.disableScrollPropagation(container);
-
-    const input = container.querySelector('#search-input');
-    L.DomEvent.on(input, 'keydown keyup keypress', L.DomEvent.stopPropagation);
-
-    // Clear search button — show/hide based on input content
-    const clearBtn = container.querySelector('#search-clear');
     input.addEventListener('input', () => {
         clearBtn.style.display = input.value.length > 0 ? 'flex' : 'none';
     });
@@ -196,46 +210,62 @@ searchControl.onAdd = function() {
             suggestions.classList.remove('active');
             suggestions.innerHTML = '';
         }
+        input.setAttribute('aria-expanded', 'false');
         input.focus();
     });
+})();
 
-    return container;
-};
-searchControl.addTo(map);
-
-// Custom SVG Marker Icons — rounded Google-style pins
+// Custom SVG Marker Icons — high-fidelity rounded pins
 const markerSvg = {
     store: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="storeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#26A69A"/>
-                <stop offset="100%" stop-color="#00796B"/>
+                <stop offset="0%" stop-color="#2BB5A6"/>
+                <stop offset="40%" stop-color="#26A69A"/>
+                <stop offset="100%" stop-color="#00695C"/>
             </linearGradient>
+            <radialGradient id="storeSheen" cx="35%" cy="30%" r="60%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
             <filter id="storeShadow" x="-25%" y="-15%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.25"/>
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.28"/>
             </filter>
         </defs>
         <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#storeGrad)" filter="url(#storeShadow)"/>
-        <circle cx="18" cy="15" r="9" fill="white" opacity="0.95"/>
-        <rect x="15" y="9.5" width="6" height="2" rx="1" fill="#00796B"/>
-        <rect x="13" y="11.5" width="10" height="7" rx="1.5" fill="#26A69A"/>
-        <rect x="14.5" y="13" width="7" height="1.5" rx="0.5" fill="#80CBC4"/>
-        <rect x="14.5" y="15.5" width="7" height="1.5" rx="0.5" fill="#B2DFDB"/>
+        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#storeSheen)"/>
+        <circle cx="18" cy="15" r="9.5" fill="white" opacity="0.97"/>
+        <rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#00796B"/>
+        <rect x="13.5" y="10.5" width="9" height="7.5" rx="1.5" fill="#26A69A"/>
+        <rect x="15" y="11.5" width="6" height="1.2" rx="0.4" fill="#80CBC4"/>
+        <rect x="15" y="13.5" width="6" height="1.2" rx="0.4" fill="#A7D8D0"/>
+        <rect x="15" y="15.5" width="6" height="1.2" rx="0.4" fill="#B2DFDB"/>
+        <path d="M19 11l-1.5 3h1.5l-1 3 2.5-3.5h-1.5z" fill="white" opacity="0.45"/>
     </svg>`,
     facility: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="facilityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#FFA726"/>
-                <stop offset="100%" stop-color="#EF6C00"/>
+                <stop offset="0%" stop-color="#FFB74D"/>
+                <stop offset="40%" stop-color="#FFA726"/>
+                <stop offset="100%" stop-color="#E65100"/>
             </linearGradient>
+            <radialGradient id="facilitySheen" cx="35%" cy="30%" r="60%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
             <filter id="facilityShadow" x="-25%" y="-15%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.25"/>
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.28"/>
             </filter>
         </defs>
         <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#facilityGrad)" filter="url(#facilityShadow)"/>
-        <circle cx="18" cy="15" r="9" fill="white" opacity="0.95"/>
-        <path d="M13 18v-5l3.5 2.5L20 13v5h-1.5v-3l-2 1.5L14.5 15v3z" fill="#EF6C00"/>
-        <rect x="14" y="10" width="8" height="1.5" rx="0.5" fill="#FFA726"/>
+        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#facilitySheen)"/>
+        <circle cx="18" cy="15" r="9.5" fill="white" opacity="0.97"/>
+        <rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#EF6C00"/>
+        <rect x="13.5" y="10.5" width="9" height="7.5" rx="1.5" fill="#FFA726"/>
+        <rect x="15" y="11.5" width="6" height="1.2" rx="0.4" fill="#FFF3E0"/>
+        <rect x="15" y="13.5" width="6" height="1.2" rx="0.4" fill="#FFE0B2"/>
+        <rect x="15" y="15.5" width="6" height="1.2" rx="0.4" fill="#FFCC80"/>
+        <path d="M19 11l-1.5 3h1.5l-1 3 2.5-3.5h-1.5z" fill="white" opacity="0.45"/>
     </svg>`,
     user: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -301,16 +331,18 @@ const popupBatterySvg = {
     store: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
         <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#00796B"/>
         <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#26A69A"/>
-        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
-        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
+        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#80CBC4"/>
+        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#A7D8D0"/>
         <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
+        <path d="M11 5.5l-1.5 4h2l-1.5 4 3-4.5h-2z" fill="white" opacity="0.35"/>
     </svg>`,
     facility: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
         <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#EF6C00"/>
         <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#FFA726"/>
         <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
-        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
-        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
+        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#FFE0B2"/>
+        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#FFCC80"/>
+        <path d="M11 5.5l-1.5 4h2l-1.5 4 3-4.5h-2z" fill="white" opacity="0.35"/>
     </svg>`
 };
 
@@ -466,10 +498,10 @@ function createPopupContent(location) {
             <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">נווט ב-Waze</a>
         </div>
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-id="${location.id}" onclick="handleLike(${location.id})" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
                 ${thumbsUpSvg}
             </button>
-            <button class="feedback-btn dislike-btn" onclick="handleDislike('${reportUrl.replace(/'/g, "\\'")}')" aria-label="דווח על בעיה">
+            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(reportUrl)}" aria-label="דווח על בעיה">
                 ${thumbsDownSvg}
             </button>
         </div>
@@ -535,10 +567,10 @@ function createSidebarContent(location) {
         </div>
 
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-id="${location.id}" onclick="handleLike(${location.id})" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
                 ${thumbsUpSvg}
             </button>
-            <button class="feedback-btn dislike-btn" onclick="handleDislike('${getReportUrl(location).replace(/'/g, "\\'")}')" aria-label="דווח על בעיה">
+            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דווח על בעיה">
                 ${thumbsDownSvg}
             </button>
         </div>
@@ -660,6 +692,7 @@ function setupAutocomplete() {
 
         if (query.length < 2) {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
             suggestions.innerHTML = '';
             highlightedIndex = -1;
             currentSearch = query;
@@ -667,37 +700,58 @@ function setupAutocomplete() {
             return;
         }
 
-        const matches = [];
+        const cityMatches = [];
+        const locationMatches = [];
         const addedCities = new Set();
 
         allLocations.forEach(location => {
-            if (location.name.includes(query) ||
-                location.address.includes(query) ||
-                fuzzyMatch(location.name, query) ||
-                fuzzyMatch(location.address, query)) {
-                matches.push({
+            // Location matching — tag exact vs fuzzy
+            const exactLocation = location.name.includes(query) || location.address.includes(query);
+            const fuzzyLocation = !exactLocation && (fuzzyMatch(location.name, query) || fuzzyMatch(location.address, query));
+            if (exactLocation || fuzzyLocation) {
+                locationMatches.push({
                     type: 'location',
                     id: location.id,
                     name: location.name,
                     city: location.city,
-                    locationType: location.type
+                    locationType: location.type,
+                    exact: exactLocation
                 });
             }
 
-            if ((location.city.includes(query) || fuzzyMatch(location.city, query)) && !addedCities.has(location.city)) {
-                addedCities.add(location.city);
-                matches.unshift({
-                    type: 'city',
-                    name: location.city,
-                    count: cityCounts.get(location.city) || 0
-                });
+            // City matching — maxDist=1 for tighter fuzzy, tag exact vs fuzzy
+            if (!addedCities.has(location.city)) {
+                const exactCity = location.city.includes(query);
+                const fuzzyCity = !exactCity && fuzzyMatch(location.city, query, 1);
+                if (exactCity || fuzzyCity) {
+                    addedCities.add(location.city);
+                    cityMatches.push({
+                        type: 'city',
+                        name: location.city,
+                        count: cityCounts.get(location.city) || 0,
+                        exact: exactCity
+                    });
+                }
             }
         });
 
-        const limitedMatches = matches.slice(0, 8);
+        // Sort cities: exact first (by count desc), then fuzzy (by count desc)
+        cityMatches.sort((a, b) => {
+            if (a.exact !== b.exact) return a.exact ? -1 : 1;
+            return b.count - a.count;
+        });
+
+        // Sort locations: exact first, then fuzzy
+        locationMatches.sort((a, b) => {
+            if (a.exact !== b.exact) return a.exact ? -1 : 1;
+            return 0;
+        });
+
+        const limitedMatches = [...cityMatches, ...locationMatches].slice(0, 8);
 
         if (limitedMatches.length === 0) {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
             suggestions.innerHTML = '';
             return;
         }
@@ -736,6 +790,7 @@ function setupAutocomplete() {
         }).join('');
 
         suggestions.classList.add('active');
+        searchInput.setAttribute('aria-expanded', 'true');
         highlightedIndex = -1;
     });
 
@@ -756,14 +811,25 @@ function setupAutocomplete() {
             selectSuggestion(items[highlightedIndex]);
         } else if (e.key === 'Escape') {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
             highlightedIndex = -1;
         }
     });
 
     function updateHighlight(items) {
         items.forEach((item, index) => {
-            item.classList.toggle('highlighted', index === highlightedIndex);
+            const isActive = index === highlightedIndex;
+            item.classList.toggle('highlighted', isActive);
+            if (isActive) {
+                item.id = 'suggestion-active';
+                searchInput.setAttribute('aria-activedescendant', 'suggestion-active');
+            } else {
+                if (item.id === 'suggestion-active') item.removeAttribute('id');
+            }
         });
+        if (highlightedIndex < 0) {
+            searchInput.removeAttribute('aria-activedescendant');
+        }
     }
 
     function selectSuggestion(item) {
@@ -783,6 +849,7 @@ function setupAutocomplete() {
         }
 
         suggestions.classList.remove('active');
+        searchInput.setAttribute('aria-expanded', 'false');
         suggestions.innerHTML = '';
         highlightedIndex = -1;
     }
@@ -795,6 +862,7 @@ function setupAutocomplete() {
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
             suggestions.classList.remove('active');
+            searchInput.setAttribute('aria-expanded', 'false');
         }
     });
 }
@@ -1124,6 +1192,16 @@ document.addEventListener('keydown', (e) => {
 
         const suggestions = document.getElementById('search-suggestions');
         if (suggestions) suggestions.classList.remove('active');
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
     }
+});
+
+// Delegated click handler for feedback buttons (avoids inline onclick)
+document.addEventListener('click', (e) => {
+    const likeBtn = e.target.closest('[data-like-id]');
+    if (likeBtn) { handleLike(Number(likeBtn.dataset.likeId)); return; }
+    const dislikeBtn = e.target.closest('[data-report-url]');
+    if (dislikeBtn) { handleDislike(dislikeBtn.dataset.reportUrl); return; }
 });
 

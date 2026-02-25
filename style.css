@@ -50,6 +50,76 @@ body {
     top: 0;
 }
 
+/* App Header */
+.app-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    z-index: 1100;
+    box-shadow: 0 1px 12px rgba(0, 0, 0, 0.06);
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.header-battery-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+}
+
+.header-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent-teal);
+    margin: 0;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+}
+
+.header-search {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 360px;
+    padding: 0 16px;
+}
+
+.header-search .map-search-container {
+    width: 100%;
+}
+
+.header-search .map-search-input {
+    width: 100%;
+    max-width: none;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.header-search .map-search-input:focus {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: var(--accent-teal);
+    box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.12);
+}
+
 /* Visually Hidden (for screen readers) */
 .visually-hidden {
     position: absolute;
@@ -69,6 +139,12 @@ body {
     position: relative;
     height: 100vh;
     height: 100dvh;
+    padding-top: 56px;
+}
+
+/* Push Leaflet top controls below the header */
+.leaflet-top {
+    top: 60px !important;
 }
 
 /* Map container */
@@ -741,14 +817,17 @@ body {
     align-items: center;
 }
 
-.skeleton-search {
-    width: 200px;
-    height: 40px;
-    border-radius: 12px;
+.skeleton-header {
+    width: 100%;
+    height: 56px;
+    border-radius: 0;
     background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
-    align-self: flex-end;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
 }
 
 .skeleton-map {
@@ -885,10 +964,47 @@ body {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+    .app-header {
+        height: 48px;
+        padding: 0 12px;
+    }
+
+    .header-title {
+        font-size: 17px;
+    }
+
+    .header-battery-icon {
+        width: 26px;
+        height: 26px;
+    }
+
+    .header-search {
+        position: static;
+        transform: none;
+        flex: 1;
+        max-width: none;
+        padding: 0;
+        margin-right: 12px;
+    }
+
+    .header-search .map-search-input {
+        font-size: 14px;
+        padding: 8px 28px 8px 12px;
+    }
+
     .main-content {
         height: 100vh;
         height: 100dvh;
         flex-direction: column;
+        padding-top: 48px;
+    }
+
+    .leaflet-top {
+        top: 52px !important;
+    }
+
+    .skeleton-header {
+        height: 48px;
     }
 
     #map {
