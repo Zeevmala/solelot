@@ -45,10 +45,19 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
 
+    <!-- Prefetch main data file -->
+    <link rel="prefetch" href="locations.json" as="fetch" crossorigin>
+
     <!-- Our CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <noscript>
+        <p style="text-align:center; padding:2rem; font-size:18px; direction:rtl;">
+            אנא הפעל JavaScript כדי להשתמש במפת מיחזור הסוללות.
+        </p>
+    </noscript>
+
     <!-- Skip to main content link for accessibility -->
     <a href="#map" class="skip-link" aria-label="דלג לתוכן המפה">דלג למפה</a>
 

@@ -52,7 +52,10 @@ function filterBatteryLocations(markers) {
     // Looking for: סוללות רגילות (regular batteries), סוללות ליתיום (lithium batteries)
 
     return markers.filter(marker => {
-        const categories = marker.categories || [];
+        // Reject markers missing required fields
+        if (!marker || typeof marker !== 'object') return false;
+
+        const categories = Array.isArray(marker.categories) ? marker.categories : [];
         const title = (marker.title || '').toLowerCase();
         const description = (marker.description || '').toLowerCase();
 
@@ -68,8 +71,8 @@ function filterBatteryLocations(markers) {
             title.includes(keyword) || description.includes(keyword)
         );
 
-        // For now, include all locations since they all accept batteries
-        // The MAI map is specifically for electronic waste including batteries
+        // The MAI map is specifically for electronic waste including batteries,
+        // so include all markers that pass basic validation
         return true;
     });
 }
@@ -149,7 +152,15 @@ function determineChain(name) {
 function transformMarker(marker, index) {
     let lat = parseFloat(marker.lat);
     let lng = parseFloat(marker.lng);
+
+    // Validate coordinates are finite and within Israel bounds (29-34°N, 34-36°E)
     if (!isFinite(lat) || !isFinite(lng)) return null;
+    if (lat < 29 || lat > 34 || lng < 34 || lng > 36) return null;
+
+    // Require a meaningful name and address
+    const name = (marker.title || '').trim();
+    const address = (marker.address || '').trim();
+    if (!name) return null;
 
     // Detect inverted coordinates (lat in lng range and vice versa)
     if (lat >= 34 && lat <= 36 && lng >= 29 && lng <= 34) {
@@ -165,15 +176,14 @@ function transformMarker(marker, index) {
 
     return {
         id: index + 1,
-        name: (marker.title || 'נקודת איסוף').substring(0, 200),
-        address: (marker.address || 'כתובת לא זמינה').substring(0, 300),
+        name: name.substring(0, 200),
+        address: (address || 'כתובת לא זמינה').substring(0, 300),
         city: extractCity(marker.address),
         type: determineType(marker),
         chain: determineChain(marker.title),
         lat: lat,
         lng: lng,
-        hours: 'בדוק באתר', // Hours not available from API
-        description: marker.description || undefined
+        hours: 'בדוק באתר' // Hours not available from API
     };
 }
 
@@ -187,8 +197,8 @@ async function main() {
         // Handle different response formats
         let markers = Array.isArray(data) ? data : (data.markers || []);
 
-        if (markers.length === 0) {
-            console.log('No markers found. Response:', JSON.stringify(data).substring(0, 500));
+        if (!Array.isArray(markers) || markers.length === 0) {
+            console.error('No markers found or unexpected response format. Response:', JSON.stringify(data).substring(0, 500));
             return;
         }
 
@@ -197,7 +207,23 @@ async function main() {
         console.log(`Filtered to ${batteryLocations.length} battery-related locations`);
 
         // Transform to our format
-        const locations = batteryLocations.map(transformMarker).filter(Boolean);
+        const transformed = batteryLocations.map(transformMarker).filter(Boolean);
+        console.log(`Transformed ${transformed.length} valid locations (rejected ${batteryLocations.length - transformed.length} with bad coords/missing name)`);
+
+        // Deduplicate by (name + address)
+        const seen = new Set();
+        const locations = [];
+        let duplicateCount = 0;
+        for (const loc of transformed) {
+            const key = `${loc.name}|${loc.address}`;
+            if (seen.has(key)) {
+                duplicateCount++;
+                continue;
+            }
+            seen.add(key);
+            locations.push({ ...loc, id: locations.length + 1 });
+        }
+        console.log(`Removed ${duplicateCount} duplicates`);
 
         // Save raw data for debugging
         fs.writeFileSync('raw_markers.json', JSON.stringify(markers, null, 2), 'utf8');
@@ -222,6 +248,7 @@ async function main() {
 
     } catch (error) {
         console.error('Error:', error.message);
+        console.error(error.stack);
     }
 }
 

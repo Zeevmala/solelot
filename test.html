@@ -143,12 +143,27 @@
     assert(detectChain('\u05E9\u05D5\u05E4\u05E8\u05E1\u05DC \u05D3\u05D9\u05DC') === 'shufersal', 'detectChain: Shufersal');
     assert(detectChain('\u05E4\u05DC\u05D0\u05E4\u05D5\u05DF \u05D7\u05D9\u05E4\u05D4') === 'pelephone', 'detectChain: Pelephone');
     assert(detectChain('\u05E1\u05DC\u05E7\u05D5\u05DD \u05D4\u05E8\u05E6\u05DC\u05D9\u05D4') === 'cellcom', 'detectChain: Cellcom');
+    assert(detectChain('\u05D0\u05D5\u05E4\u05D9\u05E1 \u05D3\u05D9\u05E4\u05D5 \u05E0\u05EA\u05E0\u05D9\u05D4') === 'office_depot', 'detectChain: Office Depot');
+    assert(detectChain('\u05D4\u05D5\u05DD \u05E1\u05E0\u05D8\u05E8 \u05D1\u05D0\u05E8 \u05E9\u05D1\u05E2') === 'home_center', 'detectChain: Home Center');
+    assert(detectChain('\u05E4\u05E8\u05D8\u05E0\u05E8 \u05D7\u05D9\u05E4\u05D4') === 'partner', 'detectChain: Partner');
+    assert(detectChain('\u05E8\u05DE\u05D9 \u05DC\u05D5\u05D9 \u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD') === 'rami_levy', 'detectChain: Rami Levy');
+    assert(detectChain('\u05D0\u05D9\u05E7\u05D0\u05D4 \u05E0\u05EA\u05E0\u05D9\u05D4') === 'ikea', 'detectChain: IKEA');
+    assert(detectChain('IKEA Rishon') === 'ikea', 'detectChain: IKEA (English)');
+    assert(detectChain('\u05E2\u05D9\u05E8\u05D9\u05D9\u05EA \u05EA\u05DC \u05D0\u05D1\u05D9\u05D1') === 'municipality', 'detectChain: Municipality');
+    assert(detectChain('\u05D1\u05D0\u05D2 - \u05DC\u05D1 \u05D4\u05E2\u05D9\u05E8') === 'bug', 'detectChain: Bug store');
     assert(detectChain('\u05EA\u05D7\u05E0\u05EA \u05D3\u05DC\u05E7') === 'other', 'detectChain: unknown returns other');
     assert(detectChain('\u05DE\u05D3\u05D8\u05D5\u05DF \u05E7\u05DE\u05E2\u05D5\u05E0\u05D0\u05D5\u05EA \u05D1\u05E2"\u05DE') === 'medton', 'detectChain: Medton');
     assert(detectChain('\u05D1\u05D9\u05D2 \u05D0\u05DC\u05E7\u05D8\u05E8\u05D9\u05E7 \u05E0\u05D4\u05E8\u05D9\u05D4') === 'big_electric', 'detectChain: Big Electric');
     assert(detectChain('\u05D1\u05D0\u05D2 - \u05E1\u05E0\u05D9\u05E3 \u05D7\u05D9\u05E4\u05D4') === 'bug', 'detectChain: Bug');
     assert(detectChain('\u05E2\u05D9\u05E8\u05D9\u05D9\u05EA \u05EA\u05DC \u05D0\u05D1\u05D9\u05D1') === 'municipality', 'detectChain: Municipality');
     assert(detectChain('\u05D1\u05D9\u05EA \u05E1\u05E4\u05E8 \u05EA\u05D3\u05D4\u05E8') === 'school', 'detectChain: School');
+
+    // === XSS escaping edge cases ===
+    assert(escapeHtml('<svg onload=alert(1)>') === '&lt;svg onload=alert(1)&gt;', 'escapeHtml: SVG onclick escaped');
+    assert(escapeHtml('javascript:alert(1)') === 'javascript:alert(1)', 'escapeHtml: javascript: URL passes through (safe as text)');
+    assert(escapeHtml('<img src=x onerror=alert(1)>') === '&lt;img src=x onerror=alert(1)&gt;', 'escapeHtml: img onerror escaped');
+    assert(escapeHtml('data:text/html,<script>alert(1)</script>').includes('&lt;script&gt;'), 'escapeHtml: data: URI script escaped');
+    assert(escapeHtml('<div onmouseover="alert(1)">').includes('&lt;div'), 'escapeHtml: div onmouseover escaped');
 
     // === "hours" filter logic ===
     const hoursFilter = (hours) => hours && hours !== '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8';
