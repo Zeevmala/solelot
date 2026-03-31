@@ -189,12 +189,12 @@ body {
 }
 
 .map-search-input::placeholder {
-    color: var(--text-muted);
+    color: var(--text-secondary);
 }
 
 .search-clear-btn {
     position: absolute;
-    left: 8px;
+    left: 4px;
     top: 50%;
     transform: translateY(-50%);
     display: none;
@@ -204,7 +204,7 @@ body {
     height: 28px;
     border: none;
     border-radius: 50%;
-    background: var(--text-muted);
+    background: var(--text-secondary);
     color: white;
     font-size: 14px;
     cursor: pointer;
@@ -214,7 +214,7 @@ body {
 }
 
 .search-clear-btn:hover {
-    background: var(--text-secondary);
+    background: var(--text-primary);
 }
 
 .map-search-container .search-suggestions {
@@ -259,7 +259,8 @@ body {
 
 .suggestion-item:focus {
     outline: 2px solid var(--accent-primary);
-    outline-offset: -2px;
+    outline-offset: 2px;
+    background: var(--bg-tertiary);
 }
 
 .suggestion-icon {
@@ -371,7 +372,7 @@ body {
 .marker-cluster div {
     width: 32px;
     height: 32px;
-    margin-left: 4px;
+    margin-inline-start: 4px;
     margin-top: 4px;
     text-align: center;
     border-radius: 50%;
@@ -414,8 +415,7 @@ body {
 }
 
 .battery-marker:hover {
-    transform: scale(1.15);
-    opacity: 0.5;
+    transform: scale(1.2);
 }
 
 .battery-marker svg {
@@ -448,7 +448,7 @@ body {
     color: var(--accent-teal);
     font-size: 18px;
     font-weight: 700;
-    padding-left: 24px;
+    padding-inline-start: 24px;
     border-bottom: 1px solid var(--border-light);
     padding-bottom: 10px;
 }
@@ -487,25 +487,25 @@ body {
     font-weight: bold;
 }
 
-/* Leaflet popup close button — bigger tap area with circle background */
+/* Leaflet popup close button — WCAG 2.5.5 touch target (44×44px) */
 .leaflet-popup-close-button {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 18px !important;
-    line-height: 32px !important;
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 20px !important;
+    line-height: 44px !important;
     text-align: center;
-    color: #888 !important;
+    color: var(--text-secondary) !important;
     background: #f0f0f0 !important;
     border-radius: 50% !important;
-    top: 8px !important;
-    right: 8px !important;
+    top: 4px !important;
+    right: 4px !important;
     padding: 0 !important;
     transition: background 0.2s;
 }
 
 .leaflet-popup-close-button:hover {
     background: #ddd !important;
-    color: #555 !important;
+    color: var(--text-primary) !important;
 }
 
 /* Navigation links in popup */
@@ -749,7 +749,7 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 50%;
     background: var(--bg-secondary);
-    color: var(--text-muted);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
     padding: 0;
@@ -1069,7 +1069,7 @@ body {
 
     .leaflet-popup-content h3 {
         font-size: 16px;
-        padding-left: 20px;
+        padding-inline-start: 20px;
     }
 
     .nav-btn {

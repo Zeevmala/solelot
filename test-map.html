@@ -222,6 +222,20 @@
             dupeInfo.textContent = '\u2139\uFE0F ' + dupeCoords + ' locations share coordinates with another (e.g. same building)';
             results.appendChild(dupeInfo);
 
+            // Check for exact name+address duplicates (should be 0 after cleanup)
+            const nameAddrSet = new Set();
+            let dupeNameAddr = 0;
+            locations.forEach(loc => {
+                const key = loc.name + '|' + loc.address;
+                if (nameAddrSet.has(key)) dupeNameAddr++;
+                nameAddrSet.add(key);
+            });
+            assert(dupeNameAddr === 0, 'No exact name+address duplicates' + (dupeNameAddr > 0 ? ' \u2014 ' + dupeNameAddr + ' found' : ''));
+
+            // Check no "Unknown" placeholder addresses
+            const unknownAddresses = locations.filter(loc => loc.address === 'Unknown' || loc.address === '\u05DB\u05EA\u05D5\u05D1\u05EA \u05DC\u05D0 \u05D6\u05DE\u05D9\u05E0\u05D4');
+            assert(unknownAddresses.length === 0, 'No placeholder addresses' + (unknownAddresses.length > 0 ? ' \u2014 ' + unknownAddresses.length + ' found' : ''));
+
             // --- Popup template tests ---
             section('Popup Template');
             var testLoc = { id: 1, name: '\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD', address: '\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E8\u05E6\u05DC 10', city: '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1', lat: 32.08, lng: 34.78, type: 'store', hours: '08:00-22:00' };

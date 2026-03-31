@@ -85,13 +85,12 @@ function handleLike(locationId) {
     });
     showNotification('תודה על המשוב! 👍');
 }
-window.handleLike = handleLike;
 
 // Handle dislike button click — open report form
 function handleDislike(reportUrl) {
     window.open(reportUrl, '_blank', 'noopener,noreferrer');
 }
-window.handleDislike = handleDislike;
+
 
 // Named constants
 const MOBILE_BREAKPOINT = 768;
@@ -884,7 +883,6 @@ function focusOnLocation(locationId) {
 
     showSidebar(location);
 }
-window.focusOnLocation = focusOnLocation;
 
 // === GPS GEOLOCATION ===
 const locateIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1019,8 +1017,10 @@ function loadLocations() {
         })
         .then(data => {
             // Validate and filter location data
+            const VALID_TYPES = ['store', 'facility'];
             allLocations = data.locations.filter(loc => {
                 if (!loc.id || !loc.name || !loc.address || !loc.city || !loc.type) return false;
+                if (!VALID_TYPES.includes(loc.type)) return false;
                 if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
                 if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
                 return true;
