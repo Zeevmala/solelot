@@ -1,7 +1,12 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v28';
+const STATIC_CACHE = 'static-v29';
 const TILES_CACHE = 'tiles-v1';
 let tileCacheCount = 0;
+
+// Pre-computed 1×1 transparent PNG for tile fetch fallback
+const TRANSPARENT_PIXEL = Uint8Array.from(atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualEQAAAABJRU5ErkJggg=='
+), c => c.charCodeAt(0));
 
 // Critical assets — must cache for app to work (install fails if any are unreachable)
 const CRITICAL_ASSETS = [
@@ -135,11 +140,7 @@ async function handleTileRequest(request) {
 
         return networkResponse;
     } catch (error) {
-        // Return transparent 1x1 PNG fallback instead of blank square
         console.log('Tile fetch failed:', error);
-        const TRANSPARENT_PIXEL = Uint8Array.from(atob(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualEQAAAABJRU5ErkJggg=='
-        ), c => c.charCodeAt(0));
         return new Response(TRANSPARENT_PIXEL, {
             status: 200,
             headers: { 'Content-Type': 'image/png' }
@@ -204,7 +205,7 @@ async function handleStaticRequest(request) {
         // Return offline page for navigation requests
         if (request.mode === 'navigate') {
             const cache = await caches.open(STATIC_CACHE);
-            return cache.match('./index.html');
+            return await cache.match('./index.html') || new Response('Offline', { status: 503 });
         }
 
         return new Response('Offline', { status: 503 });

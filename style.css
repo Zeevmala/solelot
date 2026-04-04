@@ -1151,11 +1151,55 @@ select:focus-visible {
     outline-offset: 2px;
 }
 
+/* Print stylesheet */
+@media print {
+    .app-header,
+    .sidebar,
+    .loading-overlay,
+    .empty-state,
+    .notification,
+    .skip-link,
+    .leaflet-control-zoom,
+    .leaflet-control-layers,
+    .leaflet-control-attribution,
+    .search-suggestions {
+        display: none !important;
+    }
+
+    #map {
+        position: static !important;
+        width: 100% !important;
+        height: 80vh !important;
+        page-break-inside: avoid;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+    }
+
+    .main-content {
+        padding-top: 0 !important;
+    }
+}
+
 /* High contrast mode support */
 @media (prefers-contrast: high) {
     :root {
         --border-color: #000000;
-        --text-muted: #555555;
+        --text-muted: #333333;
+        --accent-primary: #005a4f;
+        --accent-secondary: #004d40;
+    }
+
+    .nav-btn,
+    .clear-filters-btn,
+    .sidebar-close {
+        border: 2px solid #000000;
+    }
+
+    a:link {
+        text-decoration: underline;
     }
 }
 
