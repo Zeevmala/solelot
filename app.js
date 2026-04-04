@@ -77,7 +77,7 @@ function playLikeSound() {
 // Handle like button click
 function handleLike(locationId) {
     playLikeSound();
-    const btns = document.querySelectorAll('.like-btn[data-id="' + locationId + '"]');
+    const btns = document.querySelectorAll('.like-btn[data-like-id="' + locationId + '"]');
     btns.forEach(function(btn) {
         btn.classList.add('liked');
         btn.classList.add('pop');
@@ -304,27 +304,6 @@ const typeNames = {
     facility: 'מתקן מיחזור'
 };
 
-// Chain names in Hebrew
-const chainNames = {
-    superpharm: 'סופר פארם',
-    shufersal: 'שופרסל',
-    rami_levy: 'רמי לוי',
-    victory: 'ויקטורי',
-    ikea: 'איקאה',
-    home_center: 'הום סנטר',
-    office_depot: 'אופיס דיפו',
-    pelephone: 'פלאפון',
-    cellcom: 'סלקום',
-    partner: 'פרטנר',
-    medton: 'מדטון',
-    big_electric: 'ביג אלקטריק',
-    bug: 'באג',
-    municipality: 'עירייה/מועצה',
-    school: 'בית ספר',
-    other: 'אחר'
-};
-
-
 // Small battery icons for popups (20×20, no pin shape)
 const popupBatterySvg = {
     store: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
@@ -387,33 +366,6 @@ const cityCounts = new Map();
 // Current state
 let currentSearch = '';
 let selectedLocationId = null;
-
-// Chain detection from name — data-driven lookup
-const CHAIN_PATTERNS = [
-    { patterns: ['סופר פארם', 'סופר-פארם'], chain: 'superpharm' },
-    { patterns: ['שופרסל'], chain: 'shufersal' },
-    { patterns: ['רמי לוי'], chain: 'rami_levy' },
-    { patterns: ['ויקטורי'], chain: 'victory' },
-    { patterns: ['איקאה', 'ikea'], chain: 'ikea' },
-    { patterns: ['הום סנטר'], chain: 'home_center' },
-    { patterns: ['אופיס דיפו'], chain: 'office_depot' },
-    { patterns: ['פלאפון'], chain: 'pelephone' },
-    { patterns: ['סלקום'], chain: 'cellcom' },
-    { patterns: ['פרטנר'], chain: 'partner' },
-    { patterns: ['מדטון'], chain: 'medton' },
-    { patterns: ['ביג אלקטריק'], chain: 'big_electric' },
-    { patterns: ['באג'], chain: 'bug' },
-    { patterns: ['עיריי', 'מועצה', 'רשות מקומית'], chain: 'municipality' },
-    { patterns: ['בית ספר', 'ביה"ס'], chain: 'school' },
-];
-
-function detectChain(name) {
-    const n = name.toLowerCase();
-    for (const { patterns, chain } of CHAIN_PATTERNS) {
-        if (patterns.some(p => n.includes(p))) return chain;
-    }
-    return 'other';
-}
 
 // Calculate distance between two points (in km)
 function getDistance(lat1, lng1, lat2, lng2) {

@@ -1,8 +1,12 @@
 # 🔋 Solelot - מפת מיחזור סוללות בישראל
 
+[![Live Site](https://img.shields.io/badge/Live%20Site-zeevmala.github.io%2Fsolelot-00796B?style=flat-square)](https://zeevmala.github.io/solelot/)
+[![Tests](https://img.shields.io/badge/Tests-60%2F60%20passing-brightgreen?style=flat-square)](test.html)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+
 > **Find battery recycling points near you in Israel**
 
-An interactive map showing **~3,900 battery recycling locations** across Israel — collection points at major retail chains and dedicated recycling facilities.
+An interactive map showing **~3,450 battery recycling locations** across Israel — collection points at major retail chains and dedicated recycling facilities.
 
 🌐 **[Live Site → zeevmala.github.io/solelot](https://zeevmala.github.io/solelot/)**
 
@@ -35,7 +39,7 @@ An interactive map showing **~3,900 battery recycling locations** across Israel 
 ├── index.html        # Page structure (Hebrew, RTL)
 ├── style.css         # Styling and responsive layout
 ├── app.js            # Map logic, search, markers, sidebar
-├── locations.json    # ~3,900 recycling locations
+├── locations.json    # ~3,450 recycling locations
 ├── sw.js             # Service worker for offline/PWA
 ├── manifest.json     # PWA manifest
 ├── scraper.js        # Data collection script
@@ -78,7 +82,7 @@ This project includes comprehensive **HTML-based tests** that run directly in th
 2. **Integration Tests** — Data integrity and template rendering
    - Open [`test-map.html`](test-map.html) in your browser
    - Shows **29 integration tests** covering:
-     - Data integrity (7 tests) — Validates all ~3,900 locations in `locations.json`
+     - Data integrity (7 tests) — Validates all ~3,450 locations in `locations.json`
      - Popup template (6 tests) — Emoji removal, button styling, XSS protection
      - Sidebar template (6 tests) — Layout, navigation buttons, hours filtering
      - XSS protection (3 tests) — Script/image tag escaping
