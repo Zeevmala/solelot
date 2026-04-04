@@ -1,5 +1,5 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v29';
+const STATIC_CACHE = 'static-v31';
 const TILES_CACHE = 'tiles-v1';
 let tileCacheCount = 0;
 

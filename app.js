@@ -31,13 +31,32 @@ const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq
 // Shared AudioContext — created once, reused (required for iOS Safari)
 let audioCtx = null;
 
+// Unlock AudioContext on first user interaction (mobile browsers block audio until a gesture)
+function unlockAudio() {
+    try {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        // Play silent buffer to fully unlock audio on iOS
+        const buf = audioCtx.createBuffer(1, 1, 22050);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+    } catch (e) { /* Web Audio not supported */ }
+}
+document.addEventListener('touchstart', unlockAudio, { once: true });
+document.addEventListener('click', unlockAudio, { once: true });
+
 // Play a satisfying "ding" sound using Web Audio API
 function playLikeSound() {
     try {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
-        // iOS Safari requires resume() inside a user gesture
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
