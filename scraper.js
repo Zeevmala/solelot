@@ -23,9 +23,16 @@ function fetchMarkers() {
                 return;
             }
 
+            const MAX_RESPONSE_SIZE = 50 * 1024 * 1024; // 50 MB
             let data = '';
+            let dataSize = 0;
 
             res.on('data', chunk => {
+                dataSize += chunk.length;
+                if (dataSize > MAX_RESPONSE_SIZE) {
+                    req.destroy(new Error('Response exceeded 50 MB limit'));
+                    return;
+                }
                 data += chunk;
             });
 

@@ -1,5 +1,5 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v31';
+const STATIC_CACHE = 'static-v33';
 const TILES_CACHE = 'tiles-v1';
 let tileCacheCount = 0;
 
@@ -40,7 +40,13 @@ self.addEventListener('install', (event) => {
                     console.log('Caching optional assets (best-effort)');
                     return Promise.allSettled(
                         OPTIONAL_ASSETS.map(url => cache.add(url))
-                    );
+                    ).then(results => {
+                        results.forEach((result, i) => {
+                            if (result.status === 'rejected') {
+                                console.warn('Failed to cache optional asset:', OPTIONAL_ASSETS[i], result.reason?.message);
+                            }
+                        });
+                    });
                 });
             })
             .then(() => {
@@ -143,7 +149,7 @@ async function handleTileRequest(request) {
         console.log('Tile fetch failed:', error);
         return new Response(TRANSPARENT_PIXEL, {
             status: 200,
-            headers: { 'Content-Type': 'image/png' }
+            headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }
         });
     }
 }

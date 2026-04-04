@@ -26,6 +26,18 @@ function showNotification(message, duration = 2000) {
 // Report form URL
 const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
 
+// Activate deferred stylesheets (replaces inline onload="this.media='all'")
+document.querySelectorAll('link[data-deferred]').forEach(link => { link.media = 'all'; });
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+            .then(() => console.log('Service Worker registered'))
+            .catch(err => console.log('Service Worker registration failed:', err));
+    });
+}
+
 // === FEEDBACK SYSTEM (Like / Dislike) ===
 
 // Shared AudioContext — created once, reused (required for iOS Safari)
@@ -562,6 +574,10 @@ function showSidebar(location) {
     cachedSidebar.style.display = 'flex';
     cachedSidebar.classList.remove('hidden');
 
+    // Trap focus inside sidebar (modal behavior)
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.setAttribute('inert', '');
+
     if (cachedSidebarClose) cachedSidebarClose.focus();
 }
 
@@ -574,6 +590,10 @@ function hideSidebar() {
         }, 300);
     }
     selectedLocationId = null;
+
+    // Release focus trap
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.removeAttribute('inert');
 }
 
 // Update which markers are visible based on search
@@ -649,7 +669,7 @@ function setupAutocomplete() {
 
     let searchTimeout;
     searchInput.addEventListener('input', () => {
-        const query = searchInput.value.trim();
+        const query = searchInput.value.trim().substring(0, 50);
 
         // Debounced marker update when suggestions aren't showing
         clearTimeout(searchTimeout);
@@ -790,6 +810,7 @@ function setupAutocomplete() {
         items.forEach((item, index) => {
             const isActive = index === highlightedIndex;
             item.classList.toggle('highlighted', isActive);
+            item.setAttribute('aria-selected', isActive ? 'true' : 'false');
             if (isActive) {
                 item.id = 'suggestion-active';
                 searchInput.setAttribute('aria-activedescendant', 'suggestion-active');

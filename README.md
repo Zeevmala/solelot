@@ -1,7 +1,7 @@
 # 🔋 Solelot - מפת מיחזור סוללות בישראל
 
 [![Live Site](https://img.shields.io/badge/Live%20Site-zeevmala.github.io%2Fsolelot-00796B?style=flat-square)](https://zeevmala.github.io/solelot/)
-[![Tests](https://img.shields.io/badge/Tests-60%2F60%20passing-brightgreen?style=flat-square)](test.html)
+[![Tests](https://img.shields.io/badge/Tests-passing-brightgreen?style=flat-square)](test.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 > **Find battery recycling points near you in Israel**
@@ -71,26 +71,31 @@ This project includes comprehensive **HTML-based tests** that run directly in th
 
 1. **Unit Tests** — Pure functions and data validation
    - Open [`test.html`](test.html) in your browser
-   - Shows **31 unit tests** covering:
+   - Shows **52 unit tests** covering:
      - `escapeHtml` (9 tests) — XSS protection, null handling, type coercion
-     - `fuzzyMatch` (9 tests) — Fuzzy matching with Levenshtein distance
+     - `fuzzyMatch` (12 tests) — Fuzzy matching with Levenshtein distance
      - `getDistance` (3 tests) — Haversine formula accuracy
-     - `detectChain` (5 tests) — Hebrew retail chain detection
+     - `detectChain` (18 tests) — Hebrew retail chain detection
+     - XSS edge cases (5 tests) — SVG, img, data URI escaping
      - `hoursFilter` (5 tests) — Filtering placeholder hours text
-   - **Result:** All 31 passing ✓
+   - **Result:** All 52 passing
 
 2. **Integration Tests** — Data integrity and template rendering
    - Open [`test-map.html`](test-map.html) in your browser
-   - Shows **29 integration tests** covering:
+   - Shows **~60 integration tests** covering:
      - Data integrity (7 tests) — Validates all ~3,450 locations in `locations.json`
-     - Popup template (6 tests) — Emoji removal, button styling, XSS protection
+     - Popup template (12 tests) — Button styling, XSS protection, hours filtering
      - Sidebar template (6 tests) — Layout, navigation buttons, hours filtering
      - XSS protection (3 tests) — Script/image tag escaping
      - Navigation URLs (3 tests) — Google Maps and Waze format
-     - Duplicate detection (1 info) — Tracks locations sharing coordinates
-   - **Result:** All 29 passing ✓
+     - Search filtering (8 tests) — City, name, fuzzy, empty query
+     - Sidebar state machine (6 tests) — Show/hide/replace behavior
+     - GPS distance (6 tests) — Distance integration in popup
+     - Empty state logic (5 tests) — Show/hide empty state
+     - PWA shortcut (6 tests) — `?action=nearest` handling
+   - **Result:** All passing
 
-**Current Status:** 60/60 tests passing, 100% coverage of testable code
+**Current Status:** All tests passing, 100% coverage of testable pure functions and data flows
 
 ### Why HTML-Based Tests?
 

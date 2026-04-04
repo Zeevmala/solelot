@@ -16,6 +16,14 @@
     --shadow-medium: rgba(0,0,0,0.15);
     --shadow-strong: rgba(0,0,0,0.2);
     --accent-teal: #00796B;
+    /* Z-index scale */
+    --z-sidebar: 1001;
+    --z-header: 1100;
+    --z-suggestions: 1200;
+    --z-empty-state: 1500;
+    --z-overlay: 2000;
+    --z-notification: 2001;
+    --z-skip-link: 3000;
 }
 
 /* Reset and base styles */
@@ -40,7 +48,7 @@ body {
     background: var(--accent-primary);
     color: white;
     padding: 8px 16px;
-    z-index: 3000;
+    z-index: var(--z-skip-link);
     text-decoration: none;
     border-radius: 0 0 8px 8px;
     transition: top 0.3s;
@@ -65,7 +73,7 @@ body {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    z-index: 1100;
+    z-index: var(--z-header);
     box-shadow: 0 1px 12px rgba(0, 0, 0, 0.06);
 }
 
@@ -154,10 +162,9 @@ body {
     width: 100%;
 }
 
-/* Force aim cursor everywhere on the map — single rule instead of per-class overrides */
-#map,
-#map * {
-    cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><line x1='16' y1='2' x2='16' y2='14' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='18' x2='16' y2='30' stroke='%23333' stroke-width='1.2'/><line x1='2' y1='16' x2='14' y2='16' stroke='%23333' stroke-width='1.2'/><line x1='18' y1='16' x2='30' y2='16' stroke='%23333' stroke-width='1.2'/></svg>") 16 16, crosshair !important;
+/* Crosshair cursor on map (inherits to children; no universal * selector needed) */
+#map {
+    cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><line x1='16' y1='2' x2='16' y2='14' stroke='%23333' stroke-width='1.2'/><line x1='16' y1='18' x2='16' y2='30' stroke='%23333' stroke-width='1.2'/><line x1='2' y1='16' x2='14' y2='16' stroke='%23333' stroke-width='1.2'/><line x1='18' y1='16' x2='30' y2='16' stroke='%23333' stroke-width='1.2'/></svg>") 16 16, crosshair;
 }
 
 /* Map Search Control */
@@ -228,7 +235,7 @@ body {
     border-radius: 8px;
     max-height: 300px;
     overflow-y: auto;
-    z-index: 1200;
+    z-index: var(--z-suggestions);
     display: none;
     box-shadow: 0 4px 12px var(--shadow-medium);
 }
@@ -239,7 +246,8 @@ body {
 
 /* Search Suggestions */
 .suggestion-item {
-    padding: 10px 15px;
+    padding: 12px 16px;
+    min-height: 44px;
     cursor: pointer;
     border-bottom: 1px solid var(--border-light);
     display: flex;
@@ -552,7 +560,7 @@ body {
     height: 100%;
     background: var(--bg-secondary);
     box-shadow: 4px 0 20px var(--shadow-medium);
-    z-index: 1001;
+    z-index: var(--z-sidebar);
     display: flex;
     flex-direction: column;
     transition: transform 0.3s ease;
@@ -799,7 +807,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2000;
+    z-index: var(--z-overlay);
     transition: opacity 0.4s ease-out;
 }
 
@@ -874,7 +882,7 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 1500;
+    z-index: var(--z-empty-state);
     text-align: center;
     background: var(--bg-secondary);
     padding: 30px 40px;
@@ -938,7 +946,7 @@ body {
     padding: 12px 24px;
     border-radius: 8px;
     box-shadow: 0 4px 15px var(--shadow-strong);
-    z-index: 2001;
+    z-index: var(--z-notification);
     opacity: 0;
     transition: transform 0.3s, opacity 0.3s;
     font-size: 14px;
@@ -1056,6 +1064,7 @@ body {
 
     .sidebar-content {
         padding-top: 8px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     .leaflet-popup-content-wrapper {
@@ -1139,14 +1148,6 @@ body {
 
 /* Focus indicators for better accessibility */
 *:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 2px;
-}
-
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible {
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
 }
