@@ -29,7 +29,7 @@ An interactive map showing **~3,450 battery recycling locations** across Israel 
 |---|---|
 | **Frontend** | HTML, CSS, JavaScript (no frameworks) |
 | **Maps** | [Leaflet.js](https://leafletjs.com/) + [MarkerCluster](https://github.com/Leaflet/Leaflet.markercluster) |
-| **Tiles** | [CartoDB](https://carto.com/basemaps/) (Voyager & Positron) |
+| **Tiles** | [OpenStreetMap](https://www.openstreetmap.org/) standard tiles (light = CSS-desaturated) |
 | **Hosting** | GitHub Pages |
 | **PWA** | Service Worker + Web App Manifest |
 

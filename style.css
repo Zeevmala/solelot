@@ -1214,3 +1214,8 @@ body {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* Light basemap: OSM tiles desaturated (keyless replacement for CARTO Positron) */
+.basemap-light {
+    filter: grayscale(1) brightness(1.06) contrast(0.85);
+}

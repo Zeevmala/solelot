@@ -14,7 +14,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - **Facilities**: Batte-Re (Dimona), RE-CAR (Arad), MILI
 
 ## Current Features
-- Interactive Leaflet map centered on Israel (CartoDB Light default basemap)
+- Interactive Leaflet map centered on Israel (OSM tiles; light = CSS-desaturated default — CARTO now requires an API key)
 - Custom SVG battery pin markers (green, uniform for all locations)
 - Marker clustering for performance
 - Search with autocomplete suggestions (city + location)
