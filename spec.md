@@ -12,7 +12,7 @@
 - **CSS** - Styling and responsive layout
 - **JavaScript** - Interactivity and map logic
 - **Leaflet.js** - Open-source map library (free, no API key needed)
-- **CartoDB** - Light basemap tiles (default), with streets option
+- **OpenStreetMap** - Light basemap (default, desaturated OSM tiles), with streets option
 
 ## Milestones
 

@@ -178,12 +178,21 @@ function fuzzyMatch(text, query, maxDist = 2) {
 const map = L.map('map').setView([31.5, 34.9], 7);
 
 // Define multiple basemap options
+// CARTO raster tiles now require an API key (keyless requests return
+// "API KEY REQUIRED" watermark tiles), so both styles use OpenStreetMap's
+// keyless tiles. The light style is the same tiles desaturated via CSS
+// (.basemap-light in style.css). maxZoom 19 = OSM's max native zoom.
+const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 const baseMaps = {
-    'רחובות': L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '© CartoDB © OpenStreetMap'
+    'רחובות': L.tileLayer(OSM_TILE_URL, {
+        maxZoom: 19,
+        attribution: OSM_ATTRIBUTION
     }),
-    'בהיר': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© CartoDB'
+    'בהיר': L.tileLayer(OSM_TILE_URL, {
+        maxZoom: 19,
+        className: 'basemap-light',
+        attribution: OSM_ATTRIBUTION
     })
 };
 

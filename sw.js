@@ -1,6 +1,6 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v33';
-const TILES_CACHE = 'tiles-v1';
+const STATIC_CACHE = 'static-v34';
+const TILES_CACHE = 'tiles-v2';
 let tileCacheCount = 0;
 
 // Pre-computed 1×1 transparent PNG for tile fetch fallback
