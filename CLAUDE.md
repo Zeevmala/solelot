@@ -43,6 +43,8 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `locations.json` | All recycling locations (name, address, city, lat/lng, type) |
 | `scraper.js` | Script for collecting/updating location data |
 | `sw.js` | Service worker for offline/PWA support |
+| `dev-server.py` | Local dev server (no-cache, correct MIME types) |
+| `dev-https.ps1` | Dev server + Cloudflare quick tunnel for HTTPS phone testing |
 | `manifest.json` | PWA manifest |
 | `test.html` | Unit tests (pure function tests, runs in browser) |
 | `test-map.html` | Integration tests (map/UI tests, runs in browser) |

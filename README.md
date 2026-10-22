@@ -63,6 +63,22 @@ python -m http.server 8000
 
 Then open `http://localhost:8000` (or whatever port your server uses).
 
+### Testing on a phone (HTTPS)
+
+Mobile browsers only allow GPS, the service worker and PWA install on a secure (HTTPS) origin. `dev-https.ps1` serves the app locally and exposes it through a free [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) with a real, trusted certificate — no account, nothing to install on the phone, no firewall changes.
+
+```powershell
+winget install --id Cloudflare.cloudflared   # one time, then open a new terminal
+./dev-https.ps1                              # or: ./dev-https.ps1 -Port 8080
+```
+
+It prints two URLs: `http://localhost:8000` for the PC and `https://<random>.trycloudflare.com` for the phone (copied to the clipboard). Ctrl+C stops both.
+
+Notes:
+- The tunnel URL is public (but unguessable) and changes on every run.
+- `dev-server.py` disables HTTP caching, but the service worker still serves the previous version first — **reload twice** after an edit.
+- Without PowerShell: `python dev-server.py` in one terminal, `cloudflared tunnel --url http://127.0.0.1:8000` in another.
+
 ## Testing
 
 This project includes comprehensive **HTML-based tests** that run directly in the browser (no build tools needed).
