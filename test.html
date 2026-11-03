@@ -162,7 +162,7 @@
     assert(escapeHtml('<svg onload=alert(1)>') === '&lt;svg onload=alert(1)&gt;', 'escapeHtml: SVG onclick escaped');
     assert(escapeHtml('javascript:alert(1)') === 'javascript:alert(1)', 'escapeHtml: javascript: URL passes through (safe as text)');
     assert(escapeHtml('<img src=x onerror=alert(1)>') === '&lt;img src=x onerror=alert(1)&gt;', 'escapeHtml: img onerror escaped');
-    assert(escapeHtml('data:text/html,<script>alert(1)</script>').includes('&lt;script&gt;'), 'escapeHtml: data: URI script escaped');
+    assert(escapeHtml('data:text/html,<script>alert(1)<\/script>').includes('&lt;script&gt;'), 'escapeHtml: data: URI script escaped');
     assert(escapeHtml('<div onmouseover="alert(1)">').includes('&lt;div'), 'escapeHtml: div onmouseover escaped');
 
     // === "hours" filter logic ===
