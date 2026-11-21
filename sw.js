@@ -1,11 +1,13 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v34';
+const STATIC_CACHE = 'static-v35';
 const TILES_CACHE = 'tiles-v2';
 let tileCacheCount = 0;
 
-// Pre-computed 1×1 transparent PNG for tile fetch fallback
+// Pre-computed 1×1 transparent PNG for tile fetch fallback.
+// This must be valid base64: atob() throws on a bad string, and an error while
+// the script loads stops the whole service worker from installing.
 const TRANSPARENT_PIXEL = Uint8Array.from(atob(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualEQAAAABJRU5ErkJggg=='
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII='
 ), c => c.charCodeAt(0));
 
 // Critical assets — must cache for app to work (install fails if any are unreachable)
@@ -23,7 +25,6 @@ const OPTIONAL_ASSETS = [
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
     'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
     'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
     'https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap'
 ];
@@ -106,9 +107,7 @@ self.addEventListener('fetch', (event) => {
 
 // Check if request is for map tiles
 function isTileRequest(url) {
-    return url.hostname.includes('tile.openstreetmap.org') ||
-           url.hostname.includes('basemaps.cartocdn.com') ||
-           url.hostname.includes('arcgisonline.com');
+    return url.hostname === 'tile.openstreetmap.org';
 }
 
 // Handle tile requests - cache with size limit
@@ -133,7 +132,7 @@ async function handleTileRequest(request) {
             // Cache the tile (don't await to not block response)
             cache.put(request, responseToCache).then(() => {
                 tileCacheCount++;
-                // Clean up old tiles periodically (every 50 caches)
+                // Clean up old tiles periodically (every 50 new tiles)
                 if (tileCacheCount % 50 === 0) {
                     return limitCacheSize(TILES_CACHE, 200);
                 }
@@ -162,8 +161,9 @@ async function handleDataRequest(request) {
 
         if (networkResponse.ok) {
             // Update cache with fresh data
+            // Not awaited (don't delay the response); a full disk must not become an unhandled error
             const cache = await caches.open(STATIC_CACHE);
-            cache.put(request, networkResponse.clone());
+            cache.put(request, networkResponse.clone()).catch(() => {});
         }
 
         return networkResponse;
@@ -201,7 +201,7 @@ async function handleStaticRequest(request) {
 
         if (networkResponse.ok) {
             const cache = await caches.open(STATIC_CACHE);
-            cache.put(request, networkResponse.clone());
+            cache.put(request, networkResponse.clone()).catch(() => {});
         }
 
         return networkResponse;
@@ -224,7 +224,7 @@ async function fetchAndCache(request) {
         const response = await fetch(request);
         if (response.ok) {
             const cache = await caches.open(STATIC_CACHE);
-            cache.put(request, response);
+            await cache.put(request, response);
         }
     } catch (error) {
         // Silently fail - we already have cached version

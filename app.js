@@ -175,7 +175,21 @@ function fuzzyMatch(text, query, maxDist = 2) {
 }
 
 // === MAP INITIALIZATION ===
-const map = L.map('map').setView([31.5, 34.9], 7);
+// The box that frames the whole country, Metula to Eilat.
+// fitBounds picks the zoom for the screen size (a fixed zoom left Israel tiny on desktop).
+const ISRAEL_BOUNDS = L.latLngBounds([29.45, 34.2], [33.35, 35.95]);
+const map = L.map('map', {
+    zoomSnap: 0.5,                        // lets fitBounds land between whole zoom levels
+    minZoom: 7,
+    maxBounds: ISRAEL_BOUNDS.pad(0.75),   // no panning far away from the data
+    maxBoundsViscosity: 0.8,
+    zoomControl: false                    // added below, on the right side
+});
+map.fitBounds(ISRAEL_BOUNDS);
+
+// All map buttons sit on the right edge: the details panel opens on the left
+// (bottom on phones) and used to cover the zoom / locate / basemap buttons.
+L.control.zoom({ position: 'topright', zoomInTitle: 'התקרב', zoomOutTitle: 'התרחק' }).addTo(map);
 
 // Define multiple basemap options
 // CARTO raster tiles now require an API key (keyless requests return
@@ -201,7 +215,7 @@ let currentBasemapName = 'בהיר';
 baseMaps['בהיר'].addTo(map);
 
 // Create toggle button for basemap with layers icon
-const basemapToggle = L.control({ position: 'bottomleft' });
+const basemapToggle = L.control({ position: 'topright' });
 basemapToggle.onAdd = function() {
     const btn = L.DomUtil.create('button', 'basemap-toggle-btn');
     btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
@@ -254,94 +268,76 @@ basemapToggle.addTo(map);
     });
 })();
 
-// Custom SVG Marker Icons — high-fidelity rounded pins
-const markerSvg = {
-    store: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="storeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#2BB5A6"/>
-                <stop offset="40%" stop-color="#26A69A"/>
-                <stop offset="100%" stop-color="#00695C"/>
-            </linearGradient>
-            <radialGradient id="storeSheen" cx="35%" cy="30%" r="60%">
-                <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
-                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-            </radialGradient>
-            <filter id="storeShadow" x="-25%" y="-15%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.28"/>
-            </filter>
-        </defs>
-        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#storeGrad)" filter="url(#storeShadow)"/>
-        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#storeSheen)"/>
-        <circle cx="18" cy="15" r="9.5" fill="white" opacity="0.97"/>
-        <rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#00796B"/>
-        <rect x="13.5" y="10.5" width="9" height="7.5" rx="1.5" fill="#26A69A"/>
-        <rect x="15" y="11.5" width="6" height="1.2" rx="0.4" fill="#80CBC4"/>
-        <rect x="15" y="13.5" width="6" height="1.2" rx="0.4" fill="#A7D8D0"/>
-        <rect x="15" y="15.5" width="6" height="1.2" rx="0.4" fill="#B2DFDB"/>
-        <path d="M19 11l-1.5 3h1.5l-1 3 2.5-3.5h-1.5z" fill="white" opacity="0.45"/>
-    </svg>`,
-    facility: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="facilityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#FFB74D"/>
-                <stop offset="40%" stop-color="#FFA726"/>
-                <stop offset="100%" stop-color="#E65100"/>
-            </linearGradient>
-            <radialGradient id="facilitySheen" cx="35%" cy="30%" r="60%">
-                <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
-                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-            </radialGradient>
-            <filter id="facilityShadow" x="-25%" y="-15%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.28"/>
-            </filter>
-        </defs>
-        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#facilityGrad)" filter="url(#facilityShadow)"/>
-        <path d="M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z" fill="url(#facilitySheen)"/>
-        <circle cx="18" cy="15" r="9.5" fill="white" opacity="0.97"/>
-        <rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#EF6C00"/>
-        <rect x="13.5" y="10.5" width="9" height="7.5" rx="1.5" fill="#FFA726"/>
-        <rect x="15" y="11.5" width="6" height="1.2" rx="0.4" fill="#FFF3E0"/>
-        <rect x="15" y="13.5" width="6" height="1.2" rx="0.4" fill="#FFE0B2"/>
-        <rect x="15" y="15.5" width="6" height="1.2" rx="0.4" fill="#FFCC80"/>
-        <path d="M19 11l-1.5 3h1.5l-1 3 2.5-3.5h-1.5z" fill="white" opacity="0.45"/>
-    </svg>`,
-    user: `<svg viewBox="0 0 36 48" width="36" height="48" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="userGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#42A5F5"/>
-                <stop offset="100%" stop-color="#1565C0"/>
-            </linearGradient>
-            <filter id="userShadow" x="-25%" y="-15%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.25"/>
-            </filter>
-        </defs>
-        <circle cx="18" cy="16" r="13" fill="url(#userGrad)" filter="url(#userShadow)" stroke="white" stroke-width="3"/>
-        <circle cx="18" cy="16" r="5" fill="white"/>
-        <circle cx="18" cy="16" r="2" fill="#1565C0"/>
-    </svg>`
+// Custom SVG marker icons.
+// Each pin is flat (no gradients or filters): thousands of markers share the page,
+// and per-marker <defs> meant repeated element ids plus slow filter rendering.
+// The white outline keeps pins readable on any basemap and where they overlap.
+const PIN_PATH = 'M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7 26.3 1 18 1z';
+
+// Small pictures drawn inside the white circle of a pin
+const pinGlyphs = {
+    // Battery
+    store: `<rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#00695C"/>
+        <rect x="13.5" y="10.5" width="9" height="11" rx="1.5" fill="#00897B"/>
+        <path d="M19.2 12.2l-2.7 4.3h1.9l-.9 3.3 2.9-4.4h-1.9z" fill="#fff"/>`,
+    // Factory: a different shape, not just a different colour,
+    // so the two types can be told apart without relying on colour vision
+    facility: `<path d="M11.5 21.5v-7.2l4.2 2.6v-2.6l4.2 2.6V9.5h3.6v12z" fill="#D84315"/>
+        <rect x="13.6" y="18" width="2" height="2" fill="#fff"/>
+        <rect x="17.4" y="18" width="2" height="2" fill="#fff"/>`
 };
 
-function createMarkerIcon(type) {
+const pinColors = {
+    store: '#00897B',
+    facility: '#D84315'
+};
+
+function pinSvg(type, width, height) {
+    return `<svg viewBox="0 0 36 48" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="${PIN_PATH}" fill="${pinColors[type]}" stroke="#fff" stroke-width="1.5"/>
+        <circle cx="18" cy="15.5" r="9.5" fill="#fff"/>
+        ${pinGlyphs[type]}
+    </svg>`;
+}
+
+const userSvg = `<svg viewBox="0 0 28 28" width="28" height="28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="14" cy="14" r="11" fill="#1565C0" stroke="#fff" stroke-width="3"/>
+        <circle cx="14" cy="14" r="4" fill="#fff"/>
+    </svg>`;
+
+function createMarkerIcon(type, width, height) {
     return L.divIcon({
-        html: markerSvg[type],
-        className: 'battery-marker',
-        iconSize: [36, 48],
-        iconAnchor: [18, 48],
-        popupAnchor: [0, -48]
+        html: pinSvg(type, width, height),
+        className: 'battery-marker battery-marker-' + type,
+        iconSize: [width, height],
+        iconAnchor: [width / 2, height],
+        popupAnchor: [0, -height]
     });
 }
 
+// Facilities are rare (a handful among thousands), so their pin is slightly larger
 const icons = {
-    store: createMarkerIcon('store'),
-    facility: createMarkerIcon('facility'),
-    user: createMarkerIcon('user')
+    store: createMarkerIcon('store', 30, 40),
+    facility: createMarkerIcon('facility', 34, 46),
+    user: L.divIcon({
+        html: userSvg,
+        className: 'user-marker',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14]
+    })
 };
 
 // Hebrew names for types
 const typeNames = {
     store: 'נקודת איסוף',
     facility: 'מתקן מיחזור'
+};
+
+// Plural names, used in the map legend
+const typeNamesPlural = {
+    store: 'נקודות איסוף',
+    facility: 'מתקני מיחזור'
 };
 
 // Small battery icons for popups (20×20, no pin shape)
@@ -355,12 +351,9 @@ const popupBatterySvg = {
         <path d="M11 5.5l-1.5 4h2l-1.5 4 3-4.5h-2z" fill="white" opacity="0.35"/>
     </svg>`,
     facility: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-        <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#EF6C00"/>
-        <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#FFA726"/>
-        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#FFF3E0"/>
-        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#FFE0B2"/>
-        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#FFCC80"/>
-        <path d="M11 5.5l-1.5 4h2l-1.5 4 3-4.5h-2z" fill="white" opacity="0.35"/>
+        <path d="M2 18V7.5l5.5 3.4V7.5l5.5 3.4V2h5v16z" fill="#D84315"/>
+        <rect x="4.8" y="13" width="2.6" height="2.6" fill="#fff"/>
+        <rect x="9.8" y="13" width="2.6" height="2.6" fill="#fff"/>
     </svg>`
 };
 
@@ -375,30 +368,42 @@ let userMarker = null;
 let userLocation = null;
 let totalLocations = 0;
 
-// Marker cluster group
+// Which location types are switched on in the legend
+const visibleTypes = { store: true, facility: true };
+
+// Marker cluster group (collection points only).
+// A cluster's size shows how many points it holds; colour only deepens slightly,
+// staying in the app's teal so clusters and pins read as the same data.
 const markerCluster = L.markerClusterGroup({
     chunkedLoading: true,
-    maxClusterRadius: 35,
+    // Wider grouping when zoomed out keeps bubbles from piling on top of each other
+    maxClusterRadius: zoom => (zoom <= 9 ? 70 : zoom <= 13 ? 55 : 40),
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
     iconCreateFunction: function(cluster) {
         const count = cluster.getChildCount();
         let size = 'small';
-        if (count > 100) size = 'large';
-        else if (count > 20) size = 'medium';
+        let diameter = 36;
+        if (count >= 1000) { size = 'xlarge'; diameter = 60; }
+        else if (count >= 100) { size = 'large'; diameter = 52; }
+        else if (count >= 10) { size = 'medium'; diameter = 44; }
 
         // Hebrew plural: 1 מיקום, 2+ מיקומים
         const locationText = count === 1 ? 'מיקום' : 'מיקומים';
         const ariaLabel = `${count} ${locationText}`;
 
         return L.divIcon({
-            html: `<div aria-label="${ariaLabel}"><span>${count}</span></div>`,
+            html: `<div aria-label="${ariaLabel}"><span>${count.toLocaleString('he-IL')}</span></div>`,
             className: `marker-cluster marker-cluster-${size}`,
-            iconSize: L.point(40, 40)
+            iconSize: L.point(diameter, diameter)
         });
     }
 });
 map.addLayer(markerCluster);
+
+// Facilities live in their own layer and are never clustered:
+// inside a cluster of hundreds of collection points they would be invisible.
+const facilityLayer = L.layerGroup().addTo(map);
 
 // Pre-computed city counts for O(1) lookup in autocomplete
 const cityCounts = new Map();
@@ -526,6 +531,7 @@ function createSidebarContent(location) {
         <div class="sidebar-header">
             <div class="sidebar-title">
                 <h2>${escapeHtml(location.name)}</h2>
+                ${location.type === 'facility' ? `<span class="type-badge">${typeNames.facility}</span>` : ''}
             </div>
         </div>
 
@@ -574,71 +580,87 @@ const cachedSidebarContent = document.getElementById('sidebar-content');
 const cachedSidebarClose = document.getElementById('sidebar-close');
 
 // Show sidebar with location details
+let sidebarHideTimer = null;
 function showSidebar(location) {
     if (!cachedSidebar || !cachedSidebarContent) return;
+
+    // Cancel a hide that is still animating, or it would hide the sidebar we are about to show
+    clearTimeout(sidebarHideTimer);
 
     map.closePopup();
     selectedLocationId = location.id;
     cachedSidebarContent.innerHTML = createSidebarContent(location);
+    cachedSidebar.style.transform = ''; // clear leftover swipe position
     cachedSidebar.style.display = 'flex';
     cachedSidebar.classList.remove('hidden');
 
-    // Trap focus inside sidebar (modal behavior)
-    const mapEl = document.getElementById('map');
-    if (mapEl) mapEl.setAttribute('inert', '');
-
-    if (cachedSidebarClose) cachedSidebarClose.focus();
+    if (cachedSidebarClose) cachedSidebarClose.focus({ preventScroll: true });
 }
 
 // Hide sidebar
 function hideSidebar() {
-    if (cachedSidebar) {
+    if (cachedSidebar && cachedSidebar.style.display !== 'none') {
         cachedSidebar.classList.add('hidden');
-        setTimeout(() => {
+        clearTimeout(sidebarHideTimer);
+        sidebarHideTimer = setTimeout(() => {
             cachedSidebar.style.display = 'none';
+            cachedSidebar.style.transform = '';
         }, 300);
     }
     selectedLocationId = null;
-
-    // Release focus trap
-    const mapEl = document.getElementById('map');
-    if (mapEl) mapEl.removeAttribute('inert');
 }
 
-// Update which markers are visible based on search
+// Does a location match the current search text?
+function matchesSearch(location) {
+    return currentSearch === '' ||
+        location.city.includes(currentSearch) ||
+        location.name.includes(currentSearch) ||
+        location.address.includes(currentSearch) ||
+        fuzzyMatch(location.city, currentSearch) ||
+        fuzzyMatch(location.name, currentSearch) ||
+        fuzzyMatch(location.address, currentSearch);
+}
+
+// Update which markers are visible based on search and the legend switches
 function updateMarkers() {
     const visibleMarkers = [];
+    const clusteredMarkers = [];
+
+    facilityLayer.clearLayers();
 
     allMarkers.forEach((item) => {
         const location = item.location;
+        if (!visibleTypes[location.type] || !matchesSearch(location)) return;
 
-        const searchMatch = currentSearch === '' ||
-            location.city.includes(currentSearch) ||
-            location.name.includes(currentSearch) ||
-            location.address.includes(currentSearch) ||
-            fuzzyMatch(location.city, currentSearch) ||
-            fuzzyMatch(location.name, currentSearch) ||
-            fuzzyMatch(location.address, currentSearch);
-
-        if (searchMatch) {
-            visibleMarkers.push(item.marker);
+        visibleMarkers.push(item.marker);
+        if (location.type === 'facility') {
+            facilityLayer.addLayer(item.marker);
+        } else {
+            clusteredMarkers.push(item.marker);
         }
     });
 
     markerCluster.clearLayers();
-    markerCluster.addLayers(visibleMarkers);
+    markerCluster.addLayers(clusteredMarkers);
 
-    // Show/hide empty state
+    // Show the empty state only when the user filtered everything away
+    const isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
     const emptyState = document.getElementById('empty-state');
     if (emptyState) {
-        if (visibleMarkers.length === 0 && currentSearch !== '') {
-            emptyState.style.display = 'block';
-        } else {
-            emptyState.style.display = 'none';
-        }
+        const isEmpty = visibleMarkers.length === 0 && isFiltered && allMarkers.length > 0;
+        emptyState.style.display = isEmpty ? 'block' : 'none';
     }
 
     return visibleMarkers;
+}
+
+// Open a marker's popup, first zooming in until it is no longer inside a cluster
+function revealMarker(marker) {
+    if (markerCluster.hasLayer(marker)) {
+        markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
+    } else {
+        marker.openPopup();
+    }
 }
 
 // Auto-zoom to visible markers
@@ -648,12 +670,9 @@ function zoomToVisibleMarkers(visibleMarkers) {
     if (visibleMarkers.length === 1) {
         const marker = visibleMarkers[0];
         const latlng = marker.getLatLng();
+        // Wait for the flight to really finish instead of guessing with a timer
+        map.once('moveend', () => revealMarker(marker));
         map.flyTo(latlng, 15, { duration: 0.8 });
-        setTimeout(() => {
-            markerCluster.zoomToShowLayer(marker, () => {
-                marker.openPopup();
-            });
-        }, 900);
     } else {
         const group = L.featureGroup(visibleMarkers);
         map.flyToBounds(group.getBounds(), {
@@ -771,7 +790,7 @@ function setupAutocomplete() {
                     </div>
                 `;
             } else {
-                const icon = '🟢';
+                const icon = match.locationType === 'facility' ? '🏭' : '🟢';
                 return `
                     <div class="suggestion-item"
                          role="option"
@@ -874,12 +893,8 @@ function focusOnLocation(locationId) {
 
     const markerItem = allMarkers.find(item => item.location.id === locationId);
     if (markerItem) {
+        map.once('moveend', () => revealMarker(markerItem.marker));
         map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
-        setTimeout(() => {
-            markerCluster.zoomToShowLayer(markerItem.marker, () => {
-                markerItem.marker.openPopup();
-            });
-        }, 900);
     }
 
     showSidebar(location);
@@ -897,8 +912,23 @@ const extentIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="non
     </svg>`;
 
 let gpsActive = false;
+let userAccuracyCircle = null;
 
-const locateControl = L.control({ position: 'bottomleft' });
+// Beyond this distance "nearest" is not useful, so we just centre on the user
+const NEAREST_MAX_KM = 30;
+
+// Closest collection point to a position (facilities are not public drop-off points)
+function findNearestLocation(lat, lng) {
+    let best = null;
+    for (const location of allLocations) {
+        if (location.type !== 'store') continue;
+        const distance = getDistance(lat, lng, location.lat, location.lng);
+        if (!best || distance < best.distance) best = { location, distance };
+    }
+    return best;
+}
+
+const locateControl = L.control({ position: 'topright' });
 locateControl.onAdd = function() {
     const btn = L.DomUtil.create('button', 'locate-btn');
     btn.innerHTML = locateIconSvg;
@@ -916,14 +946,18 @@ locateControl.onAdd = function() {
             btn.title = 'מצא את מיקומי';
             btn.setAttribute('aria-label', 'מצא את מיקומי');
 
-            // Remove user marker
+            // Remove user marker and its accuracy circle
             if (userMarker) {
                 map.removeLayer(userMarker);
                 userMarker = null;
             }
+            if (userAccuracyCircle) {
+                map.removeLayer(userAccuracyCircle);
+                userAccuracyCircle = null;
+            }
             userLocation = null;
 
-            map.flyTo([31.5, 34.9], 7, { duration: 0.8 });
+            map.flyToBounds(ISRAEL_BOUNDS, { duration: 0.8 });
             showNotification('תצוגה מלאה');
             return;
         }
@@ -946,19 +980,47 @@ locateControl.onAdd = function() {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
 
+                // The map only covers Israel; don't fly to a location it cannot show
+                if (!map.options.maxBounds.contains([lat, lng])) {
+                    showNotification('המיקום שלך מחוץ לאזור המפה', 3000);
+                    return;
+                }
+
                 userLocation = { lat, lng };
 
                 // Place/update user marker
                 if (userMarker) {
                     userMarker.setLatLng([lat, lng]);
                 } else {
-                    userMarker = L.marker([lat, lng], { icon: icons.user })
+                    userMarker = L.marker([lat, lng], { icon: icons.user, zIndexOffset: 2000, keyboard: false })
                         .addTo(map)
                         .bindPopup('המיקום שלך');
                 }
 
-                map.flyTo([lat, lng], 14, { duration: 0.8 });
-                showNotification('מיקום נמצא');
+                // Circle showing how precise the GPS fix is (radius in metres)
+                const accuracy = Math.min(position.coords.accuracy || 0, 2000);
+                if (userAccuracyCircle) {
+                    userAccuracyCircle.setLatLng([lat, lng]).setRadius(accuracy);
+                } else {
+                    userAccuracyCircle = L.circle([lat, lng], {
+                        radius: accuracy,
+                        color: '#1565C0',
+                        weight: 1,
+                        fillOpacity: 0.12,
+                        interactive: false
+                    }).addTo(map);
+                }
+
+                // Frame the user together with the nearest collection point
+                const nearest = findNearestLocation(lat, lng);
+                if (nearest && nearest.distance <= NEAREST_MAX_KM) {
+                    const view = L.latLngBounds([[lat, lng], [nearest.location.lat, nearest.location.lng]]);
+                    map.flyToBounds(view, { padding: [80, 80], maxZoom: 16, duration: 0.8 });
+                    showNotification(`הנקודה הקרובה: ${nearest.location.name} (${nearest.distance.toFixed(1)} ק"מ)`, 4000);
+                } else {
+                    map.flyTo([lat, lng], 14, { duration: 0.8 });
+                    showNotification('מיקום נמצא');
+                }
 
                 // Switch to "full extent" mode
                 gpsActive = true;
@@ -982,6 +1044,54 @@ locateControl.onAdd = function() {
     return btn;
 };
 locateControl.addTo(map);
+
+// === LEGEND ===
+// Explains the two pin types and doubles as an on/off filter for each.
+const legendControl = L.control({ position: 'bottomright' });
+legendControl.onAdd = function() {
+    const container = L.DomUtil.create('div', 'map-legend');
+    container.setAttribute('role', 'group');
+    container.setAttribute('aria-label', 'מקרא וסינון לפי סוג');
+    container.innerHTML = Object.keys(visibleTypes).map(type => `
+        <button type="button" class="legend-item" data-legend-type="${type}" aria-pressed="true">
+            <span class="legend-icon">${pinSvg(type, 18, 24)}</span>
+            <span class="legend-label">${typeNamesPlural[type]}</span>
+            <span class="legend-count" data-legend-count="${type}"></span>
+        </button>`).join('');
+
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+
+    // One listener on the container handles both buttons (control is created once)
+    container.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-legend-type]');
+        if (!item) return;
+        const type = item.dataset.legendType;
+        setTypeVisible(type, !visibleTypes[type]);
+        updateMarkers();
+    });
+
+    return container;
+};
+legendControl.addTo(map);
+
+function setTypeVisible(type, isVisible) {
+    visibleTypes[type] = isVisible;
+    const item = document.querySelector(`[data-legend-type="${type}"]`);
+    if (item) item.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+}
+
+function updateLegendCounts() {
+    Object.keys(visibleTypes).forEach(type => {
+        const el = document.querySelector(`[data-legend-count="${type}"]`);
+        if (!el) return;
+        const count = allLocations.filter(loc => loc.type === type).length;
+        el.textContent = count.toLocaleString('he-IL');
+    });
+}
+
+// Clicking the map background closes the details panel
+map.on('click', hideSidebar);
 
 // Loading functions
 function showLoading(text) {
@@ -1044,27 +1154,29 @@ function loadLocations() {
             markerCluster.clearLayers();
 
             allLocations.forEach(location => {
-                const icon = icons[location.type] || icons.store;
-                const marker = L.marker([location.lat, location.lng], { icon: icon });
+                const isFacility = location.type === 'facility';
+                const marker = L.marker([location.lat, location.lng], {
+                    icon: icons[location.type] || icons.store,
+                    zIndexOffset: isFacility ? 1000 : 0 // facilities draw above other pins
+                });
 
-                // Lazy-load popup HTML on first open (desktop only)
+                // Popup HTML is built each time it opens (desktop only),
+                // so the distance line is always up to date with the GPS position
                 if (window.innerWidth > MOBILE_BREAKPOINT) {
-                    marker.once('popupopen', () => {
-                        marker.setPopupContent(createPopupContent(location));
-                    });
-                    marker.bindPopup('', { maxWidth: 300 });
+                    marker.bindPopup(() => createPopupContent(location), { maxWidth: 300 });
                 }
 
                 marker.on('click', () => {
                     showSidebar(location);
                 });
 
-                // Add aria-label when marker is added to map
+                // Add aria-label when marker is added to map.
+                // No escapeHtml here: setAttribute takes plain text, so escaping
+                // would make screen readers read out "&quot;" in names like ביה"ס
                 marker.on('add', () => {
                     const element = marker.getElement();
                     if (element) {
-                        const ariaLabel = `${escapeHtml(location.name)} - ${typeNames[location.type] || location.type}`;
-                        element.setAttribute('aria-label', ariaLabel);
+                        element.setAttribute('aria-label', `${location.name} - ${typeNames[location.type]}`);
                     }
                 });
 
@@ -1072,6 +1184,7 @@ function loadLocations() {
             });
 
             setupAutocomplete();
+            updateLegendCounts();
             updateMarkers();
 
             // Hide error state if it was showing
@@ -1159,11 +1272,9 @@ if (sidebarEl && sidebarContentEl) {
         sidebarEl.style.transition = '';
         const deltaY = touchCurrentY - touchStartY;
         const threshold = sidebarEl.offsetHeight * 0.4;
-        if (deltaY > threshold) {
-            hideSidebar();
-        } else {
-            sidebarEl.style.transform = '';
-        }
+        // Clearing the inline position lets the CSS transition finish the movement
+        sidebarEl.style.transform = '';
+        if (deltaY > threshold) hideSidebar();
         touchStartY = 0;
         touchCurrentY = 0;
     });
@@ -1177,10 +1288,13 @@ if (clearFiltersBtn) {
             // No data loaded — this is a retry
             loadLocations();
         } else {
-            // Clear search filters
+            // Clear the search and switch every legend type back on
             currentSearch = '';
             const searchInput = document.getElementById('search-input');
             if (searchInput) searchInput.value = '';
+            const clearBtn = document.getElementById('search-clear');
+            if (clearBtn) clearBtn.style.display = 'none';
+            Object.keys(visibleTypes).forEach(type => setTypeVisible(type, true));
             updateMarkers();
         }
     });

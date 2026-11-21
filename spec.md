@@ -25,7 +25,8 @@
 ### M2: Real Location Data ✅
 - [x] Create locations data file (JSON)
 - [x] Add all store locations (Superpharm, Shufersal, etc.)
-- [ ] Add recycling facilities (Batte-Re, RE-CAR, MILI) *(deferred)*
+- [x] Add recycling facilities (Batte-Re, RE-CAR) via `facilities.json`
+- [ ] MILI facility *(open — no verifiable public address found)*
 - [x] Different marker icons by location type
 - [x] Location details in popups
 
@@ -45,7 +46,7 @@
 ### M5: PWA & Performance ✅
 - [x] Service worker for offline support
 - [x] PWA manifest (installable)
-- [x] Marker clustering for ~3,900 locations
+- [x] Marker clustering for ~4,200 locations
 - [x] Multiple basemap options (light, streets)
 
 ### M6: Accessibility & Security ✅
@@ -57,7 +58,7 @@
 ### M7: Testing ✅
 - [x] Unit tests (pure functions) in `test.html`
 - [x] Integration tests (map/UI) in `test-map.html`
-- [x] 60 passing tests total
+- [x] Browser tests (`test.html`, `test-map.html`) + Node tests for the data pipeline (`test-scraper.js`)
 
 ### M8: Report a Problem ✅
 - [x] Google Form integration

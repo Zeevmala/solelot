@@ -1,0 +1,254 @@
+{
+  "_about": [
+    "Manual corrections applied by scraper.js on top of the MAI data, keyed by MAI marker id.",
+    "{ \"city\": \"X\" }    - the pin is in the right place but MAI lists the wrong city.",
+    "{ \"exclude\": true } - the coordinates contradict the address (pin is 12-190 km from the listed city), so the point is left off the map rather than sending someone to the wrong place.",
+    "Found in November 2026 by comparing every point with the median position of its city and reverse-geocoding the outliers with OpenStreetMap Nominatim.",
+    "An id that MAI later fixes or removes can simply be deleted from this file."
+  ],
+  "overrides": {
+    "343647": {
+      "city": "נתיבות"
+    },
+    "343803": {
+      "city": "כפר תבור"
+    },
+    "344449": {
+      "city": "נצרת"
+    },
+    "344753": {
+      "city": "נוף הגליל"
+    },
+    "344792": {
+      "city": "תל אביב"
+    },
+    "344824": {
+      "city": "עוספייה"
+    },
+    "344864": {
+      "city": "בית שמש"
+    },
+    "345247": {
+      "city": "פתח תקווה"
+    },
+    "345329": {
+      "city": "תל אביב"
+    },
+    "345424": {
+      "city": "פתח תקווה"
+    },
+    "345594": {
+      "city": "אלעד"
+    },
+    "345596": {
+      "city": "אלעד"
+    },
+    "345597": {
+      "city": "אלעד"
+    },
+    "345902": {
+      "city": "שפרעם"
+    },
+    "345904": {
+      "city": "שפרעם"
+    },
+    "345905": {
+      "city": "שפרעם"
+    },
+    "345906": {
+      "city": "שפרעם"
+    },
+    "345907": {
+      "city": "שפרעם"
+    },
+    "345908": {
+      "city": "שפרעם"
+    },
+    "345909": {
+      "city": "שפרעם"
+    },
+    "345910": {
+      "city": "שפרעם"
+    },
+    "345911": {
+      "city": "שפרעם"
+    },
+    "345912": {
+      "city": "שפרעם"
+    },
+    "345913": {
+      "city": "שפרעם"
+    },
+    "346031": {
+      "city": "קריית אתא"
+    },
+    "346034": {
+      "city": "תל אביב"
+    },
+    "346048": {
+      "city": "שפרעם"
+    },
+    "346049": {
+      "city": "שפרעם"
+    },
+    "346050": {
+      "city": "שפרעם"
+    },
+    "346051": {
+      "city": "שפרעם"
+    },
+    "346168": {
+      "city": "גוש עציון"
+    },
+    "346715": {
+      "city": "עין בוקק"
+    },
+    "347289": {
+      "city": "אום אל פחם"
+    },
+    "342884": {
+      "exclude": true
+    },
+    "342975": {
+      "exclude": true
+    },
+    "343383": {
+      "exclude": true
+    },
+    "343492": {
+      "exclude": true
+    },
+    "343500": {
+      "exclude": true
+    },
+    "343510": {
+      "exclude": true
+    },
+    "343617": {
+      "exclude": true
+    },
+    "343671": {
+      "exclude": true
+    },
+    "343679": {
+      "exclude": true
+    },
+    "343755": {
+      "exclude": true
+    },
+    "343804": {
+      "exclude": true
+    },
+    "343852": {
+      "exclude": true
+    },
+    "343927": {
+      "exclude": true
+    },
+    "343963": {
+      "exclude": true
+    },
+    "344014": {
+      "exclude": true
+    },
+    "344021": {
+      "exclude": true
+    },
+    "344222": {
+      "exclude": true
+    },
+    "344225": {
+      "exclude": true
+    },
+    "344531": {
+      "exclude": true
+    },
+    "344574": {
+      "exclude": true
+    },
+    "344702": {
+      "exclude": true
+    },
+    "344803": {
+      "exclude": true
+    },
+    "344862": {
+      "exclude": true
+    },
+    "344918": {
+      "exclude": true
+    },
+    "344919": {
+      "exclude": true
+    },
+    "345038": {
+      "exclude": true
+    },
+    "345057": {
+      "exclude": true
+    },
+    "345235": {
+      "exclude": true
+    },
+    "345264": {
+      "exclude": true
+    },
+    "345265": {
+      "exclude": true
+    },
+    "345266": {
+      "exclude": true
+    },
+    "345465": {
+      "exclude": true
+    },
+    "345480": {
+      "exclude": true
+    },
+    "345558": {
+      "exclude": true
+    },
+    "345639": {
+      "exclude": true
+    },
+    "345640": {
+      "exclude": true
+    },
+    "345803": {
+      "exclude": true
+    },
+    "345838": {
+      "exclude": true
+    },
+    "345901": {
+      "exclude": true
+    },
+    "346018": {
+      "exclude": true
+    },
+    "346132": {
+      "exclude": true
+    },
+    "346323": {
+      "exclude": true
+    },
+    "346328": {
+      "exclude": true
+    },
+    "346332": {
+      "exclude": true
+    },
+    "346484": {
+      "exclude": true
+    },
+    "346606": {
+      "exclude": true
+    },
+    "346615": {
+      "exclude": true
+    },
+    "347274": {
+      "exclude": true
+    }
+  }
+}
