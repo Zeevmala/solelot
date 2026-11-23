@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="מפת נקודות מיחזור סוללות בישראל - מצא את הנקודה הקרובה אליך">
     <meta name="theme-color" content="#00796B">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://tile.openstreetmap.org; child-src 'none'; object-src 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self'; child-src 'none'; object-src 'none'">
     <title>מפת מיחזור סוללות</title>
 
     <!-- Open Graph / Social Sharing -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://zeevmala.github.io/solelot/">
     <meta property="og:title" content="מפת מיחזור סוללות">
-    <meta property="og:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-3,450 נקודות איסוף ומתקני מיחזור ברחבי ישראל">
+    <meta property="og:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-4,200 נקודות איסוף ומתקני מיחזור ברחבי ישראל">
     <meta property="og:image" content="https://zeevmala.github.io/solelot/icons/icon-512.png">
     <meta property="og:image:width" content="512">
     <meta property="og:image:height" content="512">
@@ -23,7 +23,7 @@
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="מפת מיחזור סוללות">
-    <meta name="twitter:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-3,450 נקודות איסוף ומתקני מיחזור ברחבי ישראל">
+    <meta name="twitter:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-4,200 נקודות איסוף ומתקני מיחזור ברחבי ישראל">
     <meta name="twitter:image" content="https://zeevmala.github.io/solelot/icons/icon-512.png">
 
     <!-- Preconnect to external origins (early connection setup) -->
@@ -43,7 +43,6 @@
 
     <!-- Marker Cluster CSS (deferred — loaded via JS after page paint) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" media="print" data-deferred />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" media="print" data-deferred />
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">

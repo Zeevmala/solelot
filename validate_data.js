@@ -2,7 +2,7 @@
  * Data quality validation for locations.json
  *
  * Run after ANY data change to catch issues before they reach users.
- * Usage: bun validate_data.js
+ * Usage: node validate_data.js
  *
  * Exit code: 0 = all pass, 1 = failures found
  */
@@ -110,6 +110,62 @@ function main() {
             return street && l.name === street;
         })
         .map(l => ({ id: l.id, reason: `name="${l.name}" = street from addr` })));
+
+    // 11. Every id is a unique positive whole number
+    const idCount = {};
+    for (const loc of locations) idCount[loc.id] = (idCount[loc.id] || 0) + 1;
+    check('11. Unique numeric ids', locations
+        .filter(l => !Number.isInteger(l.id) || l.id <= 0 || idCount[l.id] > 1)
+        .map(l => ({ id: l.id, reason: `id used ${idCount[l.id]} time(s)` })));
+
+    // 12. Every facility from facilities.json made it into locations.json
+    const facilitiesFile = path.join(__dirname, 'facilities.json');
+    const expectedFacilities = fs.existsSync(facilitiesFile)
+        ? JSON.parse(fs.readFileSync(facilitiesFile, 'utf-8')).locations
+        : [];
+    check('12. All facilities present', expectedFacilities
+        .filter(f => !locations.some(l => l.id === f.id && l.type === 'facility' && l.description))
+        .map(f => ({ id: f.id, reason: `"${f.name}" missing from locations.json` })));
+
+    // 13. One spelling per city (variants split a city in two in the search box)
+    const variantGroups = {};
+    for (const loc of locations) {
+        const key = (loc.city || '').replace(/[-\u05be\s"'\u05f3]/g, '').replace(/\u05d9\u05d9/g, '\u05d9').replace(/\u05d5\u05d5/g, '\u05d5');
+        (variantGroups[key] = variantGroups[key] || new Set()).add(loc.city);
+    }
+    // These pairs look alike but are different places
+    const KNOWN_DISTINCT = [['אילון', 'איילון'], ['צוקי ים', 'צוקים']];
+    const isKnownDistinct = set => KNOWN_DISTINCT.some(pair => set.size === pair.length && pair.every(name => set.has(name)));
+    check('13. One spelling per city', Object.values(variantGroups)
+        .filter(set => set.size > 1 && !isKnownDistinct(set))
+        .map(set => ({ id: '-', reason: [...set].join(' / ') })));
+
+    // 14. Points far from the rest of their city (warning only - needs a human look).
+    // A point more than 12 km from the middle of its city usually means the
+    // coordinates or the city name are wrong. Regional councils are spread out,
+    // so this prints a list instead of failing. Fix real errors in data_overrides.json.
+    const byCity = {};
+    for (const loc of locations) (byCity[loc.city] = byCity[loc.city] || []).push(loc);
+    const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+    const toRad = deg => deg * Math.PI / 180;
+    const distanceKm = (lat1, lng1, lat2, lng2) => {
+        const a = Math.sin(toRad(lat2 - lat1) / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lng2 - lng1) / 2) ** 2;
+        return 2 * 6371 * Math.asin(Math.sqrt(a));
+    };
+    const farPoints = [];
+    for (const group of Object.values(byCity)) {
+        if (group.length < 3) continue; // too few points to know where the city is
+        const midLat = median(group.map(l => l.lat));
+        const midLng = median(group.map(l => l.lng));
+        for (const loc of group) {
+            const km = distanceKm(midLat, midLng, loc.lat, loc.lng);
+            if (km > 12) farPoints.push({ loc, km });
+        }
+    }
+    farPoints.sort((a, b) => b.km - a.km);
+    console.log(`[!] 14. Far from own city (warning): ${farPoints.length} to review`);
+    farPoints.slice(0, 5).forEach(f => console.log(`    id=${f.loc.id}: ${f.km.toFixed(0)} km from ${f.loc.city} - "${f.loc.name}"`));
 
     // Summary
     console.log(`\n--- ${totalFails === 0 ? 'ALL CHECKS PASSED' : totalFails + ' TOTAL ISSUES'} (${locations.length} locations) ---`);

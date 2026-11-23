@@ -159,9 +159,11 @@
             fuzzyMatch(location.address, query);
     }
 
-    // === Empty state logic (synced from app.js updateMarkers, lines 629-634) ===
-    function shouldShowEmptyState(visibleCount, currentSearch) {
-        return visibleCount === 0 && currentSearch !== '';
+    // === Empty state logic (synced from app.js updateMarkers) ===
+    // Shown only when the user's own filters (search text or legend switches) hide everything
+    function shouldShowEmptyState(visibleCount, currentSearch, visibleTypes, totalCount) {
+        var isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
+        return visibleCount === 0 && isFiltered && totalCount > 0;
     }
 
     // === PWA shortcut logic (synced from app.js, line 1081) ===
@@ -235,6 +237,22 @@
             // Check no "Unknown" placeholder addresses
             const unknownAddresses = locations.filter(loc => loc.address === 'Unknown' || loc.address === '\u05DB\u05EA\u05D5\u05D1\u05EA \u05DC\u05D0 \u05D6\u05DE\u05D9\u05E0\u05D4');
             assert(unknownAddresses.length === 0, 'No placeholder addresses' + (unknownAddresses.length > 0 ? ' \u2014 ' + unknownAddresses.length + ' found' : ''));
+
+            // --- IDs and facilities ---
+            section('IDs and Facilities');
+            var idSet = new Set(locations.map(function(loc) { return loc.id; }));
+            assert(idSet.size === locations.length, 'Every location has a unique id');
+            assert(locations.every(function(loc) { return Number.isInteger(loc.id) && loc.id > 0; }), 'Every id is a positive whole number');
+
+            var facilities = locations.filter(function(loc) { return loc.type === 'facility'; });
+            assert(facilities.length >= 2, 'Recycling facilities are present (' + facilities.length + ')');
+            assert(facilities.every(function(f) { return f.description && f.description.length > 0; }), 'Every facility has a description (explains it is not a public drop-off point)');
+            assert(facilities.some(function(f) { return f.city === '\u05D3\u05D9\u05DE\u05D5\u05E0\u05D4'; }), 'Batte-Re facility is in Dimona');
+            assert(facilities.some(function(f) { return f.city === '\u05E2\u05E8\u05D3'; }), 'RE-CAR facility is in Arad');
+
+            var cityNames = new Set(locations.map(function(loc) { return loc.city; }));
+            assert(!cityNames.has('\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1-\u05D9\u05E4\u05D5'), 'Tel Aviv has one spelling (no "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1-\u05D9\u05E4\u05D5" variant)');
+            assert(![...cityNames].some(function(c) { return c.indexOf('\u05E7\u05E8\u05D9\u05EA ') === 0; }), 'Kiryat-* cities use one spelling (\u05E7\u05E8\u05D9\u05D9\u05EA)');
 
             // --- Popup template tests ---
             section('Popup Template');
@@ -396,11 +414,14 @@
 
             // --- Empty State Logic ---
             section('Empty State & Error Recovery');
-            assert(shouldShowEmptyState(0, '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD') === true, 'Empty: 0 results + active search \u2192 show empty state');
-            assert(shouldShowEmptyState(0, '') === false, 'Empty: 0 results + empty search \u2192 hide (initial load)');
-            assert(shouldShowEmptyState(5, '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1') === false, 'Empty: >0 results + active search \u2192 hide');
-            assert(shouldShowEmptyState(100, '') === false, 'Empty: >0 results + empty search \u2192 hide');
-            assert(shouldShowEmptyState(0, ' ') === true, 'Empty: 0 results + whitespace search \u2192 show');
+var allOn = { store: true, facility: true };
+            var storesOff = { store: false, facility: true };
+            assert(shouldShowEmptyState(0, '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD', allOn, 100) === true, 'Empty: 0 results + active search \u2192 show empty state');
+            assert(shouldShowEmptyState(0, '', allOn, 0) === false, 'Empty: nothing loaded yet \u2192 hide (initial load)');
+            assert(shouldShowEmptyState(5, '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1', allOn, 100) === false, 'Empty: >0 results + active search \u2192 hide');
+            assert(shouldShowEmptyState(100, '', allOn, 100) === false, 'Empty: >0 results + empty search \u2192 hide');
+            assert(shouldShowEmptyState(0, ' ', allOn, 100) === true, 'Empty: 0 results + whitespace search \u2192 show');
+            assert(shouldShowEmptyState(0, '', storesOff, 100) === true, 'Empty: 0 results + a legend type switched off \u2192 show');
 
             // --- PWA ?action=nearest ---
             section('PWA ?action=nearest Shortcut');
