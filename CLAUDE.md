@@ -15,8 +15,8 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Current Features
 - Interactive Leaflet map centered on Israel (OSM tiles; light = CSS-desaturated default — CARTO now requires an API key)
-- Custom SVG pin markers: teal battery pin = collection point, orange factory pin = recycling facility (different shape AND colour)
-- Marker clustering for collection points (teal, size grows with count); facilities are never clustered
+- Custom SVG pin markers: green battery pin = collection point, orange factory pin = recycling facility (different shape AND colour)
+- Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered
 - Legend (bottom right) that also works as an on/off filter per type — shown only when the data has both types, so it is hidden while there are no facilities
 - Map opens framed on Israel (`fitBounds`) and cannot be panned far outside it (`maxBounds`)
 - Search with autocomplete suggestions (city + location)
@@ -49,6 +49,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `validate_data.js` | Data quality checks — run after every data change (`node validate_data.js`) |
 | `test-scraper.js` | Scraper tests on the real functions (`node --test test-scraper.js`) |
 | `fix_names.js`, `fix-unknown-cities.py`, `reverse_geocode.py` | **Legacy** one-off cleanup scripts. Their logic now lives in `scraper.js`; do not run them on current data |
+| `cartowolf/` | The Cartowolf design system, copied from `Zeevmala/factory` (`design/`): `tokens.css` (all colours, sizes, shadows as `--cw-*` variables), `fonts.css` + `fonts/` (IBM Plex, self-hosted), `check-colors.mjs` (finds hand-written colours). **Do not edit `tokens.css` here** — change it in the factory repo and copy it again |
 | `sw.js` | Service worker for offline/PWA support |
 | `manifest.json` | PWA manifest |
 | `test.html` | Unit tests (pure function tests, runs in browser) |
@@ -61,6 +62,10 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `icons/` | App icons in various sizes |
 
 ## Conventions
+- **Colours come from the design system.** Use `var(--cw-...)` from `cartowolf/tokens.css`; do not write hex/rgb colours in `style.css`, `app.js` or `index.html`. Check with `node cartowolf/check-colors.mjs style.css app.js index.html` (must print nothing)
+- Map colours: collection point = `--cw-data-cat-3` (sea green), facility = `--cw-data-cat-2` (orange), user location = `--cw-accent`. SVGs in `app.js` use `fill="currentColor"` and the class `pin-casing` for white parts; the colour itself is set in `style.css`
+- The page is fixed to the light theme (`data-theme="light"` on `<html>`): the OSM basemap is a light picture, and the dark-theme pin colours are made for a dark map
+- Font: IBM Plex Sans / IBM Plex Sans Hebrew, served from `cartowolf/fonts/` (no Google Fonts). Weights 400, 500, 600 only
 - UI text is in **Hebrew**
 - Layout is **RTL** (right-to-left)
 - No build tools - plain static files, no npm
