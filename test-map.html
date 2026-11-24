@@ -244,11 +244,9 @@
             assert(idSet.size === locations.length, 'Every location has a unique id');
             assert(locations.every(function(loc) { return Number.isInteger(loc.id) && loc.id > 0; }), 'Every id is a positive whole number');
 
+            // Facilities are optional (currently none). Any that exist must explain themselves.
             var facilities = locations.filter(function(loc) { return loc.type === 'facility'; });
-            assert(facilities.length >= 2, 'Recycling facilities are present (' + facilities.length + ')');
-            assert(facilities.every(function(f) { return f.description && f.description.length > 0; }), 'Every facility has a description (explains it is not a public drop-off point)');
-            assert(facilities.some(function(f) { return f.city === '\u05D3\u05D9\u05DE\u05D5\u05E0\u05D4'; }), 'Batte-Re facility is in Dimona');
-            assert(facilities.some(function(f) { return f.city === '\u05E2\u05E8\u05D3'; }), 'RE-CAR facility is in Arad');
+            assert(facilities.every(function(f) { return f.description && f.description.length > 0; }), 'Every facility has a description (' + facilities.length + ' facilities)');
 
             var cityNames = new Set(locations.map(function(loc) { return loc.city; }));
             assert(!cityNames.has('\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1-\u05D9\u05E4\u05D5'), 'Tel Aviv has one spelling (no "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1-\u05D9\u05E4\u05D5" variant)');

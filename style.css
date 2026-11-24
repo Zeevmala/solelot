@@ -462,6 +462,12 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* The legend sets display:flex, which would override the hidden attribute */
+.map-legend[hidden],
+.legend-item[hidden] {
+    display: none;
+}
+
 /* Switched-off type: faded and struck through */
 .legend-item[aria-pressed="false"] .legend-icon {
     filter: grayscale(1);

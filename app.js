@@ -1082,12 +1082,22 @@ function setTypeVisible(type, isVisible) {
 }
 
 function updateLegendCounts() {
+    let typesWithData = 0;
     Object.keys(visibleTypes).forEach(type => {
-        const el = document.querySelector(`[data-legend-count="${type}"]`);
-        if (!el) return;
         const count = allLocations.filter(loc => loc.type === type).length;
-        el.textContent = count.toLocaleString('he-IL');
+        if (count > 0) typesWithData++;
+
+        const el = document.querySelector(`[data-legend-count="${type}"]`);
+        if (el) el.textContent = count.toLocaleString('he-IL');
+
+        // A type with no locations gets no legend row
+        const item = document.querySelector(`[data-legend-type="${type}"]`);
+        if (item) item.hidden = count === 0;
     });
+
+    // With only one kind of pin on the map there is nothing to explain or filter
+    const legend = document.querySelector('.map-legend');
+    if (legend) legend.hidden = typesWithData < 2;
 }
 
 // Clicking the map background closes the details panel
