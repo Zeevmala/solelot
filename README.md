@@ -6,7 +6,7 @@
 
 > **Find battery recycling points near you in Israel**
 
-An interactive map showing **~4,200 battery recycling locations** across Israel — public collection points (shops, gas stations, municipal bins) plus the country's battery recycling plants.
+An interactive map showing **~4,200 battery recycling locations** across Israel — public collection points at shops, gas stations and municipal bins.
 
 🌐 **[Live Site → zeevmala.github.io/solelot](https://zeevmala.github.io/solelot/)**
 
@@ -18,7 +18,6 @@ An interactive map showing **~4,200 battery recycling locations** across Israel 
 - **Search** — Find locations by name, address, or city with autocomplete suggestions
 - **Navigation** — Get directions via Google Maps or Waze directly from any point
 - **Location Details** — View address, hours, and distance from your position
-- **Legend & Type Filter** — Collection points and recycling facilities use different pin shapes and colours; tap a legend row to show/hide a type
 - **Nearest Point** — The locate button frames you together with the closest collection point
 - **Multiple Basemaps** — Switch between street and light map styles
 - **PWA** — Install as an app on your phone, works offline
@@ -42,7 +41,7 @@ An interactive map showing **~4,200 battery recycling locations** across Israel 
 ├── style.css         # Styling and responsive layout
 ├── app.js            # Map logic, search, markers, sidebar
 ├── locations.json    # ~4,200 locations (generated — do not edit by hand)
-├── facilities.json   # Recycling plants (hand-curated, merged in by scraper.js)
+├── facilities.json   # Recycling plants — currently empty (merged in by scraper.js)
 ├── data_overrides.json # Manual fixes to MAI data (wrong city / wrong coordinates)
 ├── sw.js             # Service worker for offline/PWA
 ├── manifest.json     # PWA manifest
@@ -89,7 +88,7 @@ This project includes comprehensive **HTML-based tests** that run directly in th
    - Open [`test-map.html`](test-map.html) in your browser
    - Shows **~60 integration tests** covering:
      - Data integrity (7 tests) — Validates all ~4,200 locations in `locations.json`
-     - IDs and facilities (8 tests) — Unique ids, facilities present, one spelling per city
+     - IDs and facilities (5 tests) — Unique ids, facility descriptions, one spelling per city
      - Popup template (12 tests) — Button styling, XSS protection, hours filtering
      - Sidebar template (6 tests) — Layout, navigation buttons, hours filtering
      - XSS protection (3 tests) — Script/image tag escaping
@@ -151,7 +150,7 @@ node validate_data.js  # must end with ALL CHECKS PASSED
 ```
 
 - **Collection points** come from the [MAI](https://mai.org.il) map API (live map `5`, category `12` = batteries). Unnamed markers, markers MAI flags as inactive, and repeats are dropped.
-- **Facilities** (`facilities.json`) are added by hand. Their pins mark the industrial zone, not the plant gate, and they are not public drop-off points.
+- **Facilities** (`facilities.json`) is empty on purpose: recycling plants are not public drop-off points. An entry added there (type `facility`, id 1–99, with a `description`) appears with an orange factory pin and brings back the legend.
 - **`data_overrides.json`** holds per-id corrections for MAI records whose city or coordinates are wrong. Check 14 in `validate_data.js` lists new suspects after each refresh.
 
 ## License
