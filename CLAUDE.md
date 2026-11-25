@@ -143,7 +143,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 ### Testing Notes
 - `CHAIN_PATTERNS` / `determineChain` live in `scraper.js` only (the app does not use `chain`). They are tested in `test-scraper.js`, which imports the real functions.
 - XSS tests cover `<script>`, `<img>`, SVG `onload`, `javascript:` and `data:` strings.
-- `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance, empty state logic, `?action=nearest`.
+- `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance. Empty state and `?action=nearest` are covered by `test-smoke.js` on the real page.
 - `test-validate.js` runs the real `validate_data.js` on small fixtures and checks the exit code.
 - Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install. The wiring of the real page (search box, Enter, picks, `?action=nearest`, failure states, selected pin, service worker install and update) is covered by `node test-smoke.js`, which is run by hand because it needs Playwright and the network.
 

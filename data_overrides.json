@@ -9,6 +9,7 @@
     "Added 2026-11-25 (data-quality audit of the refreshed file), each checked with a Nominatim reverse geocode of the pin: 30 city fixes where the pin is right and MAI lists a neighbouring town or a label that is not a town (דיפו ירושלים, סינרמה, צומת שילת, מ.א. עמק חפר ...), always using a spelling already in the data; and 22 excludes from the 25 same-name-same-address pairs - 15 where the pin is in a different locality or on a different street than the address names, and 7 second entries of one point (pins under 500 m apart, the higher id is left out).",
     "Added 2026-11-25: 346330 and 346351 share one coordinate at the centre of באר שבע with no street (\"בכניסה הצפונית\", \"פארק אופיק\"). In a city that size a centre pin can be kilometres from the place, so both are left out.",
     "Added 2026-11-25 after review of the refreshed file: 345747 (address נתב\"ג לוד, pin in באר שבע, 76 km away) and 342784 (address רמות ירושלים, pin in north תל אביב, 46 km away) came back when same-name twins stopped being dropped; 345502 and 345653 share one coordinate in מגדל העמק but name two different industrial zones with no street.",
+    "Added 2026-11-25: 346434 (רמי לוי, העמל 20) had the city \"ים\"; Nominatim puts the pin in the industrial area of כפר סבא.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -194,6 +195,9 @@
     },
     "346338": {
       "city": "ניצן"
+    },
+    "346434": {
+      "city": "כפר סבא"
     },
     "346508": {
       "city": "נאות חובב"
