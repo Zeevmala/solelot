@@ -46,6 +46,7 @@ Opening hours are not shown: the source has none (see [Data](#data)).
 ├── validate_data.js    # Data-quality checks on locations.json
 ├── test-scraper.js     # Scraper tests (node --test)
 ├── test-validate.js    # Tests of the data checks (node --test)
+├── test-smoke.js       # Real-page smoke test (needs Playwright; not in the gate)
 ├── test.html           # Browser tests of pure functions
 ├── test-map.html       # Browser tests of data, templates and search
 ├── cartowolf/          # Design tokens, fonts, colour check

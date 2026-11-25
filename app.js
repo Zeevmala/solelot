@@ -197,6 +197,7 @@ const QUERY_ALIASES = {
     'תל אביב יפו': 'תל אביב',
     'tel aviv': 'תל אביב',
     'ראשל"צ': 'ראשון לציון',
+    'ראשלצ': 'ראשון לציון',
     'פ"ת': 'פתח תקווה',
     'ב"ש': 'באר שבע',
     'ר"ג': 'רמת גן',
@@ -215,9 +216,13 @@ const QUERY_ALIASES = {
 };
 
 // The search text as it is compared with the data
+// A short name written with a quote mark (ב"ש) counts only when the quote mark was
+// typed: the bare letters "בש" are also part of ordinary words and names.
 function normalizeQuery(text) {
     const query = normalizeText(text);
-    const alias = Object.keys(QUERY_ALIASES).find(name => normalizeText(name) === query);
+    const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
+    const alias = Object.keys(QUERY_ALIASES).find(name =>
+        normalizeText(name) === query && (typedQuote || !name.includes('"')));
     return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
 }
 
@@ -518,7 +523,12 @@ const visibleTypes = { store: true, facility: true };
 // A cluster's size shows how many points it holds; colour only deepens slightly,
 // staying in the app's teal so clusters and pins read as the same data.
 const markerCluster = L.markerClusterGroup({
-    chunkedLoading: true,
+    chunkedLoading: true, // pins are added in small batches, so a slow phone does not freeze
+    // Called after every batch. The last batch is still being finished at that moment,
+    // so the "all added" step waits for the current piece of work to end (a microtask).
+    chunkProgress: (processed, total) => {
+        if (processed === total) queueMicrotask(markerBatchesDone);
+    },
     // Wider grouping when zoomed out keeps bubbles from piling on top of each other
     maxClusterRadius: zoom => (zoom <= 9 ? 70 : zoom <= 13 ? 55 : 40),
     spiderfyOnMaxZoom: true,
@@ -794,6 +804,25 @@ function hideSidebar() {
     setSelectedMarker(null);
 }
 
+// Adding thousands of pins to the cluster layer takes several batches. Until the last
+// one is in, the layer cannot be asked to zoom to a pin (it throws an error).
+// whenMarkersAdded(fn) runs fn now if nothing is being added, or right after the last batch.
+let markerAddsRunning = 0;      // calls to markerCluster.addLayers() that have not finished
+let afterMarkersAdded = null;   // the one thing waiting for them (the latest request wins)
+function markerBatchesDone() {
+    // The cluster layer also reports an (empty) add of its own when it is put on the
+    // map, before any of ours: never count below zero
+    if (markerAddsRunning > 0) markerAddsRunning--;
+    if (markerAddsRunning > 0 || !afterMarkersAdded) return;
+    const run = afterMarkersAdded;
+    afterMarkersAdded = null;
+    run();
+}
+function whenMarkersAdded(fn) {
+    if (markerAddsRunning === 0) fn();
+    else afterMarkersAdded = fn;
+}
+
 // Set what the map is filtered by, and redraw. Every change of the search goes
 // through here, so a typing timer that is still waiting can never bring old text back.
 function setSearch(text, city) {
@@ -824,6 +853,7 @@ function updateMarkers() {
     });
 
     markerCluster.clearLayers();
+    markerAddsRunning++; // markerBatchesDone() counts it back down
     markerCluster.addLayers(clusteredMarkers);
 
     visibleMarkerCount = visibleMarkers.length;
@@ -832,9 +862,9 @@ function updateMarkers() {
     return visibleMarkers;
 }
 
-// Show the empty state only when the user filtered everything away.
-// right spelling (typing "ירושלם" suggests ירושלים), and the two would overlap.
-// right spelling (typing "חיפא" suggests חיפה), and the two would overlap.
+// Show the "no results" panel only when the search or the legend hides every pin.
+// While the suggestion list is open the panel stays hidden, because the list may be
+// offering the right spelling (typing "ירושלם" suggests ירושלים) and the two would overlap.
 let visibleMarkerCount = 0;
 function updateEmptyState() {
     const emptyState = document.getElementById('empty-state');
@@ -944,7 +974,6 @@ function setupAutocomplete() {
                          role="option"
                          data-type="city"
                          data-value="${escapeHtml(match.name)}"
-                         data-same="${match.same}"
                          tabindex="-1">
                         <span class="suggestion-icon">🏙️</span>
                         <div class="suggestion-text">
@@ -991,14 +1020,18 @@ function setupAutocomplete() {
         } else if (e.key === 'Enter') {
             e.preventDefault();
             const listOpen = suggestions.classList.contains('active') && items.length > 0;
+            const text = searchInput.value.trim().substring(0, 50);
+            // Decided from the text, not from the list: the list may be closed already
+            // (a second Enter, or Escape first) and the answer must stay the same
+            const typedCity = matchCities(cityCounts, text)[0];
             if (listOpen && highlightedIndex >= 0) {
                 selectSuggestion(items[highlightedIndex]);
-            } else if (listOpen && items[0].dataset.same === 'true') {
-                // Nothing highlighted, and the first suggestion is the city that was typed
-                selectSuggestion(items[0]);
+            } else if (typedCity && typedCity.same) {
+                // The text is a city name (or a short name for one): show that city
+                pickCity(typedCity.name);
             } else {
                 // Anything else (a shop name, part of a word): show the typed text on the map
-                const visibleMarkers = setSearch(searchInput.value.trim().substring(0, 50), null);
+                const visibleMarkers = setSearch(text, null);
                 closeSuggestions();
                 highlightedIndex = -1;
                 zoomToVisibleMarkers(visibleMarkers);
@@ -1026,29 +1059,35 @@ function setupAutocomplete() {
         }
     }
 
-    function selectSuggestion(item) {
-        const type = item.dataset.type;
-
-        if (type === 'city') {
-            const city = item.dataset.value;
-            searchInput.value = city;
-            const visibleMarkers = setSearch(city, city);
-            zoomToVisibleMarkers(visibleMarkers);
-        } else {
-            const locationId = parseInt(item.dataset.id, 10);
-            if (isNaN(locationId)) return;
-            // The box is emptied, so the map goes back to showing everything
-            searchInput.value = '';
-            const clearBtn = document.getElementById('search-clear');
-            if (clearBtn) clearBtn.style.display = 'none';
-            setSearch('', null);
-            focusOnLocation(locationId);
-        }
-
+    function emptySuggestions() {
         suggestions.classList.remove('active');
         searchInput.setAttribute('aria-expanded', 'false');
         suggestions.innerHTML = '';
         highlightedIndex = -1;
+    }
+
+    // Show exactly one city on the map
+    function pickCity(city) {
+        searchInput.value = city;
+        const visibleMarkers = setSearch(city, city);
+        zoomToVisibleMarkers(visibleMarkers);
+        emptySuggestions();
+    }
+
+    function selectSuggestion(item) {
+        if (item.dataset.type === 'city') {
+            pickCity(item.dataset.value);
+            return;
+        }
+        const locationId = parseInt(item.dataset.id, 10);
+        if (isNaN(locationId)) return;
+        // The box is emptied, so the map goes back to showing everything
+        searchInput.value = '';
+        const clearBtn = document.getElementById('search-clear');
+        if (clearBtn) clearBtn.style.display = 'none';
+        setSearch('', null);
+        focusOnLocation(locationId);
+        emptySuggestions();
     }
 
     suggestions.addEventListener('click', (e) => {
@@ -1082,14 +1121,19 @@ function focusOnLocation(locationId) {
             map.once('moveend', arrive);
             map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
         };
-        if (markerCluster.hasLayer(marker)) {
-            // The cluster layer zooms in, and opens a group of pins that share one spot,
-            // until this pin itself is drawn. Flying first and asking afterwards left
-            // the pin hidden inside a cluster on phones.
-            markerCluster.zoomToShowLayer(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
-        } else {
-            flyClose();
-        }
+        // Picking a suggestion has just put every pin back on the map; on a slow
+        // phone that is still going on, so wait for it to finish.
+        whenMarkersAdded(() => {
+            if (selectedLocationId !== locationId) return; // closed or changed while waiting
+            if (markerCluster.hasLayer(marker)) {
+                // The cluster layer zooms in, and opens a group of pins that share one spot,
+                // until this pin itself is drawn. Flying first and asking afterwards left
+                // the pin hidden inside a cluster on phones.
+                markerCluster.zoomToShowLayer(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
+            } else {
+                flyClose();
+            }
+        });
     }
 }
 

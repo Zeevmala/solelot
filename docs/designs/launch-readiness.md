@@ -62,3 +62,13 @@ Each slice has an owner (see `docs/teams.md`), the files it may touch, and a che
 - A single fallback pin at a city centre cannot be told from a real point with this data. The stacked groups suggest there are more; a re-geocode would settle it.
 - Position checks cannot see errors under 5 km.
 - Map tiles on the real OpenStreetMap server were not seen in the audits (the audit sandbox blocked them).
+
+## Status (2026-11-25)
+
+All slices are built on branch `claude/inspiring-gauss-ru4wl7`. `bash .factory/check.sh` prints `GATE PASSED` and `node test-smoke.js` prints `SMOKE PASSED (15 checks)`.
+
+- Data: 4,232 → 4,115 points. 162 points in 61 stacked groups, 92 override excludes and 15 dead names are off the map.
+- Each stream was reviewed by a fresh agent. The first data review blocked (the stacked rule also removed one street spelled two ways, including Dizengoff Center); the second blocked on two far pins and one missing test; the web review blocked on a slow-device pick, a second Enter that undid a city pick, and untested page wiring. Each was reworked; `test-smoke.js` and `test-validate.js` came out of the reviews.
+- Added to the design during the work: a search rework (Enter applies the typed text unless it is a city name; spelling variants and old town names find their city), and 54 city/exclude overrides from a re-profile of the refreshed data.
+
+Open after this design: the owner decisions listed above; 19 + 11 + 21 position warnings (14a/14b/14c) to review; three same-name pairs that still end in `(2)`; a real-page test cannot join the gate until Leaflet is served from the repository.

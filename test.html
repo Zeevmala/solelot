@@ -94,6 +94,7 @@ const QUERY_ALIASES = {
     'תל אביב יפו': 'תל אביב',
     'tel aviv': 'תל אביב',
     'ראשל"צ': 'ראשון לציון',
+    'ראשלצ': 'ראשון לציון',
     'פ"ת': 'פתח תקווה',
     'ב"ש': 'באר שבע',
     'ר"ג': 'רמת גן',
@@ -113,7 +114,9 @@ const QUERY_ALIASES = {
 
 function normalizeQuery(text) {
     const query = normalizeText(text);
-    const alias = Object.keys(QUERY_ALIASES).find(name => normalizeText(name) === query);
+    const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
+    const alias = Object.keys(QUERY_ALIASES).find(name =>
+        normalizeText(name) === query && (typedQuote || !name.includes('"')));
     return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
 }
 
@@ -261,6 +264,27 @@ function formatDistance(km) {
     assert(normalizeQuery('ר"ג') === normalizeText('רמת גן'), 'normalizeQuery: alias ר"ג');
     assert(normalizeQuery('כפ"ס') === normalizeText('כפר סבא'), 'normalizeQuery: alias כפ"ס');
     assert(normalizeQuery('נצרת עלית') === normalizeText('נוף הגליל') && normalizeQuery('נצרת עילית') === normalizeText('נוף הגליל'), 'normalizeQuery: old name נצרת עילית / נצרת עלית');
+
+    // A two-letter short name needs its quote mark (rework after review)
+    const shops = [
+        { id: 1, name: 'זול בשפע', address: 'הרצל 1', city: 'אשדוד' },
+        { id: 2, name: 'פתאל', address: 'הים 2', city: 'אילת' },
+        { id: 3, name: 'מרגוע', address: 'הגן 3', city: 'צפת' },
+        { id: 4, name: 'תאורה', address: 'הנר 4', city: 'עכו' },
+        { id: 5, name: 'מוקד', address: 'רגר 5', city: 'באר שבע' },
+        { id: 6, name: 'מוקד', address: 'הרצל 6', city: 'פתח תקווה' },
+        { id: 7, name: 'מוקד', address: 'ביאליק 7', city: 'רמת גן' },
+        { id: 8, name: 'מוקד', address: 'אלנבי 8', city: 'תל אביב' }
+    ];
+    const ids = text => searchLocations(shops, text, null).map(l => l.id).join(',');
+    assert(normalizeQuery('בש') === 'בש' && normalizeQuery('פת') === 'פת' && normalizeQuery('רג') === 'רג' && normalizeQuery('תא') === 'תא', 'normalizeQuery: bare בש / פת / רג / תא are not short names');
+    assert(ids('בש') === '1', 'searchLocations: bare "בש" finds "זול בשפע", not באר שבע (got ' + ids('בש') + ')');
+    assert(ids('פת') === '2,3,6', 'searchLocations: bare "פת" is plain text (got ' + ids('פת') + ')');
+    assert(ids('רג') === '3,5', 'searchLocations: bare "רג" is plain text (got ' + ids('רג') + ')');
+    assert(ids('תא') === '2,4', 'searchLocations: bare "תא" is plain text (got ' + ids('תא') + ')');
+    assert(ids('ב"ש') === '5' && ids('ב״ש') === '5', 'searchLocations: ב"ש and ב״ש (with the quote mark) find באר שבע');
+    assert(ids('פ"ת') === '6' && ids('ר"ג') === '7' && ids('ת"א') === '8' && ids('ת״א') === '8', 'searchLocations: פ"ת, ר"ג, ת"א with the quote mark find their city');
+    assert(matchCities(new Map([['באר שבע', 5]]), 'בש').length === 0 && matchCities(new Map([['באר שבע', 5]]), 'ב"ש')[0].same === true, 'matchCities: Enter picks באר שבע for ב"ש but not for bare בש');
 
     assert(fuzzyTolerance(3) === 0 && fuzzyTolerance(4) === 0, 'fuzzyTolerance: no edits under 5 letters');
     assert(fuzzyTolerance(5) === 1 && fuzzyTolerance(7) === 1, 'fuzzyTolerance: 1 edit for 5-7 letters');

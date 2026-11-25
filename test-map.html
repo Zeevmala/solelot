@@ -18,7 +18,7 @@
 </head>
 <body>
     <h1>Map Integration Tests</h1>
-    <p class="note">Tests locations.json data integrity, HTML template output, search logic, sidebar state, and PWA shortcuts</p>
+    <p class="note">Tests locations.json data integrity, HTML template output, search logic, sidebar state and GPS distance. The empty state and the ?action=nearest shortcut are checked on the real page by test-smoke.js</p>
     <div id="results"></div>
     <div id="summary"></div>
 
@@ -104,6 +104,7 @@ const QUERY_ALIASES = {
     'תל אביב יפו': 'תל אביב',
     'tel aviv': 'תל אביב',
     'ראשל"צ': 'ראשון לציון',
+    'ראשלצ': 'ראשון לציון',
     'פ"ת': 'פתח תקווה',
     'ב"ש': 'באר שבע',
     'ר"ג': 'רמת גן',
@@ -123,7 +124,9 @@ const QUERY_ALIASES = {
 
 function normalizeQuery(text) {
     const query = normalizeText(text);
-    const alias = Object.keys(QUERY_ALIASES).find(name => normalizeText(name) === query);
+    const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
+    const alias = Object.keys(QUERY_ALIASES).find(name =>
+        normalizeText(name) === query && (typedQuote || !name.includes('"')));
     return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
 }
 
@@ -345,18 +348,6 @@ function createSidebarContent(location) {
     // Test helper: does the real search (searchLocations, copied above) show this one location?
     function searchMatch(location, query) {
         return searchLocations([location], query, null).length === 1;
-    }
-
-    // === Empty state logic (synced from app.js updateMarkers) ===
-    // Shown only when the user's own filters (search text or legend switches) hide everything
-    function shouldShowEmptyState(visibleCount, currentSearch, visibleTypes, totalCount) {
-        var isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
-        return visibleCount === 0 && isFiltered && totalCount > 0;
-    }
-
-    // === PWA shortcut logic (synced from app.js, line 1081) ===
-    function shouldTriggerNearest(searchParams) {
-        return searchParams.get('action') === 'nearest';
     }
 
     // === Load and test locations.json ===
@@ -614,26 +605,6 @@ function createSidebarContent(location) {
 
             // Reset userLocation
             userLocation = null;
-
-            // --- Empty State Logic ---
-            section('Empty State & Error Recovery');
-var allOn = { store: true, facility: true };
-            var storesOff = { store: false, facility: true };
-            assert(shouldShowEmptyState(0, '\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD', allOn, 100) === true, 'Empty: 0 results + active search \u2192 show empty state');
-            assert(shouldShowEmptyState(0, '', allOn, 0) === false, 'Empty: nothing loaded yet \u2192 hide (initial load)');
-            assert(shouldShowEmptyState(5, '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1', allOn, 100) === false, 'Empty: >0 results + active search \u2192 hide');
-            assert(shouldShowEmptyState(100, '', allOn, 100) === false, 'Empty: >0 results + empty search \u2192 hide');
-            assert(shouldShowEmptyState(0, ' ', allOn, 100) === true, 'Empty: 0 results + whitespace search \u2192 show');
-            assert(shouldShowEmptyState(0, '', storesOff, 100) === true, 'Empty: 0 results + a legend type switched off \u2192 show');
-
-            // --- PWA ?action=nearest ---
-            section('PWA ?action=nearest Shortcut');
-            assert(shouldTriggerNearest(new URLSearchParams('?action=nearest')) === true, 'PWA: ?action=nearest triggers locate');
-            assert(shouldTriggerNearest(new URLSearchParams('?action=other')) === false, 'PWA: ?action=other does not trigger');
-            assert(shouldTriggerNearest(new URLSearchParams('')) === false, 'PWA: no params does not trigger');
-            assert(shouldTriggerNearest(new URLSearchParams('?action=nearest&foo=bar')) === true, 'PWA: extra params ignored, still triggers');
-            assert(shouldTriggerNearest(new URLSearchParams('?action=')) === false, 'PWA: empty action value does not trigger');
-            assert(shouldTriggerNearest(new URLSearchParams('?nearest=true')) === false, 'PWA: wrong param name does not trigger');
 
             // --- Summary ---
             var summary = document.getElementById('summary');

@@ -56,6 +56,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `manifest.json` | PWA manifest |
 | `test.html` | Unit tests (pure function tests, runs in browser) |
 | `test-map.html` | Integration tests (map/UI tests, runs in browser) |
+| `test-smoke.js` | Smoke test of the real page in a real browser: search, Enter, city pick, nearest, failure states, service worker. **Not in the gate** (needs Playwright installed outside the repo, and the network). Run `node test-smoke.js` before a release |
 | `.factory/` | The gate: `bash .factory/check.sh` runs every check below in one command. Also the review checklist |
 | `docs/designs/` | Approved designs (start with `SITEMAP.md`) |
 | `docs/brain/` | Project decisions and lessons learned, dated, never edited after the fact |
@@ -131,6 +132,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Do NOT add event listeners inside functions callable multiple times without a cleanup path.
 - Do NOT add new `location.type` values without updating `typeNames` in `app.js` and tests.
 - Do NOT forget to bump `STATIC_CACHE` version in `sw.js` after changing any cached file (the gate checks this against the default branch).
+- Do NOT call `markerCluster.zoomToShowLayer` right after `updateMarkers()`: markers are added in chunks, and on a slow phone the marker is not there yet. Wrap it in `whenMarkersAdded(...)`.
 - Do NOT say something passes without running `bash .factory/check.sh` and reading its last line (`GATE PASSED`).
 - Do NOT use inline `onclick` handlers in template strings. Use `data-*` attributes + event delegation.
 - Do NOT edit `locations.json` by hand — it is overwritten by `scraper.js`. Put manual fixes in `data_overrides.json` and facilities in `facilities.json`.
@@ -143,7 +145,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - XSS tests cover `<script>`, `<img>`, SVG `onload`, `javascript:` and `data:` strings.
 - `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance, empty state logic, `?action=nearest`.
 - `test-validate.js` runs the real `validate_data.js` on small fixtures and checks the exit code.
-- Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install. These were checked by hand with Playwright during the launch-readiness work; there is no committed browser smoke test.
+- Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install. The wiring of the real page (search box, Enter, picks, `?action=nearest`, failure states, selected pin, service worker install and update) is covered by `node test-smoke.js`, which is run by hand because it needs Playwright and the network.
 
 ### Data Integrity Notes
 - Refresh flow: `node scraper.js` → `node validate_data.js` (must print ALL CHECKS PASSED) → review warnings 14a/14b/14c → `bash .factory/check.sh`. The scraper prints every id it drops and writes `data_meta.json`.
