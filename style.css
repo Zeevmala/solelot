@@ -1,22 +1,6 @@
-/* CSS Variables */
+/* Colours, fonts, sizes and shadows come from cartowolf/tokens.css (the --cw-* variables).
+   Only the stacking order is local: Leaflet's own layers use z-index 400-1000. */
 :root {
-    --bg-primary: #f5f7fa;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #e3f2fd;
-    --text-primary: #333333;
-    --text-secondary: #555555;
-    --text-muted: #888888;
-    --accent-primary: #1565C0;
-    --accent-dark: #0D47A1;
-    --accent-action: #1976D2;
-    --accent-red: #d32f2f;
-    --border-color: #cccccc;
-    --border-light: #eeeeee;
-    --shadow-light: rgba(0,0,0,0.1);
-    --shadow-medium: rgba(0,0,0,0.15);
-    --shadow-strong: rgba(0,0,0,0.2);
-    --accent-teal: #00796B;
-    /* Z-index scale */
     --z-sidebar: 1001;
     --z-header: 1100;
     --z-suggestions: 1200;
@@ -34,10 +18,10 @@
 }
 
 body {
-    font-family: 'Heebo', Arial, sans-serif;
+    font-family: var(--cw-font-sans);
     direction: rtl;
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    background: var(--cw-surface-0);
+    color: var(--cw-text);
 }
 
 /* Skip Link for Accessibility */
@@ -45,12 +29,12 @@ body {
     position: absolute;
     top: -40px;
     right: 0;
-    background: var(--accent-primary);
-    color: white;
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
     padding: 8px 16px;
     z-index: var(--z-skip-link);
     text-decoration: none;
-    border-radius: 0 0 8px 8px;
+    border-radius: 0 0 var(--cw-radius-md) var(--cw-radius-md);
     transition: top 0.3s;
 }
 
@@ -69,12 +53,12 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0 20px;
-    background: rgba(255, 255, 255, 0.82);
+    background: var(--cw-overlay);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid var(--cw-border);
     z-index: var(--z-header);
-    box-shadow: 0 1px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--cw-shadow-1);
 }
 
 .header-brand {
@@ -92,8 +76,8 @@ body {
 
 .header-title {
     font-size: 20px;
-    font-weight: 700;
-    color: var(--accent-teal);
+    font-weight: 600;
+    color: var(--cw-text);
     margin: 0;
     letter-spacing: -0.3px;
     white-space: nowrap;
@@ -115,17 +99,17 @@ body {
 .header-search .map-search-input {
     width: 100%;
     max-width: none;
-    background: rgba(0, 0, 0, 0.04);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: var(--cw-surface-1);
+    border: 1px solid var(--cw-border-strong);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: none;
 }
 
 .header-search .map-search-input:focus {
-    background: rgba(255, 255, 255, 0.95);
-    border-color: var(--accent-teal);
-    box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.12);
+    background: var(--cw-surface-1);
+    border-color: var(--cw-accent);
+    box-shadow: 0 0 0 3px var(--cw-accent-subtle);
 }
 
 /* Visually Hidden (for screen readers) */
@@ -175,28 +159,28 @@ body {
 .map-search-input {
     width: 220px;
     padding: 10px 32px 10px 14px;
-    border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 12px;
+    border: 1px solid var(--cw-border-strong);
+    border-radius: var(--cw-radius-lg);
     font-size: 14px;
     font-family: inherit;
     direction: rtl;
-    background: rgba(255, 255, 255, 0.7);
+    background: var(--cw-overlay);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    color: var(--text-primary);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    color: var(--cw-text);
+    box-shadow: var(--cw-shadow-1);
     transition: all 0.2s;
 }
 
 .map-search-input:focus {
     outline: none;
-    border-color: var(--accent-primary);
-    background: rgba(255, 255, 255, 0.85);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    border-color: var(--cw-accent);
+    background: var(--cw-surface-1);
+    box-shadow: var(--cw-shadow-2);
 }
 
 .map-search-input::placeholder {
-    color: var(--text-secondary);
+    color: var(--cw-text-muted);
 }
 
 .search-clear-btn {
@@ -211,8 +195,8 @@ body {
     height: 28px;
     border: none;
     border-radius: 50%;
-    background: var(--text-secondary);
-    color: white;
+    background: var(--cw-text-muted);
+    color: var(--cw-surface-1);
     font-size: 14px;
     cursor: pointer;
     padding: 8px;
@@ -221,7 +205,7 @@ body {
 }
 
 .search-clear-btn:hover {
-    background: var(--text-primary);
+    background: var(--cw-text);
 }
 
 .map-search-container .search-suggestions {
@@ -230,14 +214,14 @@ body {
     right: 0;
     left: 0;
     margin-top: 4px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
+    background: var(--cw-surface-1);
+    border: 1px solid var(--cw-border-strong);
+    border-radius: var(--cw-radius-md);
     max-height: 300px;
     overflow-y: auto;
     z-index: var(--z-suggestions);
     display: none;
-    box-shadow: 0 4px 12px var(--shadow-medium);
+    box-shadow: var(--cw-shadow-2);
 }
 
 .map-search-container .search-suggestions.active {
@@ -249,7 +233,7 @@ body {
     padding: 12px 16px;
     min-height: 44px;
     cursor: pointer;
-    border-bottom: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--cw-border);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -262,13 +246,13 @@ body {
 
 .suggestion-item:hover,
 .suggestion-item.highlighted {
-    background: var(--bg-tertiary);
+    background: var(--cw-surface-2);
 }
 
 .suggestion-item:focus {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
-    background: var(--bg-tertiary);
+    background: var(--cw-surface-2);
 }
 
 .suggestion-icon {
@@ -282,28 +266,28 @@ body {
 
 .suggestion-name {
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--cw-text);
 }
 
 .suggestion-city {
     font-size: 12px;
-    color: var(--text-muted);
+    color: var(--cw-text-muted);
 }
 
 /* Basemap Toggle Button */
 .basemap-toggle-btn {
-    background: var(--bg-secondary);
-    border: 2px solid rgba(0,0,0,0.2);
-    border-radius: 4px;
+    background: var(--cw-overlay);
+    border: 1px solid var(--cw-border);
+    border-radius: var(--cw-radius-md);
     width: 44px;
     height: 44px;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-primary);
+    color: var(--cw-text);
     cursor: pointer;
-    box-shadow: 0 2px 10px var(--shadow-medium);
+    box-shadow: var(--cw-shadow-1);
     transition: all 0.2s;
 }
 
@@ -316,50 +300,50 @@ body {
 }
 
 .basemap-toggle-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--accent-primary);
+    background: var(--cw-surface-2);
+    border-color: var(--cw-accent);
 }
 
 .basemap-toggle-btn:focus {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
 }
 
 /* Locate Button */
 .locate-btn {
-    background: var(--bg-secondary);
-    border: 2px solid rgba(0,0,0,0.2);
-    border-radius: 4px;
+    background: var(--cw-overlay);
+    border: 1px solid var(--cw-border);
+    border-radius: var(--cw-radius-md);
     width: 44px;
     height: 44px;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-primary);
+    color: var(--cw-text);
     cursor: pointer;
-    box-shadow: 0 2px 10px var(--shadow-medium);
+    box-shadow: var(--cw-shadow-1);
     transition: all 0.2s;
 }
 
 .locate-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--accent-primary);
+    background: var(--cw-surface-2);
+    border-color: var(--cw-accent);
 }
 
 .locate-btn:focus {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
 }
 
 .locate-btn.active {
-    background: var(--accent-teal);
-    color: white;
-    border-color: var(--accent-teal);
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
+    border-color: var(--cw-accent);
 }
 
 .locate-btn.loading {
-    color: var(--accent-primary);
+    color: var(--cw-accent);
     animation: pulse 1s ease-in-out infinite;
     will-change: opacity;
 }
@@ -369,34 +353,36 @@ body {
     50% { opacity: 0.4; }
 }
 
-/* Custom Marker Clusters
-   One teal hue for all sizes: the circle SIZE says "how many",
-   the colour only gets a little darker. All four shades keep
-   white text above the 4.5:1 contrast ratio. */
+/* Marker clusters (Cartowolf cluster mark)
+   A ring in the collection-point colour around a white disc, number in the text colour.
+   The circle SIZE says "how many"; the colour stays the same as the single pins. */
 .marker-cluster {
     border-radius: 50%;
-    background-color: rgba(0, 121, 107, 0.28); /* soft halo ring */
+    background-color: color-mix(in srgb, var(--cw-data-cat-3) 28%, transparent); /* soft halo ring */
     contain: layout style;
 }
 
 .marker-cluster div {
+    box-sizing: border-box;
     width: calc(100% - 8px);
     height: calc(100% - 8px);
     margin: 4px;
+    border: 4px solid var(--cw-data-cat-3);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-    font-weight: 700;
+    background-color: var(--cw-data-casing);
+    color: var(--cw-text);
+    font-family: var(--cw-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
     font-size: 13px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--cw-shadow-1);
 }
 
-.marker-cluster-small div { background-color: #00796B; }
-.marker-cluster-medium div { background-color: #00695C; }
-.marker-cluster-large div { background-color: #00574B; font-size: 14px; }
-.marker-cluster-xlarge div { background-color: #004D40; font-size: 15px; }
+/* Four-digit counts ("2,177") must fit inside the ring */
+.marker-cluster-xlarge div { font-size: 12px; }
 
 /* Custom Battery Markers */
 .battery-marker {
@@ -406,8 +392,31 @@ body {
 
 .battery-marker svg {
     display: block;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+    filter: drop-shadow(var(--cw-shadow-1));
 }
+
+/* Pin colours. The SVGs in app.js use fill="currentColor", so the colour is set here:
+   collection point = data category 3 (sea green), facility = data category 2 (orange).
+   The two also differ in SHAPE (battery / factory), never by colour alone. */
+.battery-marker-store,
+.type-icon-store { color: var(--cw-data-cat-3); }
+
+.battery-marker-facility,
+.type-icon-facility { color: var(--cw-data-cat-2); }
+
+.user-marker { color: var(--cw-accent); }
+
+.pin-casing { fill: var(--cw-data-casing); }
+.pin-casing-stroke { stroke: var(--cw-data-casing); }
+
+/* GPS accuracy circle (Leaflet draws it as an SVG path) */
+.user-accuracy {
+    stroke: var(--cw-accent);
+    fill: var(--cw-accent);
+}
+
+/* Header logo */
+.header-battery-icon { color: var(--cw-data-cat-3); }
 
 .battery-marker:hover svg,
 .battery-marker:focus-visible svg {
@@ -421,9 +430,10 @@ body {
     flex-direction: column;
     gap: 2px;
     padding: 4px;
-    background: rgba(255, 255, 255, 0.94);
-    border-radius: 10px;
-    box-shadow: 0 2px 10px var(--shadow-medium);
+    background: var(--cw-overlay);
+    border: 1px solid var(--cw-border);
+    border-radius: var(--cw-radius-md);
+    box-shadow: var(--cw-shadow-1);
     direction: rtl;
 }
 
@@ -434,17 +444,17 @@ body {
     min-height: 44px;
     padding: 4px 10px;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--cw-radius-md);
     background: transparent;
     font-family: inherit;
     font-size: 13px;
-    color: var(--text-primary);
+    color: var(--cw-text);
     cursor: pointer;
     text-align: start;
 }
 
 .legend-item:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: var(--cw-surface-2);
 }
 
 .legend-icon {
@@ -458,7 +468,7 @@ body {
 }
 
 .legend-count {
-    color: var(--text-secondary);
+    color: var(--cw-text-muted);
     font-variant-numeric: tabular-nums;
 }
 
@@ -476,7 +486,7 @@ body {
 
 .legend-item[aria-pressed="false"] .legend-label {
     text-decoration: line-through;
-    color: var(--text-muted);
+    color: var(--cw-text-muted);
 }
 
 /* Popup styling */
@@ -488,8 +498,8 @@ body {
 }
 
 .leaflet-popup-content-wrapper {
-    border-radius: 12px;
-    box-shadow: 0 4px 20px var(--shadow-medium);
+    border-radius: var(--cw-radius-lg);
+    box-shadow: var(--cw-shadow-2);
 }
 
 .leaflet-popup-content h3 {
@@ -497,11 +507,11 @@ body {
     align-items: center;
     gap: 8px;
     margin-bottom: 14px;
-    color: var(--accent-teal);
+    color: var(--cw-text);
     font-size: 18px;
-    font-weight: 700;
+    font-weight: 600;
     padding-inline-start: 24px;
-    border-bottom: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--cw-border);
     padding-bottom: 10px;
 }
 
@@ -525,7 +535,7 @@ body {
     gap: 8px;
     margin: 6px 0;
     font-size: 14px;
-    color: var(--text-secondary);
+    color: var(--cw-text-muted);
 }
 
 .popup-row .icon {
@@ -535,8 +545,9 @@ body {
 }
 
 .distance {
-    color: var(--accent-teal);
-    font-weight: bold;
+    color: var(--cw-accent-text);
+    font-family: var(--cw-font-mono);
+    font-weight: 600;
 }
 
 /* Leaflet popup close button — WCAG 2.5.5 touch target (44×44px) */
@@ -546,8 +557,8 @@ body {
     font-size: 20px !important;
     line-height: 44px !important;
     text-align: center;
-    color: var(--text-secondary) !important;
-    background: #f0f0f0 !important;
+    color: var(--cw-text-muted) !important;
+    background: var(--cw-surface-2) !important;
     border-radius: 50% !important;
     top: 4px !important;
     right: 4px !important;
@@ -556,8 +567,8 @@ body {
 }
 
 .leaflet-popup-close-button:hover {
-    background: #ddd !important;
-    color: var(--text-primary) !important;
+    background: var(--cw-border) !important;
+    color: var(--cw-text) !important;
 }
 
 /* Navigation links in popup */
@@ -566,7 +577,7 @@ body {
     gap: 8px;
     margin-top: 18px;
     padding-top: 16px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--cw-border);
 }
 
 .nav-btn {
@@ -574,25 +585,25 @@ body {
     padding: 10px 12px;
     text-align: center;
     text-decoration: none;
-    border-radius: 8px;
+    border-radius: var(--cw-radius-md);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    border: 2px solid var(--accent-teal);
+    border: 2px solid var(--cw-accent);
     background: transparent;
-    color: var(--accent-teal);
+    color: var(--cw-accent-text);
 }
 
 .nav-btn:hover {
-    background: var(--accent-teal);
-    color: white;
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
 }
 
 .nav-btn.google:hover,
 .nav-btn.waze:hover {
-    background: var(--accent-teal);
-    color: white;
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
 }
 
 /* Sidebar */
@@ -602,8 +613,8 @@ body {
     top: 56px; /* start below the fixed header, or the header covers the close button */
     width: 380px;
     height: calc(100% - 56px);
-    background: var(--bg-secondary);
-    box-shadow: 4px 0 20px var(--shadow-medium);
+    background: var(--cw-surface-1);
+    box-shadow: var(--cw-shadow-3);
     z-index: var(--z-sidebar);
     display: flex;
     flex-direction: column;
@@ -620,25 +631,25 @@ body {
     position: absolute;
     top: 15px;
     left: 15px;
-    background: var(--bg-tertiary);
+    background: var(--cw-surface-2);
     border: none;
     width: 44px;
     height: 44px;
     border-radius: 50%;
     cursor: pointer;
     font-size: 20px;
-    color: var(--text-secondary);
+    color: var(--cw-text-muted);
     transition: all 0.2s;
     z-index: 1;
 }
 
 .sidebar-close:hover {
-    background: var(--border-color);
+    background: var(--cw-border-strong);
     transform: scale(1.1);
 }
 
 .sidebar-close:focus {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
 }
 
@@ -654,7 +665,7 @@ body {
     gap: 16px;
     margin-bottom: 24px;
     padding-bottom: 20px;
-    border-bottom: 2px solid var(--border-light);
+    border-bottom: 2px solid var(--cw-border);
 }
 
 
@@ -664,7 +675,7 @@ body {
 
 .sidebar-title h2 {
     font-size: 20px;
-    color: var(--accent-primary);
+    color: var(--cw-text);
     margin-bottom: 6px;
     line-height: 1.3;
 }
@@ -674,9 +685,9 @@ body {
     font-size: 13px;
     font-weight: 500;
     padding: 4px 12px;
-    background: #FBE9E7;
-    color: #BF360C;
-    border-radius: 12px;
+    background: var(--cw-surface-2);
+    color: var(--cw-text);
+    border-radius: var(--cw-radius-lg);
 }
 
 .sidebar-info {
@@ -701,13 +712,13 @@ body {
 
 .info-text {
     flex: 1;
-    color: var(--text-secondary);
+    color: var(--cw-text-muted);
     font-size: 15px;
     line-height: 1.6;
 }
 
 .info-text.distance {
-    color: var(--accent-action);
+    color: var(--cw-accent-text);
     font-weight: 600;
     font-size: 16px;
 }
@@ -723,7 +734,7 @@ body {
     padding: 16px 20px;
     text-align: center;
     text-decoration: none;
-    border-radius: 12px;
+    border-radius: var(--cw-radius-lg);
     font-size: 15px;
     font-weight: 600;
     transition: transform 0.2s, box-shadow 0.2s, background 0.2s, color 0.2s;
@@ -732,22 +743,22 @@ body {
     justify-content: center;
     gap: 8px;
     cursor: pointer;
-    border: 2px solid var(--accent-teal);
+    border: 2px solid var(--cw-accent);
     background: transparent;
-    color: var(--accent-teal);
+    color: var(--cw-accent-text);
 }
 
 .sidebar-nav-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px var(--shadow-medium);
-    background: var(--accent-teal);
-    color: white;
+    box-shadow: var(--cw-shadow-2);
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
 }
 
 .sidebar-nav-btn.google:hover,
 .sidebar-nav-btn.waze:hover {
-    background: var(--accent-teal);
-    color: white;
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
 }
 
 /* Feedback Like/Dislike Buttons */
@@ -765,35 +776,35 @@ body {
     justify-content: center;
     width: 44px;
     height: 44px;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--cw-border-strong);
     border-radius: 50%;
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
+    background: var(--cw-surface-1);
+    color: var(--cw-text-muted);
     cursor: pointer;
     transition: all 0.2s ease;
     padding: 0;
 }
 
 .feedback-btn:hover {
-    border-color: var(--accent-teal);
-    color: var(--accent-teal);
-    box-shadow: 0 2px 8px var(--shadow-light);
+    border-color: var(--cw-accent);
+    color: var(--cw-accent);
+    box-shadow: var(--cw-shadow-1);
 }
 
 .feedback-btn:focus-visible {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
 }
 
 .like-btn.liked {
-    color: var(--accent-teal);
-    border-color: var(--accent-teal);
-    background: rgba(0, 121, 107, 0.08);
+    color: var(--cw-accent);
+    border-color: var(--cw-accent);
+    background: var(--cw-accent-subtle);
 }
 
 .dislike-btn:hover {
-    border-color: var(--accent-red);
-    color: var(--accent-red);
+    border-color: var(--cw-danger);
+    color: var(--cw-danger);
 }
 
 @keyframes pop {
@@ -814,7 +825,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: var(--bg-primary);
+    background: var(--cw-surface-0);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -840,7 +851,7 @@ body {
     width: 100%;
     height: 56px;
     border-radius: 0;
-    background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+    background: linear-gradient(90deg, var(--cw-surface-2) 25%, var(--cw-surface-0) 50%, var(--cw-surface-2) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
     position: fixed;
@@ -852,8 +863,8 @@ body {
 .skeleton-map {
     width: 100%;
     height: 300px;
-    border-radius: 16px;
-    background: linear-gradient(90deg, #e8e8e8 25%, #f5f5f5 50%, #e8e8e8 75%);
+    border-radius: var(--cw-radius-lg);
+    background: linear-gradient(90deg, var(--cw-surface-2) 25%, var(--cw-surface-0) 50%, var(--cw-surface-2) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
     position: relative;
@@ -864,7 +875,7 @@ body {
     width: 20px;
     height: 28px;
     border-radius: 50% 50% 50% 0;
-    background: rgba(0,0,0,0.08);
+    background: var(--cw-border);
     transform: rotate(-45deg);
 }
 
@@ -873,12 +884,12 @@ body {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(0,0,0,0.06);
+    background: var(--cw-border);
 }
 
 .skeleton-text {
     font-size: 16px;
-    color: var(--text-muted);
+    color: var(--cw-text-muted);
     font-weight: 500;
 }
 
@@ -895,10 +906,10 @@ body {
     transform: translate(-50%, -50%);
     z-index: var(--z-empty-state);
     text-align: center;
-    background: var(--bg-secondary);
+    background: var(--cw-surface-1);
     padding: 30px 40px;
-    border-radius: 16px;
-    box-shadow: 0 8px 30px var(--shadow-medium);
+    border-radius: var(--cw-radius-lg);
+    box-shadow: var(--cw-shadow-3);
 }
 
 .empty-state-content {
@@ -914,23 +925,23 @@ body {
 
 .empty-state h3 {
     margin: 0;
-    color: var(--text-primary);
+    color: var(--cw-text);
     font-size: 20px;
 }
 
 .empty-state p {
     margin: 0;
-    color: var(--text-secondary);
+    color: var(--cw-text-muted);
     font-size: 14px;
 }
 
 .clear-filters-btn {
     margin-top: 15px;
     padding: 10px 25px;
-    background: var(--accent-primary);
-    color: white;
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
     border: none;
-    border-radius: 20px;
+    border-radius: var(--cw-radius-pill);
     font-size: 14px;
     font-family: inherit;
     cursor: pointer;
@@ -938,11 +949,11 @@ body {
 }
 
 .clear-filters-btn:hover {
-    background: var(--accent-dark);
+    background: var(--cw-accent-hover);
 }
 
 .clear-filters-btn:focus {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
 }
 
@@ -952,11 +963,11 @@ body {
     bottom: 80px;
     left: 50%;
     transform: translateX(-50%) translateY(100px);
-    background: var(--text-primary);
-    color: var(--bg-secondary);
+    background: var(--cw-text);
+    color: var(--cw-surface-1);
     padding: 12px 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px var(--shadow-strong);
+    border-radius: var(--cw-radius-md);
+    box-shadow: var(--cw-shadow-3);
     z-index: var(--z-notification);
     opacity: 0;
     transition: transform 0.3s, opacity 0.3s;
@@ -1053,7 +1064,7 @@ body {
         bottom: 0;
         left: 0;
         right: 0;
-        border-radius: 20px 20px 0 0;
+        border-radius: var(--cw-radius-lg) var(--cw-radius-lg) 0 0;
         overscroll-behavior: none;
     }
 
@@ -1080,7 +1091,7 @@ body {
         width: 40px;
         height: 5px;
         border-radius: 3px;
-        background: var(--border-color);
+        background: var(--cw-border-strong);
     }
 
     .sidebar-content {
@@ -1135,7 +1146,7 @@ body {
         width: 44px;
         height: 44px;
         border-radius: 50%;
-        background: var(--bg-tertiary);
+        background: var(--cw-surface-2);
         font-size: 20px;
     }
 }
@@ -1169,7 +1180,7 @@ body {
 
 /* Focus indicators for better accessibility */
 *:focus-visible {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
 }
 
@@ -1208,17 +1219,10 @@ body {
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-    :root {
-        --border-color: #000000;
-        --text-muted: #333333;
-        --accent-primary: #005a4f;
-        --accent-secondary: #004d40;
-    }
-
     .nav-btn,
     .clear-filters-btn,
     .sidebar-close {
-        border: 2px solid #000000;
+        border: 2px solid var(--cw-text);
     }
 
     a:link {
@@ -1244,6 +1248,45 @@ body {
 
 /* Give the map canvas the same light grey as the tiles while they load */
 .leaflet-container {
-    background: #e9e9e9;
+    background: var(--cw-map-muted-land);
     font-family: inherit;
+}
+
+/* Leaflet's own controls and popups, dressed in the same tokens as the rest of the page.
+   (Leaflet's stylesheet comes from unpkg with its own colours; these rules replace them.) */
+.leaflet-bar {
+    border: 1px solid var(--cw-border) !important;
+    border-radius: var(--cw-radius-md);
+    box-shadow: var(--cw-shadow-1);
+    overflow: hidden;
+}
+
+.leaflet-container .leaflet-bar a,
+.leaflet-container .leaflet-bar a:hover {
+    background-color: var(--cw-overlay);
+    color: var(--cw-text);
+    border-bottom-color: var(--cw-border);
+}
+
+.leaflet-container .leaflet-bar a:hover {
+    background-color: var(--cw-surface-2);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+    background: var(--cw-surface-1);
+    color: var(--cw-text);
+}
+
+.leaflet-container a {
+    color: var(--cw-accent-text);
+}
+
+.leaflet-control-attribution {
+    background: var(--cw-overlay) !important;
+    color: var(--cw-text-muted);
+}
+
+.legend-count {
+    font-family: var(--cw-font-mono);
 }

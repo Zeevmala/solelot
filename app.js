@@ -277,32 +277,31 @@ const PIN_PATH = 'M18 1C9.7 1 3 7.7 3 16c0 10.5 15 30 15 30s15-19.5 15-30C33 7.7
 // Small pictures drawn inside the white circle of a pin
 const pinGlyphs = {
     // Battery
-    store: `<rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="#00695C"/>
-        <rect x="13.5" y="10.5" width="9" height="11" rx="1.5" fill="#00897B"/>
-        <path d="M19.2 12.2l-2.7 4.3h1.9l-.9 3.3 2.9-4.4h-1.9z" fill="#fff"/>`,
+    store: `<rect x="15.5" y="8.5" width="5" height="2" rx="0.8" fill="currentColor"/>
+        <rect x="13.5" y="10.5" width="9" height="11" rx="1.5" fill="currentColor"/>
+        <path class="pin-casing" d="M19.2 12.2l-2.7 4.3h1.9l-.9 3.3 2.9-4.4h-1.9z"/>`,
     // Factory: a different shape, not just a different colour,
     // so the two types can be told apart without relying on colour vision
-    facility: `<path d="M11.5 21.5v-7.2l4.2 2.6v-2.6l4.2 2.6V9.5h3.6v12z" fill="#D84315"/>
-        <rect x="13.6" y="18" width="2" height="2" fill="#fff"/>
-        <rect x="17.4" y="18" width="2" height="2" fill="#fff"/>`
+    facility: `<path d="M11.5 21.5v-7.2l4.2 2.6v-2.6l4.2 2.6V9.5h3.6v12z" fill="currentColor"/>
+        <rect class="pin-casing" x="13.6" y="18" width="2" height="2"/>
+        <rect class="pin-casing" x="17.4" y="18" width="2" height="2"/>`
 };
 
-const pinColors = {
-    store: '#00897B',
-    facility: '#D84315'
-};
+// Colours are NOT written here. Every coloured shape uses fill="currentColor" and the
+// white parts use the class "pin-casing"; style.css sets both from the design tokens
+// (.battery-marker-store / .type-icon-store and so on).
 
 function pinSvg(type, width, height) {
-    return `<svg viewBox="0 0 36 48" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="${PIN_PATH}" fill="${pinColors[type]}" stroke="#fff" stroke-width="1.5"/>
-        <circle cx="18" cy="15.5" r="9.5" fill="#fff"/>
+    return `<svg class="type-icon-${type}" viewBox="0 0 36 48" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path class="pin-casing-stroke" d="${PIN_PATH}" fill="currentColor" stroke-width="1.5"/>
+        <circle class="pin-casing" cx="18" cy="15.5" r="9.5"/>
         ${pinGlyphs[type]}
     </svg>`;
 }
 
 const userSvg = `<svg viewBox="0 0 28 28" width="28" height="28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <circle cx="14" cy="14" r="11" fill="#1565C0" stroke="#fff" stroke-width="3"/>
-        <circle cx="14" cy="14" r="4" fill="#fff"/>
+        <circle class="pin-casing-stroke" cx="14" cy="14" r="11" fill="currentColor" stroke-width="3"/>
+        <circle class="pin-casing" cx="14" cy="14" r="4"/>
     </svg>`;
 
 function createMarkerIcon(type, width, height) {
@@ -342,18 +341,15 @@ const typeNamesPlural = {
 
 // Small battery icons for popups (20×20, no pin shape)
 const popupBatterySvg = {
-    store: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-        <rect x="7" y="1" width="6" height="2.5" rx="1" fill="#00796B"/>
-        <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="#26A69A"/>
-        <rect x="5.5" y="6" width="9" height="2" rx="0.7" fill="#80CBC4"/>
-        <rect x="5.5" y="9.5" width="9" height="2" rx="0.7" fill="#A7D8D0"/>
-        <rect x="5.5" y="13" width="9" height="2" rx="0.7" fill="#B2DFDB"/>
-        <path d="M11 5.5l-1.5 4h2l-1.5 4 3-4.5h-2z" fill="white" opacity="0.35"/>
+    store: `<svg class="type-icon-store" viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+        <rect x="7" y="1" width="6" height="2.5" rx="1" fill="currentColor"/>
+        <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="currentColor"/>
+        <path class="pin-casing" d="M11.2 5.5l-2.6 5h2.1l-1 4 3.7-5.4h-2.2z"/>
     </svg>`,
-    facility: `<svg viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 18V7.5l5.5 3.4V7.5l5.5 3.4V2h5v16z" fill="#D84315"/>
-        <rect x="4.8" y="13" width="2.6" height="2.6" fill="#fff"/>
-        <rect x="9.8" y="13" width="2.6" height="2.6" fill="#fff"/>
+    facility: `<svg class="type-icon-facility" viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 18V7.5l5.5 3.4V7.5l5.5 3.4V2h5v16z" fill="currentColor"/>
+        <rect class="pin-casing" x="4.8" y="13" width="2.6" height="2.6"/>
+        <rect class="pin-casing" x="9.8" y="13" width="2.6" height="2.6"/>
     </svg>`
 };
 
@@ -1004,7 +1000,7 @@ locateControl.onAdd = function() {
                 } else {
                     userAccuracyCircle = L.circle([lat, lng], {
                         radius: accuracy,
-                        color: '#1565C0',
+                        className: 'user-accuracy', // colour comes from style.css
                         weight: 1,
                         fillOpacity: 0.12,
                         interactive: false

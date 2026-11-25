@@ -1,5 +1,5 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v36';
+const STATIC_CACHE = 'static-v37';
 const TILES_CACHE = 'tiles-v2';
 let tileCacheCount = 0;
 
@@ -16,7 +16,9 @@ const CRITICAL_ASSETS = [
     './index.html',
     './style.css',
     './app.js',
-    './manifest.json'
+    './manifest.json',
+    './cartowolf/tokens.css',
+    './cartowolf/fonts.css'
 ];
 
 // Optional assets — best-effort caching (install continues if these fail)
@@ -26,7 +28,13 @@ const OPTIONAL_ASSETS = [
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
     'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
     'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
-    'https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap'
+    './cartowolf/fonts/ibm-plex-mono-latin-400-normal.woff2',
+    './cartowolf/fonts/ibm-plex-sans-hebrew-hebrew-400-normal.woff2',
+    './cartowolf/fonts/ibm-plex-sans-hebrew-hebrew-500-normal.woff2',
+    './cartowolf/fonts/ibm-plex-sans-hebrew-hebrew-600-normal.woff2',
+    './cartowolf/fonts/ibm-plex-sans-latin-400-normal.woff2',
+    './cartowolf/fonts/ibm-plex-sans-latin-500-normal.woff2',
+    './cartowolf/fonts/ibm-plex-sans-latin-600-normal.woff2'
 ];
 
 // Install event - cache static assets

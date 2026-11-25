@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="he" dir="rtl" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="מפת נקודות מיחזור סוללות בישראל - מצא את הנקודה הקרובה אליך">
-    <meta name="theme-color" content="#00796B">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self'; child-src 'none'; object-src 'none'">
+    <meta name="theme-color" content="#ffffff"><!-- cw-allow-color: a meta tag cannot read CSS variables; this is --cw-surface-1 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self'; img-src 'self' data: https:; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self'; child-src 'none'; object-src 'none'">
     <title>מפת מיחזור סוללות</title>
 
     <!-- Open Graph / Social Sharing -->
@@ -27,8 +27,6 @@
     <meta name="twitter:image" content="https://zeevmala.github.io/solelot/icons/icon-512.png">
 
     <!-- Preconnect to external origins (early connection setup) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <link rel="preconnect" href="https://tile.openstreetmap.org">
 
@@ -44,8 +42,9 @@
     <!-- Marker Cluster CSS (deferred — loaded via JS after page paint) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" media="print" data-deferred />
 
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Cartowolf design system: fonts (IBM Plex, served from this site) and design tokens (the --cw-* variables) -->
+    <link rel="stylesheet" href="cartowolf/fonts.css">
+    <link rel="stylesheet" href="cartowolf/tokens.css">
 
     <!-- Prefetch main data file -->
     <link rel="prefetch" href="locations.json" as="fetch">
@@ -67,19 +66,9 @@
     <header class="app-header" role="banner">
         <div class="header-brand">
             <svg class="header-battery-icon" viewBox="0 0 32 32" width="32" height="32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <defs>
-                    <linearGradient id="headerBattGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stop-color="#2BB5A6"/>
-                        <stop offset="100%" stop-color="#00695C"/>
-                    </linearGradient>
-                </defs>
-                <rect x="11" y="2" width="10" height="4" rx="1.5" fill="#00796B"/>
-                <rect x="6" y="6" width="20" height="24" rx="4" fill="url(#headerBattGrad)"/>
-                <rect x="8" y="8" width="16" height="20" rx="2.5" fill="white" opacity="0.95"/>
-                <rect x="10" y="11" width="12" height="3.5" rx="1" fill="#26A69A"/>
-                <rect x="10" y="16.5" width="12" height="3.5" rx="1" fill="#4DB6AC"/>
-                <rect x="10" y="22" width="12" height="3.5" rx="1" fill="#80CBC4"/>
-                <path d="M17.5 10l-3 6.5h3l-2 6.5 5-7.5h-3.5z" fill="#00796B" opacity="0.18"/>
+                <rect x="11" y="2" width="10" height="4" rx="1.5" fill="currentColor"/>
+                <rect x="6" y="6" width="20" height="24" rx="4" fill="currentColor"/>
+                <path class="pin-casing" d="M17.6 10l-5 9.2h4l-1.8 7.3 6.8-10.2h-4.2z"/>
             </svg>
             <h1 class="header-title">מפת מיחזור סוללות</h1>
         </div>
