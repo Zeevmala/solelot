@@ -1,17 +1,18 @@
 {
   "source": "https://mai.org.il/wp-json/wpgmza/v1/markers",
-  "fetched_at": "2026-11-25T18:30:18.046Z",
+  "fetched_at": "2026-11-25T19:14:20.151Z",
   "raw_markers": 8603,
-  "kept": 4115,
+  "kept": 3627,
   "skipped": {
     "old map": 3641,
     "no name": 416,
+    "school (not open to the public)": 519,
     "not a battery point": 87,
     "excluded by data_overrides.json": 92,
     "outside Israel bounds": 1,
     "marked inactive by MAI": 15
   },
-  "duplicates_removed": 74,
-  "stacked_dropped": 162,
+  "duplicates_removed": 63,
+  "stacked_dropped": 142,
   "overrides_unmatched": []
 }

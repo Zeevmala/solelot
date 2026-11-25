@@ -13,7 +13,7 @@ const path = require('path');
 const scraper = require('./scraper.js');
 const { transformMarker, buildLocations, determineChain, normalizeCity, municipalName } = scraper;
 const {
-    clean, isMarkedInactive, joinStreet, parseCoordinate, distanceMeters,
+    clean, isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters,
     streetKey, sameStreet, checkCount, parseArgs, run
 } = scraper;
 
@@ -76,11 +76,11 @@ test('transformMarker accepts a battery category inside a list', () => {
 test('generic municipal names become "מוקד איסוף - <place>"', () => {
     const { location } = transformMarker(marker({}, {
         business_name: 'רשות מקומית - מוקד איסוף',
-        neighborhood: 'בית ספר רעות'
+        neighborhood: 'מתנ"ס רעות'
     }), noCache);
-    assert.strictEqual(location.name, 'מוקד איסוף - בית ספר רעות');
+    assert.strictEqual(location.name, 'מוקד איסוף - מתנ"ס רעות');
     assert.strictEqual(location.chain, 'municipality');
-    assert.strictEqual(location.address, 'הרצל 10, בית ספר רעות, חיפה');
+    assert.strictEqual(location.address, 'הרצל 10, מתנ"ס רעות, חיפה');
 });
 
 test('municipalName strips boilerplate, the city and repeats', () => {
@@ -374,10 +374,11 @@ test('stacked coordinates: real groups that must be kept (one street, spelled di
         marker({ id: '344258', lat: '32.790511' }, { city: 'טבריה', street: 'יהודה לוי', house_number: '1', neighborhood: 'גני הלוטוס', business_name: 'שקם אלקטריק' }),
         marker({ id: '345147', lat: '32.790511' }, { city: 'טבריה', street: 'יהודה הלוי', house_number: '1', neighborhood: 'מתחם ביג טבריה', business_name: 'אייס קנה ובנה' }),
         marker({ id: '345168', lat: '32.790511' }, { city: 'טבריה', street: 'יהודה הלוי', house_number: '1', neighborhood: 'מתחם ביג טבריה', business_name: 'באג' }),
-        // a village: nobody has a street, everybody is in כפר ג'וליס (two coordinates)
-        marker({ id: '345844', lat: '32.942235' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: "בית ספר יסודי ב'", business_name: 'רשות מקומית - מרכז איסוף' }),
-        marker({ id: '345846', lat: '32.942235' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: "בית ספר מקיף ג'וליס", business_name: municipal }),
-        marker({ id: '345845', lat: '32.945048' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: "בית ספר ממלכתי א'", business_name: 'רשות מקומית - מרכז איסוף' }),
+        // a village: nobody has a street, everybody is in כפר ג'וליס (two coordinates).
+        // The real records are schools, which are now skipped, so the places are renamed here.
+        marker({ id: '345844', lat: '32.942235' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: 'מועדון נוער', business_name: 'רשות מקומית - מרכז איסוף' }),
+        marker({ id: '345846', lat: '32.942235' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: 'מרכז קהילתי', business_name: municipal }),
+        marker({ id: '345845', lat: '32.945048' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: 'ספרייה', business_name: 'רשות מקומית - מרכז איסוף' }),
         marker({ id: '345848', lat: '32.945048' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, business_name: municipal })
     ];
     const { locations, dropped } = buildLocations(markers, noCache);
@@ -405,7 +406,7 @@ test('stacked coordinates: real groups that must still be dropped', () => {
         marker({ id: '345049', lat: '31.768319' }, { ...none, city: 'ירושלים', neighborhood: 'גבעונים גבעת זאב', business_name: 'תחנת דלק - דלק מנטה' }),
         // two real, different streets in one village (פסוטה) - a street is a claim we can check
         marker({ id: '344213', lat: '33.046997' }, { city: 'פסוטה', street: 'יחיא אל עדי', house_number: undefined, neighborhood: 'מתנ"ס', business_name: municipal }),
-        marker({ id: '344505', lat: '33.046997' }, { city: 'פסוטה', street: 'אל אחטל', house_number: undefined, neighborhood: 'בית ספר אלחואר', business_name: municipal })
+        marker({ id: '344505', lat: '33.046997' }, { city: 'פסוטה', street: 'אל אחטל', house_number: undefined, neighborhood: 'מועצה מקומית', business_name: municipal })
     ];
     const { locations, dropped } = buildLocations(markers, noCache);
     assert.deepStrictEqual(locations, []);
@@ -578,15 +579,14 @@ test('fixture: every kind of real marker ends up where it should', () => {
     for (const loc of locations) {
         assert.ok(!/[<>]|&\w+;/.test(loc.name + loc.address + loc.city), 'markup in ' + loc.id);
     }
-    // record without a business name: named after its street
-    assert.strictEqual(byId.get(343396).name, 'נקודת איסוף - נס לגויים 53, בית ספר המשותף');
-    assert.strictEqual(byId.get(343396).city, 'תל אביב');
+    // schools are left off the map: 343396 (school in the title), 345844 and 345846 (school in the place field)
+    for (const id of [343396, 345844, 345846]) assert.ok(!byId.has(id), id + ' is a school and must be skipped');
 
     // skipped, with the reason counted: 343988 no city, 342852 no name, 21574 map 2,
     // 343303 no battery category, 343260 lat 35.15, 346604 "לא פעיל", 346657 "נסגר", 346701 "כפל"
     assert.deepStrictEqual(skipped, {
         'old map': 1, 'no name': 1, 'outside Israel bounds': 1, 'not a battery point': 1,
-        'no city': 1, 'marked inactive by MAI': 3
+        'no city': 1, 'marked inactive by MAI': 3, 'school (not open to the public)': 3
     });
     for (const id of [343988, 342852, 21574, 343303, 343260, 346604, 346657, 346701]) {
         assert.ok(!byId.has(id), id + ' must be skipped');
@@ -598,8 +598,6 @@ test('fixture: every kind of real marker ends up where it should', () => {
     assert.strictEqual(stats.stackedPoints, 6);
     // one street spelled two ways (דיזינגוף / דיזנגוף 50, Dizengoff Center) -> kept
     for (const id of [343312, 343456]) assert.ok(byId.has(id), id + ' must be kept');
-    // one village, no street on either record (כפר ג'וליס, two schools) -> kept
-    for (const id of [345844, 345846]) assert.ok(byId.has(id), id + ' must be kept');
     // shopping centre (קניון רמת אביב, three shops, one coordinate) -> all kept
     for (const id of [343313, 343460, 343463]) assert.ok(byId.has(id), id + ' must be kept');
 
@@ -619,7 +617,7 @@ test('fixture: every kind of real marker ends up where it should', () => {
     // one point listed twice at the same coordinate -> the lower id stays
     assert.deepStrictEqual(dropped.sameSpot, [{ id: 342617, sameAs: 342611 }]);
 
-    assert.strictEqual(locations.length, 18);
+    assert.strictEqual(locations.length, 15);
     assert.deepStrictEqual(locations.map(l => l.id), [...byId.keys()].sort((a, b) => a - b));
     assert.strictEqual(new Set(locations.map(l => l.name + '|' + l.city)).size, locations.length);
 });
@@ -713,4 +711,28 @@ test('command line: --input without a path is a usage error (exit 1)', () => {
     const result = spawnSync(process.execPath, [path.join(__dirname, 'scraper.js'), '--input'], { encoding: 'utf8' });
     assert.strictEqual(result.status, 1);
     assert.match(result.stderr, /--input needs a file/);
+});
+
+test('isSchool: schools, yeshivas and kindergartens, but not streets, shops or colleges', () => {
+    for (const name of [
+        'מוקד איסוף - בית ספר רעות', 'מוקד איסוף - בית הספר ממ"ד הראל', 'מוקד איסוף - בתי הספר היסודיים ממלכתיים - עתיד',
+        'מוקד איסוף - בתי-ספר יסודיים ממ"ד - הרא"ה', 'מוקד איסוף - ביה"ס ברנדיס', 'מוקד איסוף - בי"ס קשת',
+        'מוקד איסוף - מזכירות\\ביה"ס', 'מוקד איסוף - תיכון הראל', 'מוקד איסוף - חט"ב סביונים', 'מוקד איסוף - חטיבת רבין',
+        'מוקד איסוף - ישיבת הסדר', 'מוקד איסוף - אולפנת בהרן', 'מוקד איסוף - ממ"ד גוננים', 'מוקד איסוף - גני ילדים',
+        'מוקד איסוף - קריית החינוך', 'מוקד איסוף - "התיכון הישראלי למדעים ואומנויות"', 'מוקד איסוף - בית חינוך קהילתי גאולה', 'מוקד איסוף - תלמוד תורה'
+    ]) assert.ok(isSchool(name), name);
+    for (const name of [
+        'תחנת דלק - סונול סו גוד - חטיבת הנח"ל 30', 'תחנת דלק - פז YELLOW - חטיבה תשע פינת הולנד', 'חשמלית - אלישיב',
+        'מוקד איסוף - סמוך לגן ילדים', 'באג - אוניברסיטת ת"א, שער 8', 'מוקד איסוף - מכללת לוינסקי', 'בית מדרש דרכי דוד',
+        'מוקד איסוף - גן נווה', 'מוקד איסוף - מתנ"ס מרכז אופק', 'שופרסל', 'מוקד איסוף - התיכונים 5', 'מוקד איסוף - שכונת יפה נוף, צמוד לבית הספר', 'מוקד איסוף - מכללת שנקר'
+    ]) assert.ok(!isSchool(name), name);
+});
+
+test('a school is skipped, whether the school is in the name or in the place field', () => {
+    const inName = transformMarker(marker({}, { business_name: 'בית ספר רעות' }), noCache);
+    assert.strictEqual(inName.skip, 'school (not open to the public)');
+    const inPlace = transformMarker(marker({}, { business_name: 'רשות מקומית - מוקד איסוף', neighborhood: 'בית ספר רימונים' }), noCache);
+    assert.strictEqual(inPlace.skip, 'school (not open to the public)');
+    const onSchoolStreet = transformMarker(marker({}, { business_name: 'שופרסל', street: 'בית הספר', house_number: '4' }), noCache);
+    assert.ok(onSchoolStreet.location, 'a shop on a street named after a school stays');
 });

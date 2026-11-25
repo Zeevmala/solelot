@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 // Shared with the scraper so the two cannot disagree on what "inactive" or "same street" means.
 // Requiring scraper.js runs nothing: it only calls its main() when executed directly.
-const { isMarkedInactive, streetKey, sameStreet } = require('./scraper.js');
+const { isMarkedInactive, isSchool, streetKey, sameStreet } = require('./scraper.js');
 
 const INPUT_FILE = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, 'locations.json');
 
@@ -304,6 +304,12 @@ function main() {
         }
     }
     check('21. No city names one letter apart', nearSpellings, true);
+
+    // 22. No schools (owner's decision: a bin inside a school is not open to the public).
+    // Same rule as the scraper (isSchool), so the two cannot disagree.
+    check('22. No school points', locations
+        .filter(l => isSchool(String(l.name || '')))
+        .map(l => ({ id: l.id, reason: `"${l.name}"` })));
 
     // Summary
     console.log(`\n--- ${totalFails === 0 ? 'ALL CHECKS PASSED' : totalFails + ' TOTAL ISSUES'} (${locations.length} locations) ---`);

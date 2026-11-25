@@ -25,7 +25,7 @@ Opening hours are not shown: the source has none (see [Data](#data)).
 | | |
 |---|---|
 | **Frontend** | HTML, CSS, JavaScript. No framework, no build step, no npm |
-| **Maps** | [Leaflet](https://leafletjs.com/) 1.9.4 and [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) 1.5.3, loaded from unpkg |
+| **Maps** | [Leaflet](https://leafletjs.com/) 1.9.4 and [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) 1.5.3, served from `vendor/` in this repository |
 | **Tiles** | [OpenStreetMap](https://www.openstreetmap.org/) standard tiles |
 | **Design system** | Cartowolf tokens and self-hosted IBM Plex fonts (`cartowolf/`) |
 | **Hosting** | GitHub Pages, under `/solelot/` |
@@ -88,6 +88,8 @@ One command runs every check and ends with `GATE PASSED` or a line starting with
 The two test pages also run by hand: with the local server running, open `http://localhost:8000/test.html` and `http://localhost:8000/test-map.html`. They test copies of `app.js` functions, which is why step 8 exists.
 
 ## Data
+
+Schools are left off the map on purpose: a collection bin inside a school is not open to the public. Colleges and universities are shown.
 
 `locations.json` holds every point:
 

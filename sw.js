@@ -1,5 +1,5 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v38';
+const STATIC_CACHE = 'static-v39';
 const TILES_CACHE = 'tiles-v2';
 let tileCacheCount = 0;
 
@@ -19,10 +19,10 @@ const CRITICAL_ASSETS = [
     './manifest.json',
     './cartowolf/tokens.css',
     './cartowolf/fonts.css',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'
+    './vendor/leaflet/leaflet.css',
+    './vendor/leaflet/leaflet.js',
+    './vendor/markercluster/MarkerCluster.css',
+    './vendor/markercluster/leaflet.markercluster.js'
 ];
 
 // Optional assets — best-effort caching (install continues if these fail)

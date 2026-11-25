@@ -7,7 +7,7 @@
 // NOT part of the gate (bash .factory/check.sh): the gate must work offline and
 // without installed packages. This script needs
 //   - Playwright, installed outside this repository (npm i -g playwright, or NODE_PATH)
-//   - network access to unpkg.com (Leaflet) and tile.openstreetmap.org (map tiles)
+//   - network access to tile.openstreetmap.org (map tiles)
 // It starts its own small web server for the folder, prints one "ok" or "FAIL"
 // line per check and exits with 1 if any check failed.
 //
@@ -470,12 +470,12 @@ check('a record with markup in its id (or text coordinates) is not loaded and in
 
 check('if Leaflet does not arrive, an error panel with a reload button replaces the loading screen', async () => {
     const { context, page } = await openPage();
-    await page.route('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', route => route.abort());
+    await page.route('**/vendor/leaflet/leaflet.js', route => route.abort());
     await page.goto(server.base); await page.waitForTimeout(1500);
     const panel = await page.evaluate(() => ({ title: document.querySelector('#empty-state h3').textContent, button: document.getElementById('clear-filters').textContent,
         panel: getComputedStyle(document.getElementById('empty-state')).display, loading: getComputedStyle(document.getElementById('loading-overlay')).display }));
     expect(panel.title === 'שגיאה בטעינת המפה' && panel.button === 'טען מחדש' && panel.panel === 'block' && panel.loading === 'none', JSON.stringify(panel));
-    await page.unroute('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
+    await page.unroute('**/vendor/leaflet/leaflet.js');
     await Promise.all([page.waitForNavigation(), page.click('#clear-filters')]);
     await dataLoaded(page);
     await context.close();

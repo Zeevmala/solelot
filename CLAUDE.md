@@ -10,7 +10,7 @@ Interactive map for battery recycling locations in Israel
 HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Locations to Include
-- **Collection points**: whatever the MAI map lists under batteries. In the data (Nov 2026): shops and chains ~36%, petrol stations ~20%, municipal points ~14%, schools ~12%, street e-waste bins ~8%. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
+- **Collection points**: whatever the MAI map lists under batteries. Mostly shops and chains, petrol stations, municipal points and street e-waste bins (~3,600 points, Nov 2026). **Schools are left out on purpose** (owner's decision, Nov 2026: a bin inside a school is not open to the public) — `isSchool()` in `scraper.js` skips them and validator check 22 fails if one appears. Colleges and universities stay. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
 - **Facilities**: none shown. Batte-Re and RE-CAR were added and then removed at the owner's request (Nov 2026). `facilities.json` is empty; the app still supports the type
 
 ## Current Features
@@ -52,11 +52,12 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `test-fixtures/` | A small sample of real MAI markers used by `test-scraper.js` |
 | `test-scraper.js` | Scraper tests on the real functions (`node --test test-scraper.js`) |
 | `cartowolf/` | The Cartowolf design system, copied from `Zeevmala/factory` (`design/`): `tokens.css` (all colours, sizes, shadows as `--cw-*` variables), `fonts.css` + `fonts/` (IBM Plex, self-hosted), `check-colors.mjs` (finds hand-written colours). **Do not edit `tokens.css` here** — change it in the factory repo and copy it again |
+| `vendor/` | Leaflet 1.9.4 and Leaflet.markercluster 1.5.3, copied unchanged from unpkg and served from this repo (no CDN). **Do not edit**; see `vendor/README.md` to update |
 | `sw.js` | Service worker for offline/PWA support |
 | `manifest.json` | PWA manifest |
 | `test.html` | Unit tests (pure function tests, runs in browser) |
 | `test-map.html` | Integration tests (map/UI tests, runs in browser) |
-| `test-smoke.js` | Smoke test of the real page in a real browser: search, Enter, city pick, nearest, failure states, service worker. **Not in the gate** (needs Playwright installed outside the repo, and the network). Run `node test-smoke.js` before a release |
+| `test-smoke.js` | Smoke test of the real page in a real browser: search, Enter, city pick, nearest, failure states, service worker. **Not in the gate** (needs Playwright installed outside the repo, and the network for map tiles). Run `node test-smoke.js` before a release |
 | `.factory/` | The gate: `bash .factory/check.sh` runs every check below in one command. Also the review checklist |
 | `docs/designs/` | Approved designs (start with `SITEMAP.md`) |
 | `docs/brain/` | Project decisions and lessons learned, dated, never edited after the fact |
@@ -145,7 +146,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - XSS tests cover `<script>`, `<img>`, SVG `onload`, `javascript:` and `data:` strings.
 - `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance. Empty state and `?action=nearest` are covered by `test-smoke.js` on the real page.
 - `test-validate.js` runs the real `validate_data.js` on small fixtures and checks the exit code.
-- Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install. The wiring of the real page (search box, Enter, picks, `?action=nearest`, failure states, selected pin, service worker install and update) is covered by `node test-smoke.js`, which is run by hand because it needs Playwright and the network.
+- Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install. The wiring of the real page (search box, Enter, picks, `?action=nearest`, failure states, selected pin, service worker install and update) is covered by `node test-smoke.js`, which is run by hand because it needs Playwright (not installed on the gate's runner) and the network for map tiles.
 
 ### Data Integrity Notes
 - Refresh flow: `node scraper.js` → `node validate_data.js` (must print ALL CHECKS PASSED) → review warnings 14a/14b/14c → `bash .factory/check.sh`. The scraper prints every id it drops and writes `data_meta.json`.
@@ -161,6 +162,8 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ### Launch readiness (Nov 2026)
 The full list of what was found and fixed is in `docs/designs/launch-readiness.md`. Fixed there: search showed other cities' points (fuzzy match too loose) and kept a stale filter; ~250 pins were not at their address; no credit to MAI on the page; a failed service worker update could delete the working offline cache; no gate.
+
+- Schools left off the map and Leaflet served from `vendor/` (owner's decisions after the review, Nov 2026).
 
 ### Spec Drift
 - M2 (facility locations): **REMOVED** by the owner's decision — no facility points on the map.
@@ -182,7 +185,7 @@ Was 40×40px. Now 44×44px.
 **LOW — Search input height 37px (`style.css`)**
 Slightly under 44px touch target. Consider increasing to 44px.
 
-### Performance Notes (at ~4,100 locations)
+### Performance Notes (at ~3,600 locations)
 - **Search**: Full scan (7 string ops × ~4,200 markers) per debounce tick. Fine at 4K. At 10K+, pre-build a `Map<city, locations[]>` index.
 - **Markers**: ~4,200 markers × 2–3 event listeners each. Marker SVGs are flat (no per-marker gradients/filters). Fine at 4K. At 10K+, switch to virtual markers (create on `moveend` for visible bounds only).
 - **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 40 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.

@@ -69,6 +69,22 @@ function isMarkedInactive(name) {
     return DEAD_WORDS.some(word => new RegExp('(^|[^א-ת])' + word + '($|[^א-ת])').test(name));
 }
 
+// Schools are left off the map (owner's decision, Nov 2026): a collection bin
+// inside a school is not open to the public. Colleges and universities stay.
+// Each pattern must match a whole word, so "אלישיב" (a moshav) is not a "ישיבה"
+// and "התיכונים" (a street) is not a "תיכון".
+const SCHOOL_WORDS = [
+    'בית ה?ספר', 'בתי[ -]ה?ספר', 'בי"ס', 'ביה"ס', 'ה?תיכון', 'חט"ב', 'חטיבת', 'ישיבה', 'ישיבת',
+    'אולפנה', 'אולפנת', 'ממ"ד', 'תלמוד תורה', 'גני ילדים', 'בית חינוך', 'קרי?ית ה?חינוך'
+];
+const SCHOOL_PATTERN = new RegExp('(^|[^א-ת])(' + SCHOOL_WORDS.join('|') + ')($|[^א-ת])');
+
+function isSchool(name) {
+    // "חטיבת הנח"ל 30" is a street; petrol stations are named after the street they are on
+    if (name.startsWith('תחנת דלק')) return false;
+    return SCHOOL_PATTERN.test(name);
+}
+
 // Order matters: the first match wins, so specific names come first.
 const CHAIN_PATTERNS = [
     ['superpharm', ['סופר-פארם', 'סופר פארם', 'סופרפארם']],
@@ -323,6 +339,8 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
     if (withoutCommas(name) === withoutCommas(addressParts.join(', '))) {
         name = 'נקודת איסוף - ' + (addressParts.slice(0, -1).join(', ') || city);
     }
+
+    if (isSchool(name) || isSchool(rawName) || isSchool(place)) return { skip: 'school (not open to the public)' };
 
     return {
         location: {
@@ -757,6 +775,6 @@ if (require.main === module) {
 
 module.exports = {
     transformMarker, buildLocations, determineChain, normalizeCity, municipalName, clean,
-    isMarkedInactive, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
+    isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
     disambiguate, checkCount, parseArgs, run
 };

@@ -45,7 +45,7 @@
 ### M5: PWA & Performance ✅
 - [x] Service worker for offline support
 - [x] PWA manifest (installable)
-- [x] Marker clustering for ~4,200 locations
+- [x] Marker clustering for ~3,600 locations
 - [x] Multiple basemap options (light, streets)
 
 ### M6: Accessibility & Security ✅

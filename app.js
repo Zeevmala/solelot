@@ -309,7 +309,7 @@ function setEmptyStateText(title, text, buttonText) {
     if (btn) btn.textContent = buttonText;
 }
 
-// The map library comes from another server (unpkg). If it did not arrive, nothing
+// The map library is a separate file (vendor/leaflet). If it did not arrive, nothing
 // below can work: show the error panel instead of leaving the loading screen forever.
 if (typeof L === 'undefined' || typeof L.markerClusterGroup !== 'function') {
     setEmptyStateText('שגיאה בטעינת המפה', 'בדוק את החיבור לאינטרנט ונסה שוב', 'טען מחדש');

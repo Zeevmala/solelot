@@ -74,3 +74,10 @@ All slices are built on branch `claude/inspiring-gauss-ru4wl7`. `bash .factory/c
 A third web review blocked on a marker race on slow devices (a new add started while the old one was running); redraws are now serialised. That last fix was verified with the reviewer's reproduction script and the smoke test, not by another fresh review.
 
 Open after this design: the owner decisions listed above; 19 + 11 + 21 position warnings (14a/14b/14c) to review; three same-name pairs that still end in `(2)`; a real-page test cannot join the gate until Leaflet is served from the repository.
+
+## Owner decisions (2026-11-25, after the status above)
+
+- Schools are not shown. Built: `isSchool()` in `scraper.js`, validator check 22, tests. 4,115 → 3,627 points.
+- Leaflet is served from the repository (`vendor/`). Built: page, CSP and service worker point at local files; unpkg is gone from the page.
+- MAI terms and possibly closed chains: skipped by the owner, unchanged.
+- The like button: the owner's answer needs one clarification before it is built (see the session notes); unchanged for now.
