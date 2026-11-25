@@ -150,6 +150,12 @@ function getDistance(lat1, lng1, lat2, lng2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
 }
+
+function formatDistance(km) {
+    const metres = Math.round(km * 100) * 10;
+    if (metres < 1000) return `${metres} מ׳`;
+    return `${km.toFixed(1)} ק"מ`;
+}
     // <<< END OF COPIES
 
     // === escapeHtml tests ===
@@ -260,6 +266,17 @@ function getDistance(lat1, lng1, lat2, lng2) {
     assert(d2 === 0, 'getDistance: same point = 0');
     const d3 = getDistance(31.2530, 34.7915, 31.0461, 35.1489); // Beer Sheva to Arad
     assert(d3 > 30 && d3 < 50, 'getDistance: Beer Sheva to Arad ~40km (got ' + d3.toFixed(1) + ')');
+
+    // === formatDistance tests ===
+    assert(formatDistance(0.35) === '350 \u05DE\u05F3', 'formatDistance: 0.35 km is shown as 350 metres');
+    assert(formatDistance(0.04) === '40 \u05DE\u05F3', 'formatDistance: 0.04 km is 40 metres, not "0.0 km"');
+    assert(formatDistance(0.3549) === '350 \u05DE\u05F3', 'formatDistance: metres are rounded to the nearest 10');
+    assert(formatDistance(0) === '0 \u05DE\u05F3', 'formatDistance: 0 is 0 metres');
+    assert(formatDistance(0.994) === '990 \u05DE\u05F3', 'formatDistance: 994 m stays in metres');
+    assert(formatDistance(0.996) === '1.0 \u05E7"\u05DE', 'formatDistance: 996 m rounds up to 1.0 km, never "1000 metres"');
+    assert(formatDistance(1) === '1.0 \u05E7"\u05DE', 'formatDistance: 1 km is shown in km');
+    assert(formatDistance(12.34) === '12.3 \u05E7"\u05DE', 'formatDistance: km keep one decimal');
+    assert(!formatDistance(0.04).includes('0.0'), 'formatDistance: never "0.0"');
 
     // Chain detection lives in scraper.js and is tested by test-scraper.js (node --test)
 

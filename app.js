@@ -490,9 +490,7 @@ const markerCluster = L.markerClusterGroup({
         else if (count >= 100) { size = 'large'; diameter = 52; }
         else if (count >= 10) { size = 'medium'; diameter = 44; }
 
-        // Hebrew plural: 1 מיקום, 2+ מיקומים
-        const locationText = count === 1 ? 'מיקום' : 'מיקומים';
-        const ariaLabel = `${count} ${locationText}`;
+        const ariaLabel = count === 1 ? 'נקודת איסוף אחת' : `${count} נקודות איסוף`;
 
         return L.divIcon({
             html: `<div aria-label="${ariaLabel}"><span>${count.toLocaleString('he-IL')}</span></div>`,
@@ -527,6 +525,13 @@ function getDistance(lat1, lng1, lat2, lng2) {
         Math.sin(dLng/2) * Math.sin(dLng/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+}
+
+// A distance as people read it: metres (rounded to 10) under 1 km, km above
+function formatDistance(km) {
+    const metres = Math.round(km * 100) * 10;
+    if (metres < 1000) return `${metres} מ׳`;
+    return `${km.toFixed(1)} ק"מ`;
 }
 
 // Build report URL with pre-filled location name, address, and city
@@ -583,7 +588,7 @@ function createPopupContent(location) {
         content += `
         <div class="popup-row distance">
             <span class="icon">📏</span>
-            <span>${distance.toFixed(1)} ק"מ ממיקומך</span>
+            <span>${formatDistance(distance)} ממיקומך</span>
         </div>`;
     }
 
@@ -623,7 +628,7 @@ function createSidebarContent(location) {
         distanceHtml = `
             <div class="info-row">
                 <span class="info-icon">📏</span>
-                <span class="info-text distance">${distance.toFixed(1)} ק"מ ממיקומך</span>
+                <span class="info-text distance">${formatDistance(distance)} ממיקומך</span>
             </div>
         `;
     }
@@ -683,6 +688,37 @@ const cachedSidebar = document.getElementById('sidebar');
 const cachedSidebarContent = document.getElementById('sidebar-content');
 const cachedSidebarClose = document.getElementById('sidebar-close');
 
+// The pin whose details are open is drawn larger and above its neighbours.
+// The "selected" class is styled in style.css.
+let selectedMarker = null;
+let selectedMarkerZIndex = 0; // the pin's own zIndexOffset, put back when it is deselected
+function setSelectedMarker(marker) {
+    if (selectedMarker === marker) return;
+    if (selectedMarker) {
+        const oldElement = selectedMarker.getElement();
+        if (oldElement) oldElement.classList.remove('selected');
+        selectedMarker.setZIndexOffset(selectedMarkerZIndex);
+    }
+    selectedMarker = marker;
+    if (marker) {
+        selectedMarkerZIndex = marker.options.zIndexOffset;
+        marker.setZIndexOffset(1500); // above facilities (1000), below the user dot (2000)
+        const element = marker.getElement();
+        if (element) element.classList.add('selected');
+    }
+}
+
+// On phones the details open as a sheet over the bottom of the map.
+// Move the map just enough for the pin to stay visible above the sheet.
+function keepPinAboveSheet(marker) {
+    if (!cachedSidebar || window.innerWidth > MOBILE_BREAKPOINT) return;
+    if (cachedSidebar.offsetWidth < map.getSize().x) return; // landscape: a side panel, not a sheet
+    map.panInside(marker.getLatLng(), {
+        paddingTopLeft: [20, 60], // room for the pin itself, which is drawn above its point
+        paddingBottomRight: [20, cachedSidebar.offsetHeight + 20]
+    });
+}
+
 // Show sidebar with location details
 let sidebarHideTimer = null;
 function showSidebar(location) {
@@ -693,6 +729,8 @@ function showSidebar(location) {
 
     map.closePopup();
     selectedLocationId = location.id;
+    const markerItem = allMarkers.find(item => item.location.id === location.id);
+    setSelectedMarker(markerItem ? markerItem.marker : null);
     cachedSidebarContent.innerHTML = createSidebarContent(location);
     cachedSidebar.style.transform = ''; // clear leftover swipe position
     cachedSidebar.style.display = 'flex';
@@ -712,6 +750,7 @@ function hideSidebar() {
         }, 300);
     }
     selectedLocationId = null;
+    setSelectedMarker(null);
 }
 
 // Set what the map is filtered by, and redraw. Every change of the search goes
@@ -746,15 +785,34 @@ function updateMarkers() {
     markerCluster.clearLayers();
     markerCluster.addLayers(clusteredMarkers);
 
-    // Show the empty state only when the user filtered everything away
-    const isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
-    const emptyState = document.getElementById('empty-state');
-    if (emptyState) {
-        const isEmpty = visibleMarkers.length === 0 && isFiltered && allMarkers.length > 0;
-        emptyState.style.display = isEmpty ? 'block' : 'none';
-    }
+    visibleMarkerCount = visibleMarkers.length;
+    updateEmptyState();
 
     return visibleMarkers;
+}
+
+// Show the empty state only when the user filtered everything away.
+// It waits while the suggestion list is open: the list may be offering the
+// right spelling (typing "חיפא" suggests חיפה), and the two would overlap.
+let visibleMarkerCount = 0;
+function updateEmptyState() {
+    const emptyState = document.getElementById('empty-state');
+    if (!emptyState) return;
+    const suggestions = document.getElementById('search-suggestions');
+    const listOpen = suggestions && suggestions.classList.contains('active') && suggestions.children.length > 0;
+    const isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
+    const isEmpty = visibleMarkerCount === 0 && isFiltered && allMarkers.length > 0;
+    emptyState.style.display = isEmpty && !listOpen ? 'block' : 'none';
+}
+
+// Close the suggestion list without picking from it
+function closeSuggestions() {
+    const suggestions = document.getElementById('search-suggestions');
+    const searchInput = document.getElementById('search-input');
+    if (!suggestions || !suggestions.classList.contains('active')) return;
+    suggestions.classList.remove('active');
+    if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
+    updateEmptyState(); // it may have been waiting for the list to close
 }
 
 // Open a marker's popup, first zooming in until it is no longer inside a cluster
@@ -877,7 +935,7 @@ function setupAutocomplete() {
                         <span class="suggestion-icon">🏙️</span>
                         <div class="suggestion-text">
                             <div class="suggestion-name">${escapeHtml(match.name)}</div>
-                            <div class="suggestion-city">${match.count} נקודות</div>
+                            <div class="suggestion-city">${match.count === 1 ? 'נקודה אחת' : `${match.count} נקודות`}</div>
                         </div>
                     </div>
                 `;
@@ -926,8 +984,7 @@ function setupAutocomplete() {
                 setSearch(searchInput.value.trim().substring(0, 50), null);
             }
         } else if (e.key === 'Escape') {
-            suggestions.classList.remove('active');
-            searchInput.setAttribute('aria-expanded', 'false');
+            closeSuggestions();
             highlightedIndex = -1;
         }
     });
@@ -981,8 +1038,7 @@ function setupAutocomplete() {
 
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
-            suggestions.classList.remove('active');
-            searchInput.setAttribute('aria-expanded', 'false');
+            closeSuggestions();
         }
     });
 }
@@ -1117,7 +1173,7 @@ locateControl.onAdd = function() {
                 if (nearest && nearest.distance <= NEAREST_MAX_KM) {
                     const view = L.latLngBounds([[lat, lng], [nearest.location.lat, nearest.location.lng]]);
                     map.flyToBounds(view, { padding: [80, 80], maxZoom: 16, duration: 0.8 });
-                    showNotification(`הנקודה הקרובה: ${nearest.location.name} (${nearest.distance.toFixed(1)} ק"מ)`, 4000);
+                    showNotification(`הנקודה הקרובה: ${nearest.location.name} (${formatDistance(nearest.distance)})`, 4000);
                 } else {
                     map.flyTo([lat, lng], 14, { duration: 0.8 });
                     showNotification('מיקום נמצא');
@@ -1231,7 +1287,7 @@ function hideLoading() {
 // === INITIALIZATION ===
 function loadLocations() {
     autocompleteInitialized = false;
-    showLoading('טוען נקודות מיחזור...');
+    showLoading('טוען נקודות איסוף...');
 
     fetch('locations.json')
         .then(response => {
@@ -1251,10 +1307,11 @@ function loadLocations() {
 
             const loadingText = document.getElementById('loading-text');
             if (loadingText) {
-                loadingText.textContent = `טוען ${totalLocations} נקודות...`;
+                loadingText.textContent = `טוען ${totalLocations} נקודות איסוף...`;
             }
 
             // Clear previous markers if retrying
+            setSelectedMarker(null);
             allMarkers = [];
             markerCluster.clearLayers();
 
@@ -1273,6 +1330,7 @@ function loadLocations() {
 
                 marker.on('click', () => {
                     showSidebar(location);
+                    keepPinAboveSheet(marker);
                 });
 
                 // Add aria-label when marker is added to map.
@@ -1282,6 +1340,8 @@ function loadLocations() {
                     const element = marker.getElement();
                     if (element) {
                         element.setAttribute('aria-label', `${location.name} - ${typeNames[location.type]}`);
+                        // Clustering builds a new element each time the pin comes back
+                        element.classList.toggle('selected', marker === selectedMarker);
                     }
                 });
 
@@ -1405,11 +1465,7 @@ if (clearFiltersBtn) {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         hideSidebar();
-
-        const suggestions = document.getElementById('search-suggestions');
-        if (suggestions) suggestions.classList.remove('active');
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
+        closeSuggestions();
     }
 });
 
