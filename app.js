@@ -176,20 +176,22 @@ function fuzzyMatch(text, query, maxDist = 2) {
 
 // === SEARCH ===
 // Makes two spellings of the same thing equal before they are compared:
-// Latin letters in lower case, Hebrew quote marks as plain ones, hyphens as spaces.
+// Latin letters in lower case, no quote marks (מתנ"ס = מתנס), hyphens as spaces,
+// and a doubled י or ו as a single one (תקווה = תקוה, קריית = קרית).
 function normalizeText(text) {
     return String(text || '')
         .toLowerCase()
-        .replace(/[\u05F4\u201C\u201D]/g, '"')
-        .replace(/[\u05F3\u2018\u2019]/g, "'")
+        .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
         .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/קרית /g, 'קריית ')
+        .replace(/י+/g, 'י')
+        .replace(/ו+/g, 'ו')
         .replace(/\s+/g, ' ')
         .trim();
 }
 
-// Short names people type for a city -> the city name used in the data.
-// Keys are written the way normalizeText() returns them.
+// Short and old names people type for a city -> the city name used in the data.
+// Both sides are compared after normalizeText(), so write them the readable way.
+// The old names are the ones scraper.js folds in CITY_ALIASES.
 const QUERY_ALIASES = {
     'ת"א': 'תל אביב',
     'תל אביב יפו': 'תל אביב',
@@ -197,13 +199,26 @@ const QUERY_ALIASES = {
     'ראשל"צ': 'ראשון לציון',
     'פ"ת': 'פתח תקווה',
     'ב"ש': 'באר שבע',
-    'י ם': 'ירושלים'
+    'ר"ג': 'רמת גן',
+    'כפ"ס': 'כפר סבא',
+    'י-ם': 'ירושלים',
+    'נצרת עילית': 'נוף הגליל',
+    'נצרת עלית': 'נוף הגליל',
+    'זכרון יעקב': 'זיכרון יעקב',
+    'יקנעם': 'יוקנעם',
+    'יקנעם עילית': 'יוקנעם',
+    'יוקנעם עילית': 'יוקנעם',
+    'שוהם': 'שהם',
+    'יהוד מונוסון': 'יהוד',
+    'מודיעין מכבים רעות': 'מודיעין',
+    'פרדס חנה כרכור': 'פרדס חנה'
 };
 
 // The search text as it is compared with the data
 function normalizeQuery(text) {
     const query = normalizeText(text);
-    return Object.prototype.hasOwnProperty.call(QUERY_ALIASES, query) ? QUERY_ALIASES[query] : query;
+    const alias = Object.keys(QUERY_ALIASES).find(name => normalizeText(name) === query);
+    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
 }
 
 // How many wrong letters a query may have: none in a short word, where one
@@ -235,6 +250,32 @@ function searchLocations(locations, query, cityFilter) {
     const maxDist = fuzzyTolerance(q.length);
     if (maxDist === 0) return [];
     return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
+}
+
+// The cities offered in the suggestion list for a typed text.
+// cityCounts is a Map of city name -> number of locations. "same" marks the city
+// that IS the typed text (or what its short name stands for): the only kind of
+// suggestion Enter may pick by itself.
+function matchCities(cityCounts, text) {
+    const query = normalizeQuery(text);
+    const maxDist = fuzzyTolerance(query.length);
+    const matches = [];
+    if (query === '') return matches;
+    cityCounts.forEach((count, name) => {
+        const city = normalizeText(name);
+        const exact = city.includes(query);
+        if (exact || (maxDist > 0 && fuzzyMatch(city, query, maxDist))) {
+            matches.push({ type: 'city', name, count, exact, same: city === query });
+        }
+    });
+    // The city that is the typed text first, then cities containing it, then near
+    // matches; inside each group the city with more locations first
+    matches.sort((a, b) => {
+        if (a.same !== b.same) return a.same ? -1 : 1;
+        if (a.exact !== b.exact) return a.exact ? -1 : 1;
+        return b.count - a.count;
+    });
+    return matches;
 }
 
 // === DATA CHECK ===
@@ -876,8 +917,7 @@ function setupAutocomplete() {
 
         searchTimeout = setTimeout(() => setSearch(text, null), 300);
 
-        const cityMatches = [];
-        const addedCities = new Set();
+        const cityMatches = matchCities(cityCounts, text);
 
         // Locations: the same ones the map will show for this text
         const locationMatches = searchLocations(allLocations, text, null).map(location => ({
@@ -887,33 +927,6 @@ function setupAutocomplete() {
             city: location.city,
             locationType: location.type
         }));
-
-        allLocations.forEach(location => {
-            // City matching — maxDist=1 for tighter fuzzy, tag exact vs fuzzy
-            if (!addedCities.has(location.city)) {
-                const city = normalizeText(location.city);
-                const exactCity = city.includes(query);
-                const fuzzyCity = !exactCity && fuzzyMatch(city, query, 1);
-                if (exactCity || fuzzyCity) {
-                    addedCities.add(location.city);
-                    cityMatches.push({
-                        type: 'city',
-                        name: location.city,
-                        count: cityCounts.get(location.city) || 0,
-                        exact: exactCity,
-                        same: city === query
-                    });
-                }
-            }
-        });
-
-        // Sort cities: exact first (by count desc), then fuzzy (by count desc).
-        // The city that is exactly the typed text comes before all of them
-        cityMatches.sort((a, b) => {
-            if (a.same !== b.same) return a.same ? -1 : 1;
-            if (a.exact !== b.exact) return a.exact ? -1 : 1;
-            return b.count - a.count;
-        });
 
         const limitedMatches = [...cityMatches, ...locationMatches].slice(0, 8);
 
@@ -931,6 +944,7 @@ function setupAutocomplete() {
                          role="option"
                          data-type="city"
                          data-value="${escapeHtml(match.name)}"
+                         data-same="${match.same}"
                          tabindex="-1">
                         <span class="suggestion-icon">🏙️</span>
                         <div class="suggestion-text">
@@ -976,12 +990,18 @@ function setupAutocomplete() {
             updateHighlight(items);
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (suggestions.classList.contains('active') && items.length > 0) {
-                // Nothing highlighted: Enter takes the first suggestion
-                selectSuggestion(items[Math.max(highlightedIndex, 0)]);
+            const listOpen = suggestions.classList.contains('active') && items.length > 0;
+            if (listOpen && highlightedIndex >= 0) {
+                selectSuggestion(items[highlightedIndex]);
+            } else if (listOpen && items[0].dataset.same === 'true') {
+                // Nothing highlighted, and the first suggestion is the city that was typed
+                selectSuggestion(items[0]);
             } else {
-                // No list to pick from: show the typed text on the map now
-                setSearch(searchInput.value.trim().substring(0, 50), null);
+                // Anything else (a shop name, part of a word): show the typed text on the map
+                const visibleMarkers = setSearch(searchInput.value.trim().substring(0, 50), null);
+                closeSuggestions();
+                highlightedIndex = -1;
+                zoomToVisibleMarkers(visibleMarkers);
             }
         } else if (e.key === 'Escape') {
             closeSuggestions();

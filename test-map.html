@@ -91,10 +91,10 @@ function fuzzyMatch(text, query, maxDist = 2) {
 function normalizeText(text) {
     return String(text || '')
         .toLowerCase()
-        .replace(/[\u05F4\u201C\u201D]/g, '"')
-        .replace(/[\u05F3\u2018\u2019]/g, "'")
+        .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
         .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/קרית /g, 'קריית ')
+        .replace(/י+/g, 'י')
+        .replace(/ו+/g, 'ו')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -106,12 +106,25 @@ const QUERY_ALIASES = {
     'ראשל"צ': 'ראשון לציון',
     'פ"ת': 'פתח תקווה',
     'ב"ש': 'באר שבע',
-    'י ם': 'ירושלים'
+    'ר"ג': 'רמת גן',
+    'כפ"ס': 'כפר סבא',
+    'י-ם': 'ירושלים',
+    'נצרת עילית': 'נוף הגליל',
+    'נצרת עלית': 'נוף הגליל',
+    'זכרון יעקב': 'זיכרון יעקב',
+    'יקנעם': 'יוקנעם',
+    'יקנעם עילית': 'יוקנעם',
+    'יוקנעם עילית': 'יוקנעם',
+    'שוהם': 'שהם',
+    'יהוד מונוסון': 'יהוד',
+    'מודיעין מכבים רעות': 'מודיעין',
+    'פרדס חנה כרכור': 'פרדס חנה'
 };
 
 function normalizeQuery(text) {
     const query = normalizeText(text);
-    return Object.prototype.hasOwnProperty.call(QUERY_ALIASES, query) ? QUERY_ALIASES[query] : query;
+    const alias = Object.keys(QUERY_ALIASES).find(name => normalizeText(name) === query);
+    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
 }
 
 function fuzzyTolerance(queryLength) {

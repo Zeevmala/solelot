@@ -81,10 +81,10 @@ function fuzzyMatch(text, query, maxDist = 2) {
 function normalizeText(text) {
     return String(text || '')
         .toLowerCase()
-        .replace(/[\u05F4\u201C\u201D]/g, '"')
-        .replace(/[\u05F3\u2018\u2019]/g, "'")
+        .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
         .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/קרית /g, 'קריית ')
+        .replace(/י+/g, 'י')
+        .replace(/ו+/g, 'ו')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -96,12 +96,25 @@ const QUERY_ALIASES = {
     'ראשל"צ': 'ראשון לציון',
     'פ"ת': 'פתח תקווה',
     'ב"ש': 'באר שבע',
-    'י ם': 'ירושלים'
+    'ר"ג': 'רמת גן',
+    'כפ"ס': 'כפר סבא',
+    'י-ם': 'ירושלים',
+    'נצרת עילית': 'נוף הגליל',
+    'נצרת עלית': 'נוף הגליל',
+    'זכרון יעקב': 'זיכרון יעקב',
+    'יקנעם': 'יוקנעם',
+    'יקנעם עילית': 'יוקנעם',
+    'יוקנעם עילית': 'יוקנעם',
+    'שוהם': 'שהם',
+    'יהוד מונוסון': 'יהוד',
+    'מודיעין מכבים רעות': 'מודיעין',
+    'פרדס חנה כרכור': 'פרדס חנה'
 };
 
 function normalizeQuery(text) {
     const query = normalizeText(text);
-    return Object.prototype.hasOwnProperty.call(QUERY_ALIASES, query) ? QUERY_ALIASES[query] : query;
+    const alias = Object.keys(QUERY_ALIASES).find(name => normalizeText(name) === query);
+    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
 }
 
 function fuzzyTolerance(queryLength) {
@@ -127,6 +140,28 @@ function searchLocations(locations, query, cityFilter) {
     const maxDist = fuzzyTolerance(q.length);
     if (maxDist === 0) return [];
     return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
+}
+
+function matchCities(cityCounts, text) {
+    const query = normalizeQuery(text);
+    const maxDist = fuzzyTolerance(query.length);
+    const matches = [];
+    if (query === '') return matches;
+    cityCounts.forEach((count, name) => {
+        const city = normalizeText(name);
+        const exact = city.includes(query);
+        if (exact || (maxDist > 0 && fuzzyMatch(city, query, maxDist))) {
+            matches.push({ type: 'city', name, count, exact, same: city === query });
+        }
+    });
+    // The city that is the typed text first, then cities containing it, then near
+    // matches; inside each group the city with more locations first
+    matches.sort((a, b) => {
+        if (a.same !== b.same) return a.same ? -1 : 1;
+        if (a.exact !== b.exact) return a.exact ? -1 : 1;
+        return b.count - a.count;
+    });
+    return matches;
 }
 
 function isValidLocation(loc) {
@@ -201,24 +236,31 @@ function formatDistance(km) {
     ];
 
     assert(normalizeText('KSP') === 'ksp', 'normalizeText: Latin letters become lower case');
-    assert(normalizeText('ביה״ס') === 'ביה"ס', 'normalizeText: Hebrew gershayim becomes a plain double quote');
-    assert(normalizeText('ג׳סר') === "ג'סר", 'normalizeText: Hebrew geresh becomes a plain single quote');
+    assert(normalizeText('ביה״ס') === 'ביהס' && normalizeText('ביה"ס') === 'ביהס', 'normalizeText: double quote marks (Hebrew or plain) are dropped');
+    assert(normalizeText('ג׳סר') === 'גסר' && normalizeText("ג'סר") === 'גסר', 'normalizeText: single quote marks (Hebrew or plain) are dropped');
+    assert(normalizeText('פתח תקווה') === normalizeText('פתח תקוה'), 'normalizeText: doubled ו equals a single one');
+    assert(normalizeText('ירושליים') === normalizeText('ירושלים'), 'normalizeText: doubled י equals a single one');
     assert(normalizeText('תל אביב-יפו') === 'תל אביב יפו', 'normalizeText: hyphen becomes a space');
-    assert(normalizeText('קרית אתא') === 'קריית אתא', 'normalizeText: קרית becomes קריית');
+    assert(normalizeText('קרית אתא') === normalizeText('קריית אתא'), 'normalizeText: קרית equals קריית');
     assert(normalizeText('  תל   אביב ') === 'תל אביב', 'normalizeText: extra spaces removed');
     assert(normalizeText(null) === '', 'normalizeText: null returns empty');
 
-    assert(normalizeQuery('ת"א') === 'תל אביב', 'normalizeQuery: alias ת"א');
-    assert(normalizeQuery('ת״א') === 'תל אביב', 'normalizeQuery: alias ת״א (Hebrew gershayim)');
-    assert(normalizeQuery('תל אביב יפו') === 'תל אביב', 'normalizeQuery: alias תל אביב יפו');
-    assert(normalizeQuery('תל אביב-יפו') === 'תל אביב', 'normalizeQuery: alias תל אביב-יפו');
-    assert(normalizeQuery('Tel Aviv') === 'תל אביב', 'normalizeQuery: alias Tel Aviv');
-    assert(normalizeQuery('ראשל"צ') === 'ראשון לציון', 'normalizeQuery: alias ראשל"צ');
-    assert(normalizeQuery('פ"ת') === 'פתח תקווה', 'normalizeQuery: alias פ"ת');
-    assert(normalizeQuery('ב"ש') === 'באר שבע', 'normalizeQuery: alias ב"ש');
-    assert(normalizeQuery('י-ם') === 'ירושלים', 'normalizeQuery: alias י-ם');
+    assert(normalizeQuery('ת"א') === normalizeText('תל אביב'), 'normalizeQuery: alias ת"א');
+    assert(normalizeQuery('ת״א') === normalizeText('תל אביב'), 'normalizeQuery: alias ת״א (Hebrew gershayim)');
+    assert(normalizeQuery('תל אביב יפו') === normalizeText('תל אביב'), 'normalizeQuery: alias תל אביב יפו');
+    assert(normalizeQuery('תל אביב-יפו') === normalizeText('תל אביב'), 'normalizeQuery: alias תל אביב-יפו');
+    assert(normalizeQuery('Tel Aviv') === normalizeText('תל אביב'), 'normalizeQuery: alias Tel Aviv');
+    assert(normalizeQuery('ראשל"צ') === normalizeText('ראשון לציון'), 'normalizeQuery: alias ראשל"צ');
+    assert(normalizeQuery('פ"ת') === normalizeText('פתח תקווה'), 'normalizeQuery: alias פ"ת');
+    assert(normalizeQuery('ב"ש') === normalizeText('באר שבע'), 'normalizeQuery: alias ב"ש');
+    assert(normalizeQuery('י-ם') === normalizeText('ירושלים'), 'normalizeQuery: alias י-ם');
     assert(normalizeQuery('toString') === 'tostring', 'normalizeQuery: built-in property names are not aliases');
     assert(normalizeQuery('חיפה') === 'חיפה', 'normalizeQuery: other text unchanged');
+
+    assert(normalizeQuery('ראשלצ') === normalizeText('ראשון לציון'), 'normalizeQuery: alias ראשלצ (no quote mark)');
+    assert(normalizeQuery('ר"ג') === normalizeText('רמת גן'), 'normalizeQuery: alias ר"ג');
+    assert(normalizeQuery('כפ"ס') === normalizeText('כפר סבא'), 'normalizeQuery: alias כפ"ס');
+    assert(normalizeQuery('נצרת עלית') === normalizeText('נוף הגליל') && normalizeQuery('נצרת עילית') === normalizeText('נוף הגליל'), 'normalizeQuery: old name נצרת עילית / נצרת עלית');
 
     assert(fuzzyTolerance(3) === 0 && fuzzyTolerance(4) === 0, 'fuzzyTolerance: no edits under 5 letters');
     assert(fuzzyTolerance(5) === 1 && fuzzyTolerance(7) === 1, 'fuzzyTolerance: 1 edit for 5-7 letters');
@@ -242,6 +284,60 @@ function formatDistance(km) {
     assert(names(searchLocations(places, 'גדרה', null)) === '5', 'searchLocations: no near matches when the text itself is found');
     assert(searchLocations(places, 'חיפא', null).length === 0, 'searchLocations: no near match for a 4-letter text (0 edits under 5 letters)');
     assert(searchLocations(places, 'zzzzqqqq', null).length === 0, 'searchLocations: nonsense finds nothing');
+
+    // === Common spellings typed in full (rework of A1) ===
+    // Each city has 2 points; the "noise" records hold the stray substring hits
+    // that used to switch the near-match fallback off.
+    const towns = [];
+    ['פתח תקווה', 'זיכרון יעקב', 'נוף הגליל', 'יוקנעם', 'שהם', 'ראשון לציון', 'רמת גן', 'כפר סבא', 'יהוד', 'פרדס חנה', 'מודיעין', 'קריית שמונה', 'באר שבע', 'תל אביב', 'ירושלים'].forEach((city, n) => {
+        towns.push({ id: 100 + n * 2, name: 'מוקד איסוף', address: 'הראשי 1', city: city });
+        towns.push({ id: 101 + n * 2, name: 'מתנ"ס', address: 'הגפן 2', city: city });
+    });
+    towns.push({ id: 900, name: 'חנות', address: 'פתח תקוה 12', city: 'חולון' });       // street named with the other spelling
+    towns.push({ id: 901, name: 'מכולת', address: 'זכרון יעקב 3', city: 'חיפה' });
+    towns.push({ id: 902, name: 'קיוסק', address: 'יקנעם 4', city: 'עפולה' });
+    towns.push({ id: 903, name: 'מרכז', address: 'שוהם 5', city: 'חיפה' });
+    const cityPoints = (query, city) => {
+        const found = searchLocations(towns, query, null);
+        return found.filter(l => l.city === city).length + '/' + found.length;
+    };
+    assert(cityPoints('פתח תקוה', 'פתח תקווה') === '2/3', 'spelling: "פתח תקוה" finds the פתח תקווה points (got ' + cityPoints('פתח תקוה', 'פתח תקווה') + ')');
+    assert(cityPoints('זכרון יעקב', 'זיכרון יעקב') === '2/2', 'spelling: "זכרון יעקב" finds זיכרון יעקב (got ' + cityPoints('זכרון יעקב', 'זיכרון יעקב') + ')');
+    assert(cityPoints('נצרת עילית', 'נוף הגליל') === '2/2', 'spelling: "נצרת עילית" finds נוף הגליל');
+    assert(cityPoints('נצרת עלית', 'נוף הגליל') === '2/2', 'spelling: "נצרת עלית" finds נוף הגליל');
+    assert(cityPoints('יקנעם', 'יוקנעם') === '2/2', 'spelling: "יקנעם" finds יוקנעם (got ' + cityPoints('יקנעם', 'יוקנעם') + ')');
+    assert(cityPoints('שוהם', 'שהם') === '2/2', 'spelling: "שוהם" finds שהם (got ' + cityPoints('שוהם', 'שהם') + ')');
+    assert(cityPoints('ראשלצ', 'ראשון לציון') === '2/2', 'spelling: "ראשלצ" finds ראשון לציון');
+    assert(cityPoints('ר"ג', 'רמת גן') === '2/2', 'spelling: ר"ג finds רמת גן');
+    assert(cityPoints('כפ"ס', 'כפר סבא') === '2/2', 'spelling: כפ"ס finds כפר סבא');
+    assert(cityPoints('יהוד מונוסון', 'יהוד') === '2/2', 'spelling: "יהוד מונוסון" finds יהוד');
+    assert(cityPoints('פרדס חנה כרכור', 'פרדס חנה') === '2/2', 'spelling: "פרדס חנה כרכור" finds פרדס חנה');
+    assert(cityPoints('מודיעין מכבים רעות', 'מודיעין') === '2/2', 'spelling: "מודיעין מכבים רעות" finds מודיעין');
+    assert(searchLocations(towns, 'מתנס', null).length === 15, 'spelling: "מתנס" finds every מתנ"ס (got ' + searchLocations(towns, 'מתנס', null).length + ')');
+    assert(cityPoints('ירושליים', 'ירושלים') === '2/2', 'spelling: "ירושליים" finds ירושלים');
+    assert(cityPoints('קרית שמונה', 'קריית שמונה') === '2/2', 'spelling: "קרית שמונה" finds קריית שמונה');
+    assert(cityPoints('באר-שבע', 'באר שבע') === '2/2', 'spelling: "באר-שבע" finds באר שבע');
+    assert(cityPoints('תל-אביב', 'תל אביב') === '2/2', 'spelling: "תל-אביב" finds תל אביב');
+    assert(cityPoints('tel aviv', 'תל אביב') === '2/2', 'spelling: "tel aviv" finds תל אביב');
+
+    // === matchCities tests (the cities in the suggestion list; Enter picks only a "same" city) ===
+    const counts = new Map([['רמלה', 31], ['חדרה', 42], ['גדרה', 9], ['תל אביב', 375], ['שאג\'ור', 3], ['מגדל', 4], ['מגדל העמק', 20], ['אליפז', 1], ['נוף הגליל', 16], ['רגבה', 2], ['פתח תקווה', 140], ['תקומה', 1], ['לוד', 11], ['לוט', 1], ['ירושלים', 178]]);
+    const cityList = text => matchCities(counts, text).map(c => c.name + (c.same ? '=' : c.exact ? '' : '~')).join(',');
+    assert(cityList('מגה') === '', 'matchCities: "מגה" offers no city (was רמלה) (got ' + cityList('מגה') + ')');
+    assert(cityList('באג') === '', 'matchCities: "באג" offers no city (was שאג\'ור)');
+    assert(cityList('דלק') === '', 'matchCities: "דלק" offers no city (was מגדל)');
+    assert(cityList('לוד') === 'לוד=', 'matchCities: 3-letter city name has no near-miss city (got ' + cityList('לוד') + ')');
+    assert(cityList('חדרה') === 'חדרה=', 'matchCities: 4-letter city name has no near-miss city (got ' + cityList('חדרה') + ')');
+    assert(cityList('פז') === 'אליפז' && matchCities(counts, 'פז')[0].same === false, 'matchCities: "פז" is inside אליפז but is not that city, so Enter does not pick it');
+    assert(cityList('גלי') === 'נוף הגליל', 'matchCities: "גלי" is part of a city name, not a city');
+    assert(cityList('ר"ג') === '', 'matchCities: ר"ג offers no near-miss (was רגבה); רמת גן is not in this list');
+    assert(cityList('תקוה') === 'פתח תקווה', 'matchCities: "תקוה" offers פתח תקווה, not תקומה (got ' + cityList('תקוה') + ')');
+    assert(cityList('ת"א') === 'תל אביב=', 'matchCities: ת"א is the city תל אביב');
+    assert(cityList('תל אביב יפו') === 'תל אביב=', 'matchCities: "תל אביב יפו" is the city תל אביב');
+    assert(cityList('פתח תקוה') === 'פתח תקווה=', 'matchCities: "פתח תקוה" is the city פתח תקווה');
+    assert(cityList('מגדל') === 'מגדל=,מגדל העמק', 'matchCities: the city that was typed comes before a bigger city containing it (got ' + cityList('מגדל') + ')');
+    assert(cityList('ירושלם') === 'ירושלים~', 'matchCities: a 6-letter typing mistake still offers the city, marked as not the same');
+    assert(cityList('') === '', 'matchCities: empty text offers nothing');
 
     // === isValidLocation tests (the filter applied to locations.json when it loads) ===
     const goodLoc = { id: 100, name: 'א', address: 'ב', city: 'ג', type: 'store', lat: 32.1, lng: 34.8 };
