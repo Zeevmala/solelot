@@ -5,6 +5,7 @@
     "{ \"exclude\": true } - the coordinates contradict the address (pin is 12-190 km from the listed city), so the point is left off the map rather than sending someone to the wrong place.",
     "Found in November 2026 by comparing every point with the median position of its city and reverse-geocoding the outliers with OpenStreetMap Nominatim.",
     "Added 2026-11-25 (launch-readiness B-2), each checked with a Nominatim reverse geocode: 15 more excludes where the pin is in a different locality than the address (3.5-190 km away), 13 city fixes where the pin is right and the city was wrong, and 347251 excluded because its name is a coordinate and it has no address.",
+    "Added 2026-11-25 (launch-readiness B-3): 346143 is at the entrance to Kibbutz Eilon, 0.6 km from the other אילון point, so its city is אילון (MAI wrote איילון). 344355 is the fuel station by Kibbutz Dvir, which MAI lists under the kibbutz's other name דבירה; its city is דביר so the two points are found together.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -13,6 +14,9 @@
     },
     "343803": {
       "city": "כפר תבור"
+    },
+    "344355": {
+      "city": "דביר"
     },
     "344449": {
       "city": "נצרת"
@@ -112,6 +116,9 @@
     },
     "346051": {
       "city": "שפרעם"
+    },
+    "346143": {
+      "city": "אילון"
     },
     "346168": {
       "city": "גוש עציון"

@@ -198,7 +198,8 @@ test('normalizeCity: one spelling for the localities found in the audit', () => 
         'דיר אל אסאד': 'דיר אל-אסד',
         'מעלות': 'מעלות תרשיחא',
         'זבולון - כבר המכבי': 'כפר המכבי',
-        'עמק חפר - כמכמורת': 'מכמורת'
+        'עמק חפר - כמכמורת': 'מכמורת',
+        'שדה עוזיה': 'שדה עוזיהו'
     };
     for (const [from, to] of Object.entries(expected)) {
         assert.strictEqual(normalizeCity(from), to, from);
@@ -253,6 +254,25 @@ test('the chain-internal branch code is removed from the name', () => {
     assert.strictEqual(location.chain, 'mega');
 });
 
+test('a business name that is only the address becomes "נקודת איסוף - <street>"', () => {
+    // real records: 343467 "ההשראה 2, שלומי", 345324 (place only), 344752 (city field holds the address)
+    const a = transformMarker(marker({}, { city: 'שלומי', street: 'ההשראה', house_number: '2', business_name: 'ההשראה 2, שלומי' }), noCache).location;
+    assert.strictEqual(a.name, 'נקודת איסוף - ההשראה 2');
+    assert.strictEqual(a.address, 'ההשראה 2, שלומי');
+    const b = transformMarker(marker({}, {
+        city: 'ירושלים', street: undefined, house_number: undefined,
+        neighborhood: 'מרכז מסחרי נווה יעקב', business_name: 'מרכז מסחרי נווה יעקב, ירושלים'
+    }), noCache).location;
+    assert.strictEqual(b.name, 'נקודת איסוף - מרכז מסחרי נווה יעקב');
+    const c = transformMarker(marker({}, {
+        city: 'פנחס לבון 18 נתניה', street: 'פנחס לבון', house_number: '18', business_name: 'פנחס לבון 18, נתניה'
+    }), noCache).location;
+    assert.strictEqual(c.name, 'נקודת איסוף - פנחס לבון 18');
+    assert.strictEqual(c.city, 'נתניה');
+    // a real name is left alone
+    assert.strictEqual(transformMarker(marker(), noCache).location.name, 'באג');
+});
+
 test('streetKey ignores numbers, quotes and street words', () => {
     assert.strictEqual(streetKey("רח' הרצל 10"), 'הרצל');
     assert.strictEqual(streetKey('שדרות יגאל אלון 3'), streetKey('יגאל אלון 3'));
@@ -285,6 +305,17 @@ test('stacked coordinates: a shopping centre (same street, different shops) is k
     ];
     const { locations, dropped } = buildLocations(markers, noCache);
     assert.deepStrictEqual(locations.map(l => l.id), [21, 22, 23]);
+    assert.deepStrictEqual(dropped.stacked, []);
+});
+
+test('stacked coordinates: one street written short and long is still one street', () => {
+    const markers = [
+        marker({ id: '25' }, { business_name: 'באג', street: 'אבא הלל סילבר', house_number: '301' }),
+        marker({ id: '26' }, { business_name: 'קרביץ', street: 'אבא הלל', house_number: '301' }),
+        marker({ id: '27' }, { business_name: 'גולף', street: 'אבא הלל', house_number: '301' })
+    ];
+    const { locations, dropped } = buildLocations(markers, noCache);
+    assert.deepStrictEqual(locations.map(l => l.id), [25, 26, 27]);
     assert.deepStrictEqual(dropped.stacked, []);
 });
 

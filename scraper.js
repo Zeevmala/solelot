@@ -133,6 +133,7 @@ const CITY_ALIASES = {
     'מעלות': 'מעלות תרשיחא',
     'כבר המכבי': 'כפר המכבי',
     'כמכמורת': 'מכמורת',
+    'שדה עוזיה': 'שדה עוזיהו',
     'פרדס חנה-כרכור': 'פרדס חנה',
     'פרדס חנה כרכור': 'פרדס חנה'
 };
@@ -315,6 +316,14 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
     if (place && place !== name && !street.includes(place)) addressParts.push(place);
     addressParts.push(city);
 
+    // Some records have the address typed in as the business name
+    // ("ההשראה 2, שלומי"). The same text twice helps nobody, so such a point
+    // gets the generic name that nameless points get.
+    const withoutCommas = text => text.replace(/,/g, '');
+    if (withoutCommas(name) === withoutCommas(addressParts.join(', '))) {
+        name = 'נקודת איסוף - ' + (addressParts.slice(0, -1).join(', ') || city);
+    }
+
     return {
         location: {
             id: parseInt(marker.id, 10),
@@ -420,8 +429,10 @@ function streetKey(street) {
 // A shopping centre (same street, different shops) is not stacked. Neither is a
 // point with no street next to points of the same city: it does not contradict them.
 function isStacked(group) {
-    const streets = new Set(group.map(entry => streetKey(entry.street)).filter(Boolean));
-    if (streets.size > 1) return true;
+    const streets = [...new Set(group.map(entry => streetKey(entry.street)).filter(Boolean))];
+    // "אבא הלל" and "אבא הלל סילבר" are one street: a key that starts another is the same street.
+    const sameStreet = (a, b) => (a + ' ').startsWith(b + ' ') || (b + ' ').startsWith(a + ' ');
+    if (streets.some(a => streets.some(b => !sameStreet(a, b)))) return true;
     const someoneHasNoStreet = group.some(entry => !streetKey(entry.street));
     const cities = new Set(group.map(entry => entry.location.city));
     return someoneHasNoStreet && cities.size > 1;
