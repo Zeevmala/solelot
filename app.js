@@ -174,6 +174,108 @@ function fuzzyMatch(text, query, maxDist = 2) {
     return false;
 }
 
+// === SEARCH ===
+// Makes two spellings of the same thing equal before they are compared:
+// Latin letters in lower case, Hebrew quote marks as plain ones, hyphens as spaces.
+function normalizeText(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/[\u05F4\u201C\u201D]/g, '"')
+        .replace(/[\u05F3\u2018\u2019]/g, "'")
+        .replace(/[-\u05BE\u2013]/g, ' ')
+        .replace(/קרית /g, 'קריית ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// Short names people type for a city -> the city name used in the data.
+// Keys are written the way normalizeText() returns them.
+const QUERY_ALIASES = {
+    'ת"א': 'תל אביב',
+    'תל אביב יפו': 'תל אביב',
+    'tel aviv': 'תל אביב',
+    'ראשל"צ': 'ראשון לציון',
+    'פ"ת': 'פתח תקווה',
+    'ב"ש': 'באר שבע',
+    'י ם': 'ירושלים'
+};
+
+// The search text as it is compared with the data
+function normalizeQuery(text) {
+    const query = normalizeText(text);
+    return Object.prototype.hasOwnProperty.call(QUERY_ALIASES, query) ? QUERY_ALIASES[query] : query;
+}
+
+// How many wrong letters a query may have: none in a short word, where one
+// changed letter already makes a different word (לוד / לוט)
+function fuzzyTolerance(queryLength) {
+    if (queryLength < 5) return 0;
+    if (queryLength < 8) return 1;
+    return 2;
+}
+
+// The locations a search shows on the map.
+// A city picked from the suggestions shows exactly that city. Typed text shows the
+// locations that contain it; only when there are none does it fall back to
+// near matches (typing mistakes).
+function searchLocations(locations, query, cityFilter) {
+    if (cityFilter) return locations.filter(location => location.city === cityFilter);
+
+    const q = normalizeQuery(query);
+    if (q === '') return locations.slice();
+
+    const fields = locations.map(location => [
+        normalizeText(location.name),
+        normalizeText(location.address),
+        normalizeText(location.city)
+    ]);
+    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
+    return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
+}
+
+// === DATA CHECK ===
+// A record from locations.json is shown only if it has everything the page needs.
+// The id must be a whole number: it is written into HTML attributes.
+function isValidLocation(loc) {
+    if (!loc || !Number.isInteger(loc.id) || loc.id <= 0) return false;
+    if (!loc.name || !loc.address || !loc.city || !loc.type) return false;
+    if (!['store', 'facility'].includes(loc.type)) return false;
+    if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return false;
+    if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
+    if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
+    return true;
+}
+
+// === EMPTY STATE TEXT ===
+// The same panel says "no results" for a search and "error" when loading failed
+function setEmptyStateText(title, text, buttonText) {
+    const emptyState = document.getElementById('empty-state');
+    if (!emptyState) return;
+    const h3 = emptyState.querySelector('h3');
+    const p = emptyState.querySelector('p');
+    const btn = emptyState.querySelector('.clear-filters-btn');
+    if (h3) h3.textContent = title;
+    if (p) p.textContent = text;
+    if (btn) btn.textContent = buttonText;
+}
+
+// The map library comes from another server (unpkg). If it did not arrive, nothing
+// below can work: show the error panel instead of leaving the loading screen forever.
+if (typeof L === 'undefined' || typeof L.markerClusterGroup !== 'function') {
+    setEmptyStateText('שגיאה בטעינת המפה', 'בדוק את החיבור לאינטרנט ונסה שוב', 'טען מחדש');
+    const libraryErrorPanel = document.getElementById('empty-state');
+    const reloadBtn = document.getElementById('clear-filters');
+    if (reloadBtn) reloadBtn.addEventListener('click', () => window.location.reload());
+    if (libraryErrorPanel) libraryErrorPanel.style.display = 'block';
+    hideLoading();
+    // Stops the rest of this file, which needs the map library
+    throw new Error('Leaflet did not load');
+}
+
 // === MAP INITIALIZATION ===
 // The box that frames the whole country, Metula to Eilat.
 // fitBounds picks the zoom for the screen size (a fixed zoom left Israel tiny on desktop).
@@ -201,14 +303,19 @@ const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright
 const baseMaps = {
     'רחובות': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
+        crossOrigin: true, // lets the service worker read and cache the tiles
         attribution: OSM_ATTRIBUTION
     }),
     'בהיר': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
         className: 'basemap-light',
+        crossOrigin: true,
         attribution: OSM_ATTRIBUTION
     })
 };
+
+// Credit for the location data, shown next to the map credit
+map.attributionControl.addAttribution('<a href="https://mai.org.il" target="_blank" rel="noopener">נתונים: תאגיד מ.א.י</a>');
 
 // Track current basemap
 let currentBasemapName = 'בהיר';
@@ -256,8 +363,7 @@ basemapToggle.addTo(map);
     clearBtn.addEventListener('click', () => {
         input.value = '';
         clearBtn.style.display = 'none';
-        currentSearch = '';
-        updateMarkers();
+        setSearch('', null);
         const suggestions = document.getElementById('search-suggestions');
         if (suggestions) {
             suggestions.classList.remove('active');
@@ -405,7 +511,9 @@ const facilityLayer = L.layerGroup().addTo(map);
 const cityCounts = new Map();
 
 // Current state
-let currentSearch = '';
+let currentSearch = '';       // the text in the search box
+let currentCity = null;       // a city picked from the suggestions, or null
+let searchTimeout = null;     // the short wait after typing, before the map updates
 let selectedLocationId = null;
 
 // Calculate distance between two points (in km)
@@ -606,27 +714,26 @@ function hideSidebar() {
     selectedLocationId = null;
 }
 
-// Does a location match the current search text?
-function matchesSearch(location) {
-    return currentSearch === '' ||
-        location.city.includes(currentSearch) ||
-        location.name.includes(currentSearch) ||
-        location.address.includes(currentSearch) ||
-        fuzzyMatch(location.city, currentSearch) ||
-        fuzzyMatch(location.name, currentSearch) ||
-        fuzzyMatch(location.address, currentSearch);
+// Set what the map is filtered by, and redraw. Every change of the search goes
+// through here, so a typing timer that is still waiting can never bring old text back.
+function setSearch(text, city) {
+    clearTimeout(searchTimeout);
+    currentSearch = text;
+    currentCity = city;
+    return updateMarkers();
 }
 
 // Update which markers are visible based on search and the legend switches
 function updateMarkers() {
     const visibleMarkers = [];
     const clusteredMarkers = [];
+    const matches = new Set(searchLocations(allLocations, currentSearch, currentCity));
 
     facilityLayer.clearLayers();
 
     allMarkers.forEach((item) => {
         const location = item.location;
-        if (!visibleTypes[location.type] || !matchesSearch(location)) return;
+        if (!visibleTypes[location.type] || !matches.has(location)) return;
 
         visibleMarkers.push(item.marker);
         if (location.type === 'facility') {
@@ -691,74 +798,63 @@ function setupAutocomplete() {
 
     let highlightedIndex = -1;
 
-    let searchTimeout;
     searchInput.addEventListener('input', () => {
-        const query = searchInput.value.trim().substring(0, 50);
+        const text = searchInput.value.trim().substring(0, 50);
+        const query = normalizeQuery(text);
 
-        // Debounced marker update when suggestions aren't showing
+        // The map follows the text in the box, with or without a suggestion list.
+        // Typing also ends an earlier city pick.
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            currentSearch = query;
-            if (!suggestions.classList.contains('active')) {
-                updateMarkers();
-            }
-        }, 300);
+        currentCity = null;
 
         if (query.length < 2) {
             suggestions.classList.remove('active');
             searchInput.setAttribute('aria-expanded', 'false');
             suggestions.innerHTML = '';
             highlightedIndex = -1;
-            currentSearch = query;
-            updateMarkers();
+            setSearch(text, null);
             return;
         }
 
+        searchTimeout = setTimeout(() => setSearch(text, null), 300);
+
         const cityMatches = [];
-        const locationMatches = [];
         const addedCities = new Set();
 
-        allLocations.forEach(location => {
-            // Location matching — tag exact vs fuzzy
-            const exactLocation = location.name.includes(query) || location.address.includes(query);
-            const fuzzyLocation = !exactLocation && (fuzzyMatch(location.name, query) || fuzzyMatch(location.address, query));
-            if (exactLocation || fuzzyLocation) {
-                locationMatches.push({
-                    type: 'location',
-                    id: location.id,
-                    name: location.name,
-                    city: location.city,
-                    locationType: location.type,
-                    exact: exactLocation
-                });
-            }
+        // Locations: the same ones the map will show for this text
+        const locationMatches = searchLocations(allLocations, text, null).map(location => ({
+            type: 'location',
+            id: location.id,
+            name: location.name,
+            city: location.city,
+            locationType: location.type
+        }));
 
+        allLocations.forEach(location => {
             // City matching — maxDist=1 for tighter fuzzy, tag exact vs fuzzy
             if (!addedCities.has(location.city)) {
-                const exactCity = location.city.includes(query);
-                const fuzzyCity = !exactCity && fuzzyMatch(location.city, query, 1);
+                const city = normalizeText(location.city);
+                const exactCity = city.includes(query);
+                const fuzzyCity = !exactCity && fuzzyMatch(city, query, 1);
                 if (exactCity || fuzzyCity) {
                     addedCities.add(location.city);
                     cityMatches.push({
                         type: 'city',
                         name: location.city,
                         count: cityCounts.get(location.city) || 0,
-                        exact: exactCity
+                        exact: exactCity,
+                        same: city === query
                     });
                 }
             }
         });
 
-        // Sort cities: exact first (by count desc), then fuzzy (by count desc)
+        // Sort cities: exact first (by count desc), then fuzzy (by count desc).
+        // The city that is exactly the typed text comes before all of them
         cityMatches.sort((a, b) => {
+            if (a.same !== b.same) return a.same ? -1 : 1;
             if (a.exact !== b.exact) return a.exact ? -1 : 1;
             return b.count - a.count;
-        });
-
-        // Sort locations: exact first, then fuzzy
-        locationMatches.sort((a, b) => {
-            if (a.exact !== b.exact) return a.exact ? -1 : 1;
-            return 0;
         });
 
         const limitedMatches = [...cityMatches, ...locationMatches].slice(0, 8);
@@ -820,9 +916,15 @@ function setupAutocomplete() {
             e.preventDefault();
             highlightedIndex = Math.max(highlightedIndex - 1, -1);
             updateHighlight(items);
-        } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+        } else if (e.key === 'Enter') {
             e.preventDefault();
-            selectSuggestion(items[highlightedIndex]);
+            if (suggestions.classList.contains('active') && items.length > 0) {
+                // Nothing highlighted: Enter takes the first suggestion
+                selectSuggestion(items[Math.max(highlightedIndex, 0)]);
+            } else {
+                // No list to pick from: show the typed text on the map now
+                setSearch(searchInput.value.trim().substring(0, 50), null);
+            }
         } else if (e.key === 'Escape') {
             suggestions.classList.remove('active');
             searchInput.setAttribute('aria-expanded', 'false');
@@ -853,13 +955,16 @@ function setupAutocomplete() {
         if (type === 'city') {
             const city = item.dataset.value;
             searchInput.value = city;
-            currentSearch = city;
-            const visibleMarkers = updateMarkers();
+            const visibleMarkers = setSearch(city, city);
             zoomToVisibleMarkers(visibleMarkers);
         } else {
             const locationId = parseInt(item.dataset.id, 10);
             if (isNaN(locationId)) return;
+            // The box is emptied, so the map goes back to showing everything
             searchInput.value = '';
+            const clearBtn = document.getElementById('search-clear');
+            if (clearBtn) clearBtn.style.display = 'none';
+            setSearch('', null);
             focusOnLocation(locationId);
         }
 
@@ -1048,6 +1153,7 @@ legendControl.onAdd = function() {
     const container = L.DomUtil.create('div', 'map-legend');
     container.setAttribute('role', 'group');
     container.setAttribute('aria-label', 'מקרא וסינון לפי סוג');
+    container.hidden = true; // shown by updateLegendCounts() once the data has loaded
     container.innerHTML = Object.keys(visibleTypes).map(type => `
         <button type="button" class="legend-item" data-legend-type="${type}" aria-pressed="true">
             <span class="legend-icon">${pinSvg(type, 18, 24)}</span>
@@ -1134,14 +1240,7 @@ function loadLocations() {
         })
         .then(data => {
             // Validate and filter location data
-            const VALID_TYPES = ['store', 'facility'];
-            allLocations = data.locations.filter(loc => {
-                if (!loc.id || !loc.name || !loc.address || !loc.city || !loc.type) return false;
-                if (!VALID_TYPES.includes(loc.type)) return false;
-                if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
-                if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
-                return true;
-            });
+            allLocations = data.locations.filter(isValidLocation);
             totalLocations = allLocations.length;
 
             // Pre-compute city counts for fast autocomplete
@@ -1191,11 +1290,18 @@ function loadLocations() {
 
             setupAutocomplete();
             updateLegendCounts();
+
+            // After a failed load the panel still holds the error texts: put the
+            // "no results" texts back. updateMarkers() then shows or hides the panel.
+            setEmptyStateText('לא נמצאו תוצאות', 'נסה לשנות את הסינון או לחפש מונח אחר', 'נקה סינון');
             updateMarkers();
 
-            // Hide error state if it was showing
-            const emptyState = document.getElementById('empty-state');
-            if (emptyState) emptyState.style.display = 'none';
+            // PWA shortcut ?action=nearest: only now is there data to find the nearest point in
+            if (pendingNearest) {
+                pendingNearest = false;
+                const locateBtn = document.querySelector('.locate-btn');
+                if (locateBtn) locateBtn.click();
+            }
 
             setTimeout(() => {
                 hideLoading();
@@ -1206,26 +1312,16 @@ function loadLocations() {
             hideLoading();
 
             // Show empty state with retry option
+            setEmptyStateText('שגיאה בטעינת הנתונים', 'בדוק את החיבור לאינטרנט ונסה שוב', 'נסה שוב');
             const emptyState = document.getElementById('empty-state');
-            if (emptyState) {
-                const h3 = emptyState.querySelector('h3');
-                const p = emptyState.querySelector('p');
-                if (h3) h3.textContent = 'שגיאה בטעינת הנתונים';
-                if (p) p.textContent = 'בדוק את החיבור לאינטרנט ונסה שוב';
-                const retryBtn = emptyState.querySelector('.clear-filters-btn');
-                if (retryBtn) retryBtn.textContent = 'נסה שוב';
-                emptyState.style.display = 'block';
-            }
+            if (emptyState) emptyState.style.display = 'block';
         });
 }
 
-loadLocations();
+// PWA shortcut ?action=nearest: remembered here, carried out when the data has loaded
+let pendingNearest = new URLSearchParams(window.location.search).get('action') === 'nearest';
 
-// Handle PWA shortcut: ?action=nearest
-if (new URLSearchParams(window.location.search).get('action') === 'nearest') {
-    const locateBtn = document.querySelector('.locate-btn');
-    if (locateBtn) locateBtn.click();
-}
+loadLocations();
 
 // === EVENT LISTENERS ===
 
@@ -1295,13 +1391,12 @@ if (clearFiltersBtn) {
             loadLocations();
         } else {
             // Clear the search and switch every legend type back on
-            currentSearch = '';
             const searchInput = document.getElementById('search-input');
             if (searchInput) searchInput.value = '';
             const clearBtn = document.getElementById('search-clear');
             if (clearBtn) clearBtn.style.display = 'none';
             Object.keys(visibleTypes).forEach(type => setTypeVisible(type, true));
-            updateMarkers();
+            setSearch('', null);
         }
     });
 }

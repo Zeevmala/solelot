@@ -32,50 +32,125 @@
         condition ? passed++ : failed++;
     }
 
-    // === Import functions from app.js (copy the pure functions) ===
+    // >>> COPIED FROM app.js - exact copies, do not edit here (change app.js, then copy again)
+const EARTH_RADIUS_KM = 6371;
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
-    function fuzzyMatch(text, query, maxDist = 2) {
-        if (!text || !query) return false;
-        if (text.includes(query)) return true;
-        if (query.length <= 2) return false;
-        if (Math.abs(text.length - query.length) > 3) return false;
-        const qLen = query.length;
-        const tLen = text.length;
-        let prev = new Array(qLen + 1);
-        for (let j = 0; j <= qLen; j++) prev[j] = j;
-        for (let i = 1; i <= tLen; i++) {
-            const curr = new Array(qLen + 1);
-            curr[0] = 0;
-            for (let j = 1; j <= qLen; j++) {
-                const cost = text[i - 1] === query[j - 1] ? 0 : 1;
-                curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
-            }
-            if (curr[qLen] <= maxDist) return true;
-            prev = curr;
+function fuzzyMatch(text, query, maxDist = 2) {
+    if (!text || !query) return false;
+    if (text.includes(query)) return true;
+    if (query.length <= 2) return false; // too short for fuzzy
+    if (Math.abs(text.length - query.length) > 3) return false; // too different to match
+
+    // Sliding window Levenshtein: check if any substring of text
+    // of length ~query.length is within maxDist edits
+    const qLen = query.length;
+    const tLen = text.length;
+
+    // Initialize DP row — allow free start position in text
+    let prev = new Array(qLen + 1);
+    for (let j = 0; j <= qLen; j++) prev[j] = j;
+
+    for (let i = 1; i <= tLen; i++) {
+        const curr = new Array(qLen + 1);
+        curr[0] = 0; // free start position
+        for (let j = 1; j <= qLen; j++) {
+            const cost = text[i - 1] === query[j - 1] ? 0 : 1;
+            curr[j] = Math.min(
+                prev[j] + 1,      // deletion
+                curr[j - 1] + 1,  // insertion
+                prev[j - 1] + cost // substitution
+            );
         }
-        return false;
+        // Check if we found a good enough match ending here
+        if (curr[qLen] <= maxDist) return true;
+        prev = curr;
     }
+    return false;
+}
 
-    function getDistance(lat1, lng1, lat2, lng2) {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLng/2) * Math.sin(dLng/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    }
+function normalizeText(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/[\u05F4\u201C\u201D]/g, '"')
+        .replace(/[\u05F3\u2018\u2019]/g, "'")
+        .replace(/[-\u05BE\u2013]/g, ' ')
+        .replace(/קרית /g, 'קריית ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+const QUERY_ALIASES = {
+    'ת"א': 'תל אביב',
+    'תל אביב יפו': 'תל אביב',
+    'tel aviv': 'תל אביב',
+    'ראשל"צ': 'ראשון לציון',
+    'פ"ת': 'פתח תקווה',
+    'ב"ש': 'באר שבע',
+    'י ם': 'ירושלים'
+};
+
+function normalizeQuery(text) {
+    const query = normalizeText(text);
+    return Object.prototype.hasOwnProperty.call(QUERY_ALIASES, query) ? QUERY_ALIASES[query] : query;
+}
+
+function fuzzyTolerance(queryLength) {
+    if (queryLength < 5) return 0;
+    if (queryLength < 8) return 1;
+    return 2;
+}
+
+function searchLocations(locations, query, cityFilter) {
+    if (cityFilter) return locations.filter(location => location.city === cityFilter);
+
+    const q = normalizeQuery(query);
+    if (q === '') return locations.slice();
+
+    const fields = locations.map(location => [
+        normalizeText(location.name),
+        normalizeText(location.address),
+        normalizeText(location.city)
+    ]);
+    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
+    return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
+}
+
+function isValidLocation(loc) {
+    if (!loc || !Number.isInteger(loc.id) || loc.id <= 0) return false;
+    if (!loc.name || !loc.address || !loc.city || !loc.type) return false;
+    if (!['store', 'facility'].includes(loc.type)) return false;
+    if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return false;
+    if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
+    if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
+    return true;
+}
+
+function getDistance(lat1, lng1, lat2, lng2) {
+    const R = EARTH_RADIUS_KM;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+    // <<< END OF COPIES
 
     // === escapeHtml tests ===
     assert(escapeHtml('hello') === 'hello', 'escapeHtml: plain text unchanged');
@@ -102,6 +177,81 @@
     assert(fuzzyMatch('בטחה', 'חיפה', 1) === false, 'fuzzyMatch: maxDist=1 rejects distant city');
     assert(fuzzyMatch('חיפה', 'חיפה', 1) === true, 'fuzzyMatch: maxDist=1 exact match');
     assert(fuzzyMatch('חיפה', 'חיפ', 1) === true, 'fuzzyMatch: maxDist=1 substring match');
+
+    // === Search tests (normalizeText, normalizeQuery, fuzzyTolerance, searchLocations) ===
+    const names = list => list.map(l => l.id).join(',');
+    const places = [
+        { id: 1, name: 'סופר פארם', address: 'הנשיא 10', city: 'חדרה' },
+        { id: 2, name: 'שופרסל', address: 'הרצל 5', city: 'חדרה' },
+        { id: 3, name: 'מכולת חדרה הקטנה', address: 'ויצמן 1', city: 'חיפה' },   // other city, name contains חדרה
+        { id: 4, name: 'KSP מחשבים', address: 'דרך חדרה 3', city: 'נתניה' },      // other city, address contains חדרה
+        { id: 5, name: 'בית ספר גדרה', address: 'הבנים 2', city: 'גדרה' },         // one letter away from חדרה
+        { id: 6, name: 'מרכז מסחרי', address: 'הרצל 1', city: 'לוד' },
+        { id: 7, name: 'מרכז מסחרי', address: 'הגפן 4', city: 'לוט' },             // one letter away from לוד
+        { id: 8, name: 'בנק', address: 'אלנבי 9', city: 'תל אביב' },
+        { id: 9, name: 'ביה״ס אורט', address: 'העצמאות 7', city: 'קרית אתא' },
+        { id: 10, name: 'דואר', address: 'יפו 20', city: 'ירושלים' },
+        { id: 11, name: 'מתנ"ס', address: 'בן גוריון 8', city: 'ג\'סר א-זרקא' }
+    ];
+
+    assert(normalizeText('KSP') === 'ksp', 'normalizeText: Latin letters become lower case');
+    assert(normalizeText('ביה״ס') === 'ביה"ס', 'normalizeText: Hebrew gershayim becomes a plain double quote');
+    assert(normalizeText('ג׳סר') === "ג'סר", 'normalizeText: Hebrew geresh becomes a plain single quote');
+    assert(normalizeText('תל אביב-יפו') === 'תל אביב יפו', 'normalizeText: hyphen becomes a space');
+    assert(normalizeText('קרית אתא') === 'קריית אתא', 'normalizeText: קרית becomes קריית');
+    assert(normalizeText('  תל   אביב ') === 'תל אביב', 'normalizeText: extra spaces removed');
+    assert(normalizeText(null) === '', 'normalizeText: null returns empty');
+
+    assert(normalizeQuery('ת"א') === 'תל אביב', 'normalizeQuery: alias ת"א');
+    assert(normalizeQuery('ת״א') === 'תל אביב', 'normalizeQuery: alias ת״א (Hebrew gershayim)');
+    assert(normalizeQuery('תל אביב יפו') === 'תל אביב', 'normalizeQuery: alias תל אביב יפו');
+    assert(normalizeQuery('תל אביב-יפו') === 'תל אביב', 'normalizeQuery: alias תל אביב-יפו');
+    assert(normalizeQuery('Tel Aviv') === 'תל אביב', 'normalizeQuery: alias Tel Aviv');
+    assert(normalizeQuery('ראשל"צ') === 'ראשון לציון', 'normalizeQuery: alias ראשל"צ');
+    assert(normalizeQuery('פ"ת') === 'פתח תקווה', 'normalizeQuery: alias פ"ת');
+    assert(normalizeQuery('ב"ש') === 'באר שבע', 'normalizeQuery: alias ב"ש');
+    assert(normalizeQuery('י-ם') === 'ירושלים', 'normalizeQuery: alias י-ם');
+    assert(normalizeQuery('toString') === 'tostring', 'normalizeQuery: built-in property names are not aliases');
+    assert(normalizeQuery('חיפה') === 'חיפה', 'normalizeQuery: other text unchanged');
+
+    assert(fuzzyTolerance(3) === 0 && fuzzyTolerance(4) === 0, 'fuzzyTolerance: no edits under 5 letters');
+    assert(fuzzyTolerance(5) === 1 && fuzzyTolerance(7) === 1, 'fuzzyTolerance: 1 edit for 5-7 letters');
+    assert(fuzzyTolerance(8) === 2 && fuzzyTolerance(20) === 2, 'fuzzyTolerance: 2 edits from 8 letters');
+
+    assert(searchLocations(places, '', null).length === places.length, 'searchLocations: empty text shows everything');
+    assert(names(searchLocations(places, 'חדרה', 'חדרה')) === '1,2', 'searchLocations: a picked city shows exactly that city (got ' + names(searchLocations(places, 'חדרה', 'חדרה')) + ')');
+    assert(names(searchLocations(places, 'חדרה', null)) === '1,2,3,4', 'searchLocations: typed חדרה shows only records containing חדרה, not גדרה (got ' + names(searchLocations(places, 'חדרה', null)) + ')');
+    assert(names(searchLocations(places, 'לוד', null)) === '6', 'searchLocations: short text "לוד" does not match לוט (got ' + names(searchLocations(places, 'לוד', null)) + ')');
+    assert(names(searchLocations(places, 'ksp', null)) === '4', 'searchLocations: "ksp" finds KSP');
+    assert(names(searchLocations(places, 'ksp', null)) === names(searchLocations(places, 'KSP', null)), 'searchLocations: "ksp" equals "KSP"');
+    assert(names(searchLocations(places, 'ת"א', null)) === '8', 'searchLocations: ת"א finds תל אביב');
+    assert(names(searchLocations(places, 'ת״א', null)) === '8', 'searchLocations: ת״א finds תל אביב');
+    assert(names(searchLocations(places, 'תל אביב יפו', null)) === '8', 'searchLocations: תל אביב יפו finds תל אביב');
+    assert(names(searchLocations(places, 'י-ם', null)) === '10', 'searchLocations: י-ם finds ירושלים');
+    assert(names(searchLocations(places, 'קריית אתא', null)) === '9', 'searchLocations: קריית finds a record spelled קרית');
+    assert(names(searchLocations(places, 'ביה"ס', null)) === '9', 'searchLocations: plain quote finds a name written with ״');
+    assert(names(searchLocations(places, 'א זרקא', null)) === '11', 'searchLocations: space finds a name written with a hyphen');
+    assert(names(searchLocations(places, 'ירושלם', null)) === '10', 'searchLocations: typing mistake falls back to a near match (ירושלם -> ירושלים)');
+    assert(names(searchLocations(places, 'תל אבבי', null)) === '8', 'searchLocations: typing mistake falls back to a near match (תל אבבי -> תל אביב)');
+    assert(names(searchLocations(places, 'גדרה', null)) === '5', 'searchLocations: no near matches when the text itself is found');
+    assert(searchLocations(places, 'חיפא', null).length === 0, 'searchLocations: no near match for a 4-letter text (0 edits under 5 letters)');
+    assert(searchLocations(places, 'zzzzqqqq', null).length === 0, 'searchLocations: nonsense finds nothing');
+
+    // === isValidLocation tests (the filter applied to locations.json when it loads) ===
+    const goodLoc = { id: 100, name: 'א', address: 'ב', city: 'ג', type: 'store', lat: 32.1, lng: 34.8 };
+    const withField = (key, value) => Object.assign({}, goodLoc, { [key]: value });
+    assert(isValidLocation(goodLoc) === true, 'isValidLocation: a complete record passes');
+    assert(isValidLocation(withField('id', '1"><img src=x onerror=alert(1)>')) === false, 'isValidLocation: id with markup is rejected');
+    assert(isValidLocation(withField('id', '100')) === false, 'isValidLocation: id as a string is rejected');
+    assert(isValidLocation(withField('id', 1.5)) === false, 'isValidLocation: id that is not a whole number is rejected');
+    assert(isValidLocation(withField('id', 0)) === false, 'isValidLocation: id 0 is rejected');
+    assert(isValidLocation(withField('lat', '32.1')) === false, 'isValidLocation: lat as a string is rejected');
+    assert(isValidLocation(withField('lng', null)) === false, 'isValidLocation: missing lng is rejected');
+    assert(isValidLocation(withField('lat', 0)) === false, 'isValidLocation: lat 0 (outside Israel) is rejected');
+    assert(isValidLocation(withField('lat', NaN)) === false, 'isValidLocation: NaN is rejected');
+    assert(isValidLocation(withField('type', 'shop')) === false, 'isValidLocation: unknown type is rejected');
+    assert(isValidLocation(withField('name', '')) === false, 'isValidLocation: empty name is rejected');
+    assert(isValidLocation(null) === false, 'isValidLocation: null is rejected');
 
     // === getDistance tests ===
     const d1 = getDistance(32.0853, 34.7818, 31.7683, 35.2137); // Tel Aviv to Jerusalem
