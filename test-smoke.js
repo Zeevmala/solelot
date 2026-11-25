@@ -33,11 +33,14 @@ const args = process.argv.slice(2);
 const argValue = name => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
 const ROOT = path.resolve(argValue('--root') || __dirname);
 const ONLY = argValue('--only');
+// The checks about timing repeat themselves; SMOKE_RUNS=5 node test-smoke.js repeats them more
+const RUNS = Number(process.env.SMOKE_RUNS || 2);
 
 // Texts and places the checks use. They must exist in locations.json;
 // a check says so clearly if the data changed and one of them is gone.
 const CITY = 'חדרה';            // a city whose name also appears in other cities' addresses
 const SHOP_TEXT = 'מגה';        // a shop name that is not a city
+const CITY_2 = 'לוד';           // any other city
 const PART_OF_CITY = 'גלי';     // inside the city name נוף הגליל, but not a city itself
 const TEL_AVIV = { latitude: 32.0853, longitude: 34.7818, accuracy: 30 };
 
@@ -115,6 +118,28 @@ const type = (page, text, delay = 30) => page.locator('#search-input').pressSequ
 const press = (page, key) => page.locator('#search-input').press(key);
 const clearSearch = async page => { await page.evaluate(() => document.getElementById('search-clear').click()); await page.waitForTimeout(400); };
 const settle = (page, ms = 700) => page.waitForTimeout(ms); // longer than the 300 ms typing wait
+
+// Resolves when the map has stood still for a second (same centre and zoom, no pins
+// being added). Fails loudly if that does not happen in time.
+const mapSettled = (page, timeout = 90000) => page.evaluate(ms => new Promise((resolve, reject) => {
+    const started = Date.now();
+    let last = '', still = 0;
+    const look = () => {
+        const busy = markerAddRunning || redrawWanted || map._animatingZoom;
+        const now = [map.getCenter().lat.toFixed(6), map.getCenter().lng.toFixed(6), map.getZoom()].join();
+        still = (now === last && !busy) ? still + 1 : 0;
+        last = now;
+        if (still >= 5) resolve();
+        else if (Date.now() - started > ms) reject(new Error('the map did not come to rest in ' + ms / 1000 + ' s'));
+        else setTimeout(look, 200);
+    };
+    look();
+}), timeout);
+
+const slowDown = async (context, page, rate) => {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate });
+};
 
 // Selected pins that can really be seen (on screen, and on a phone not under the sheet)
 const visibleSelectedPins = page => page.evaluate(() => {
@@ -247,15 +272,11 @@ async function pickFromSuggestions(viewport, cpuSlowdown) {
     const { context, page, problems } = await openApp({ viewport });
     const target = await tightClusterLocation(page);
     expect(target, 'data changed: no location with two close neighbours');
-    if (cpuSlowdown > 1) {
-        const cdp = await context.newCDPSession(page);
-        await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuSlowdown });
-    }
+    if (cpuSlowdown > 1) await slowDown(context, page, cpuSlowdown);
     await page.locator('#search-input').fill(target.name); // long enough to wait out the typing delay below
     await page.locator(`.suggestion-item[data-id="${target.id}"]`).click({ timeout: 60000 });
     // wait until the map stops moving, not for a fixed time: a slowed-down browser needs longer
-    await page.waitForFunction(() => document.querySelectorAll('.battery-marker.selected').length === 1 && !map._animatingZoom && !map._flyToFrame, null, { timeout: 60000 }).catch(() => {});
-    await page.waitForTimeout(1500 * Math.max(1, cpuSlowdown / 2));
+    await mapSettled(page);
     const result = { pins: await visibleSelectedPins(page), zoom: await page.evaluate(() => map.getZoom()),
         title: await page.evaluate(() => (document.querySelector('#sidebar h2') || {}).textContent) };
     const errors = problems.filter(p => p.startsWith('page error'));
@@ -281,6 +302,127 @@ check('picking a location inside a tight cluster shows it as the one selected pi
 check('picking a location inside a tight cluster shows it as the one selected pin (phone)', () => pickFromSuggestions(PHONE, 1));
 check('the same on a slow phone (CPU 4x slower): pins are still being added when it is picked', () => pickFromSuggestions(PHONE, 4));
 check('the same on a very slow phone (CPU 6x slower)', () => pickFromSuggestions(PHONE, 6));
+
+check('a search change while pins are still being added ends with the pins of the final text', async () => {
+    // 1. On a slow phone the first typed letter starts adding thousands of pins;
+    //    the rest of the word and Enter arrive before that has finished.
+    for (let run = 1; run <= RUNS; run++) {
+        const { context, page, problems } = await openApp({ viewport: PHONE });
+        const own = await inCity(page, CITY);
+        await slowDown(context, page, 6);
+        await page.locator('#search-input').focus();
+        await page.keyboard.type(CITY); await page.keyboard.press('Enter');
+        await mapSettled(page);
+        const s = await shown(page);
+        const errors = problems.filter(p => p.startsWith('page error'));
+        await context.close();
+        expect(errors.length === 0, `type + Enter, run ${run}: ${errors.join(' ; ')}`);
+        expect(s.count === own && s.cities.join() === CITY, `type "${CITY}" + Enter at once, run ${run}: ${s.count} pins in ${s.cities.length} cities (the city has ${own})`);
+    }
+    // 2. Clear (all pins come back, slowly) and new text at once
+    for (let run = 1; run <= RUNS; run++) {
+        const { context, page } = await openApp({ viewport: PHONE });
+        const byText = await containing(page, CITY);
+        await slowDown(context, page, 6);
+        await type(page, SHOP_TEXT); await mapSettled(page);
+        await page.locator('#search-clear').click(); await page.keyboard.insertText(CITY);
+        await page.waitForTimeout(1500); await mapSettled(page);
+        const s = await shown(page);
+        await context.close();
+        expect(s.box === CITY && s.count === byText, `clear, then "${CITY}" at once, run ${run}: ${s.count} pins shown, ${byText} contain the text`);
+    }
+    // 3. Three changes with no pause between them: a city, clear, another city
+    for (let run = 1; run <= RUNS; run++) {
+        const { context, page } = await openApp({ viewport: PHONE });
+        const own = await inCity(page, CITY_2);
+        expect(own > 0, `data changed: no points in ${CITY_2}`);
+        await slowDown(context, page, 4);
+        await page.evaluate(([one, two]) => {
+            const box = document.getElementById('search-input');
+            const typeText = t => { box.value = t; box.dispatchEvent(new Event('input', { bubbles: true })); };
+            const enter = () => box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            typeText(one); enter();
+            document.getElementById('search-clear').click();
+            typeText(two); enter();
+        }, [CITY, CITY_2]);
+        await mapSettled(page);
+        const s = await shown(page);
+        await context.close();
+        expect(s.count === own && s.cities.join() === CITY_2, `"${CITY}", clear, "${CITY_2}" in one go, run ${run}: ${s.count} pins in ${s.cities.length} cities (${CITY_2} has ${own})`);
+    }
+});
+
+// Two places far apart, each with a name no other place has
+const farApartPlaces = page => page.evaluate(() => {
+    const unique = l => l.name.length <= 50 && allLocations.filter(o => o.name === l.name).length === 1;
+    const north = allLocations.find(l => l.lat > 32.7 && unique(l));
+    const south = allLocations.find(l => l.lat < 31.4 && unique(l));
+    return [north, south].map(l => ({ id: l.id, name: l.name, lat: l.lat, lng: l.lng }));
+});
+// Things done inside the page in one go, faster than any person: no pause for the app to catch up
+const typeInPage = (page, text) => page.evaluate(t => {
+    const box = document.getElementById('search-input');
+    box.value = t;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+}, text);
+const pickInPage = (page, place) => page.evaluate(p => {
+    const box = document.getElementById('search-input');
+    box.value = p.name;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector(`.suggestion-item[data-id="${p.id}"]`).click();
+}, place);
+const enterInPage = page => page.evaluate(() =>
+    document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+// "Zooming to a clustered pin" has started / has just ended
+const revealRunning = page => page.waitForFunction(() => cancelReveal !== null, null, { polling: 'raf', timeout: 15000 });
+const revealOver = page => page.waitForFunction(() => cancelReveal === null, null, { polling: 'raf', timeout: 15000 });
+const endsAt = async (page, place, step) => {
+    await mapSettled(page);
+    const end = await page.evaluate(b => ({ km: getDistance(map.getCenter().lat, map.getCenter().lng, b.lat, b.lng), title: document.querySelector('#sidebar h2').textContent }), place);
+    const pins = await visibleSelectedPins(page);
+    expect(end.title === place.name && end.km < 2 && pins === 1, `${step}: details "${end.title}", map centre ${end.km.toFixed(1)} km from "${place.name}", ${pins} visible selected pins`);
+};
+
+check('a second pick right after the first ends at the second place', async () => {
+    // 1. no pause at all
+    let { context, page, problems } = await openApp();
+    let [first, second] = await farApartPlaces(page);
+    await pickInPage(page, first); await pickInPage(page, second);
+    await endsAt(page, second, 'two picks with no pause');
+    await context.close();
+    // 2. the second pick while the map is still zooming in to the first one
+    ({ context, page, problems } = await openApp());
+    await pickInPage(page, first); await revealRunning(page); await pickInPage(page, second);
+    await endsAt(page, second, 'second pick while zooming to the first');
+    await context.close();
+    // 3. on a phone, the second pick while the map is flying the last stretch to the first one
+    ({ context, page, problems } = await openApp({ viewport: PHONE }));
+    await pickInPage(page, first); await revealRunning(page); await revealOver(page); await pickInPage(page, second);
+    await endsAt(page, second, 'second pick during the flight to the first (phone)');
+    const errors = problems.filter(p => p.startsWith('page error'));
+    await context.close();
+    expect(errors.length === 0, 'page errors: ' + errors[0]);
+});
+
+check('a search while the map is zooming to a picked place leaves no broken listener behind', async () => {
+    const { context, page, problems } = await openApp();
+    const [first] = await farApartPlaces(page);
+    const own = await inCity(page, CITY);
+    await pickInPage(page, first); await revealRunning(page);
+    await typeInPage(page, CITY); await enterInPage(page);
+    await mapSettled(page);
+    // move the map a few times: a listener left behind throws on every movement
+    for (let i = 0; i < 3; i++) {
+        await page.mouse.move(640, 450); await page.mouse.down(); await page.mouse.move(700, 500, { steps: 5 }); await page.mouse.up();
+        await page.waitForTimeout(500);
+    }
+    await page.keyboard.press('Escape');
+    const s = await shown(page);
+    const errors = problems.filter(p => p.startsWith('page error'));
+    await context.close();
+    expect(errors.length === 0, `${errors.length} page errors after the map was moved: ${errors[0]}`);
+    expect(s.count === own && s.cities.join() === CITY, `pick, then "${CITY}" + Enter: ${s.count} shown, city has ${own}`);
+});
 
 check('a failed locations.json shows the error panel; retry brings the normal texts back', async () => {
     const { context, page } = await openPage();

@@ -804,23 +804,77 @@ function hideSidebar() {
     setSelectedMarker(null);
 }
 
-// Adding thousands of pins to the cluster layer takes several batches. Until the last
-// one is in, the layer cannot be asked to zoom to a pin (it throws an error).
-// whenMarkersAdded(fn) runs fn now if nothing is being added, or right after the last batch.
-let markerAddsRunning = 0;      // calls to markerCluster.addLayers() that have not finished
-let afterMarkersAdded = null;   // the one thing waiting for them (the latest request wins)
+// Adding thousands of pins to the cluster layer takes several batches, with pauses
+// in between so a slow phone does not freeze. Two rules keep that safe:
+// 1. Never start a new add while one is running: the cluster layer would go on adding
+//    the rest of the OLD list, and the map would show pins the search does not match.
+//    A change that arrives meanwhile is remembered and drawn once, when the add ends.
+// 2. The layer cannot zoom to a pin before the last batch is in (it throws an error).
+//    whenMarkersAdded(fn) runs fn now if the map is up to date, or right after it is.
+let markerAddRunning = false;   // markerCluster.addLayers() has not finished
+let redrawWanted = false;       // the search or the legend changed during that add
+let afterMarkersAdded = null;   // the one thing waiting for the pins (the latest request wins)
 function markerBatchesDone() {
-    // The cluster layer also reports an (empty) add of its own when it is put on the
-    // map, before any of ours: never count below zero
-    if (markerAddsRunning > 0) markerAddsRunning--;
-    if (markerAddsRunning > 0 || !afterMarkersAdded) return;
+    // The cluster layer also reports an (empty) add of its own when it is put on the map
+    if (!markerAddRunning) return;
+    markerAddRunning = false;
+    if (redrawWanted) {
+        redrawWanted = false;
+        drawMarkers(); // reads the search as it is now, so states in between are skipped
+        return;
+    }
     const run = afterMarkersAdded;
     afterMarkersAdded = null;
-    run();
+    if (run) run();
 }
 function whenMarkersAdded(fn) {
-    if (markerAddsRunning === 0) fn();
+    if (!markerAddRunning && !redrawWanted) fn();
     else afterMarkersAdded = fn;
+}
+
+// Zoom the cluster layer in until one pin is drawn by itself, then call done().
+// The cluster layer does this with listeners of its own on the map. If the pins are
+// replaced while it is still zooming, those listeners stay behind and throw an error on
+// every later map movement. So they are written down here while the layer registers
+// them, and cancelReveal() takes them off again before the pins are replaced.
+let cancelReveal = null;
+// While the cluster layer plays its own split/merge animation it ignores map movements.
+// A reveal that moved the map during that time would wait forever, so when the
+// animation ends the layer is told once more that the map has moved.
+markerCluster.on('animationend', () => {
+    if (cancelReveal) map.fire('moveend');
+});
+function zoomToClusteredMarker(marker, done) {
+    if (cancelReveal) cancelReveal();
+    map.stop(); // end a flight to another place first; the layer must start from a still map
+    const listeners = [];
+    const targets = [map, markerCluster];
+    targets.forEach(target => {
+        const realOn = target.on;
+        target.on = function(type, fn, context) {
+            // only the two the reveal itself waits on; Leaflet registers others meanwhile
+            if (context === markerCluster && (type === 'moveend' || type === 'animationend')) {
+                listeners.push([target, type, fn, context]);
+            }
+            return realOn.call(this, type, fn, context);
+        };
+    });
+    let cancelled = false;
+    const cancel = () => {
+        cancelled = true;
+        listeners.forEach(([target, type, fn, context]) => target.off(type, fn, context));
+        if (cancelReveal === cancel) cancelReveal = null;
+    };
+    cancelReveal = cancel;
+    try {
+        markerCluster.zoomToShowLayer(marker, () => {
+            if (cancelled) return;
+            if (cancelReveal === cancel) cancelReveal = null;
+            done();
+        });
+    } finally {
+        targets.forEach(target => { delete target.on; }); // back to the normal on()
+    }
 }
 
 // Set what the map is filtered by, and redraw. Every change of the search goes
@@ -832,29 +886,36 @@ function setSearch(text, city) {
     return updateMarkers();
 }
 
-// Update which markers are visible based on search and the legend switches
-function updateMarkers() {
-    const visibleMarkers = [];
-    const clusteredMarkers = [];
+// The markers that the search text and the legend switches leave visible right now
+function visibleMarkerItems() {
     const matches = new Set(searchLocations(allLocations, currentSearch, currentCity));
+    return allMarkers.filter(item => visibleTypes[item.location.type] && matches.has(item.location));
+}
 
+// Put those markers on the map, replacing what was there
+function drawMarkers() {
+    const clusteredMarkers = [];
+    if (cancelReveal) cancelReveal();
     facilityLayer.clearLayers();
-
-    allMarkers.forEach((item) => {
-        const location = item.location;
-        if (!visibleTypes[location.type] || !matches.has(location)) return;
-
-        visibleMarkers.push(item.marker);
-        if (location.type === 'facility') {
+    visibleMarkerItems().forEach(item => {
+        if (item.location.type === 'facility') {
             facilityLayer.addLayer(item.marker);
         } else {
             clusteredMarkers.push(item.marker);
         }
     });
-
     markerCluster.clearLayers();
-    markerAddsRunning++; // markerBatchesDone() counts it back down
+    markerAddRunning = true; // markerBatchesDone() switches it off, also for an empty list
     markerCluster.addLayers(clusteredMarkers);
+}
+
+// Update which markers are visible based on search and the legend switches.
+// Returns the markers that will be shown; they may still be on their way to the map.
+function updateMarkers() {
+    const visibleMarkers = visibleMarkerItems().map(item => item.marker);
+
+    if (markerAddRunning) redrawWanted = true;
+    else drawMarkers();
 
     visibleMarkerCount = visibleMarkers.length;
     updateEmptyState();
@@ -888,11 +949,13 @@ function closeSuggestions() {
 
 // Open a marker's popup, first zooming in until it is no longer inside a cluster
 function revealMarker(marker) {
-    if (markerCluster.hasLayer(marker)) {
-        markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
-    } else {
-        marker.openPopup();
-    }
+    whenMarkersAdded(() => {
+        if (markerCluster.hasLayer(marker)) {
+            zoomToClusteredMarker(marker, () => marker.openPopup());
+        } else {
+            marker.openPopup();
+        }
+    });
 }
 
 // Auto-zoom to visible markers
@@ -1113,23 +1176,28 @@ function focusOnLocation(locationId) {
     const markerItem = allMarkers.find(item => item.location.id === locationId);
     if (markerItem) {
         const marker = markerItem.marker;
+        // Every step below can happen late (after a flight, or after the pins were added).
+        // By then the details may be closed or show another place: then do nothing.
+        const stillWanted = () => selectedLocationId === locationId;
         const arrive = () => {
+            if (!stillWanted()) return;
             marker.openPopup();
             keepPinAboveSheet(marker);
         };
         const flyClose = () => {
+            if (!stillWanted()) return;
             map.once('moveend', arrive);
             map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
         };
         // Picking a suggestion has just put every pin back on the map; on a slow
         // phone that is still going on, so wait for it to finish.
         whenMarkersAdded(() => {
-            if (selectedLocationId !== locationId) return; // closed or changed while waiting
+            if (!stillWanted()) return;
             if (markerCluster.hasLayer(marker)) {
                 // The cluster layer zooms in, and opens a group of pins that share one spot,
                 // until this pin itself is drawn. Flying first and asking afterwards left
                 // the pin hidden inside a cluster on phones.
-                markerCluster.zoomToShowLayer(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
+                zoomToClusteredMarker(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
             } else {
                 flyClose();
             }
