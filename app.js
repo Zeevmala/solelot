@@ -833,7 +833,7 @@ function updateMarkers() {
 }
 
 // Show the empty state only when the user filtered everything away.
-// It waits while the suggestion list is open: the list may be offering the
+// right spelling (typing "ירושלם" suggests ירושלים), and the two would overlap.
 // right spelling (typing "חיפא" suggests חיפה), and the two would overlap.
 let visibleMarkerCount = 0;
 function updateEmptyState() {
@@ -1068,17 +1068,29 @@ function focusOnLocation(locationId) {
     const location = allLocations.find(l => l.id === locationId);
     if (!location) return;
 
+    // Details first: opening them closes any open popup, and the pin's popup comes after
+    showSidebar(location);
+
     const markerItem = allMarkers.find(item => item.location.id === locationId);
     if (markerItem) {
-        map.once('moveend', () => {
-            revealMarker(markerItem.marker);
-            // Only for a pin that is already drawn; a clustered one is still being zoomed to
-            if (markerItem.marker.getElement()) keepPinAboveSheet(markerItem.marker);
-        });
-        map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
+        const marker = markerItem.marker;
+        const arrive = () => {
+            marker.openPopup();
+            keepPinAboveSheet(marker);
+        };
+        const flyClose = () => {
+            map.once('moveend', arrive);
+            map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
+        };
+        if (markerCluster.hasLayer(marker)) {
+            // The cluster layer zooms in, and opens a group of pins that share one spot,
+            // until this pin itself is drawn. Flying first and asking afterwards left
+            // the pin hidden inside a cluster on phones.
+            markerCluster.zoomToShowLayer(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
+        } else {
+            flyClose();
+        }
     }
-
-    showSidebar(location);
 }
 
 // === GPS GEOLOCATION ===
