@@ -1050,7 +1050,11 @@ function focusOnLocation(locationId) {
 
     const markerItem = allMarkers.find(item => item.location.id === locationId);
     if (markerItem) {
-        map.once('moveend', () => revealMarker(markerItem.marker));
+        map.once('moveend', () => {
+            revealMarker(markerItem.marker);
+            // Only for a pin that is already drawn; a clustered one is still being zoomed to
+            if (markerItem.marker.getElement()) keepPinAboveSheet(markerItem.marker);
+        });
         map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
     }
 
