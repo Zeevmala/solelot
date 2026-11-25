@@ -45,6 +45,7 @@ Opening hours are not shown: the source has none (see [Data](#data)).
 ├── scraper.js          # Builds locations.json from the MAI API and the two files above
 ├── validate_data.js    # Data-quality checks on locations.json
 ├── test-scraper.js     # Scraper tests (node --test)
+├── test-validate.js    # Tests of the data checks (node --test)
 ├── test.html           # Browser tests of pure functions
 ├── test-map.html       # Browser tests of data, templates and search
 ├── cartowolf/          # Design tokens, fonts, colour check
@@ -75,7 +76,7 @@ One command runs every check and ends with `GATE PASSED` or a line starting with
 
 1. Every script parses.
 2. Every JSON file parses.
-3. `node --test test-scraper.js`: tests of the real scraper functions.
+3. `node --test test-scraper.js test-validate.js`: tests of the real scraper functions and of the data checks.
 4. `node validate_data.js`: data-quality checks on `locations.json`.
 5. `node cartowolf/check-colors.mjs style.css app.js index.html`: no hand-written colours.
 6. Site check: every file the service worker precaches exists, the page loads nothing that is not precached, no path starts at the domain root, and the manifest icons have the sizes they claim.

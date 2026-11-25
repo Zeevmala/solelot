@@ -225,7 +225,11 @@ cached=$(node -e '
   console.log([...new Set(["sw.js", ...paths])].filter(p => p !== "locations.json").join("\n"));')
 changed=$(printf '%s\n' "$cached" | tr '\n' '\0' | xargs -0 git diff --name-only "$base" --)
 if [ -n "$changed" ]; then
-  if ! git diff "$base" -- sw.js | grep -qE '^\+const STATIC_CACHE = '; then
+  # Compare the version value itself, not the line: a comment added to the line is not a bump.
+  version() { grep -oE "^const STATIC_CACHE = '[^']+'" | head -1; }
+  old_version=$(git show "$base:sw.js" 2>/dev/null | version || true)
+  new_version=$(version < sw.js || true)
+  if [ -z "$new_version" ] || [ "$old_version" = "$new_version" ]; then
     echo "FAIL: files the service worker caches changed since $base, but STATIC_CACHE in sw.js did not:"
     printf '%s\n' "$changed" | sed 's/^/      /'
     exit 1
