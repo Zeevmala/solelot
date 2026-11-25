@@ -3,13 +3,17 @@
  *
  * Run after ANY data change to catch issues before they reach users.
  * Usage: node validate_data.js [path]
- *   path: another file to check instead of locations.json (used to test the checks on small fixtures)
+ *   path: another file to check instead of locations.json. test-validate.js uses it to run
+ *         every check on generated fixtures (node --test test-validate.js)
  *
  * Exit code: 0 = all pass, 1 = failures found
  */
 
 const fs = require('fs');
 const path = require('path');
+// Shared with the scraper so the two cannot disagree on what "inactive" or "same street" means.
+// Requiring scraper.js runs nothing: it only calls its main() when executed directly.
+const { isMarkedInactive, streetKey } = require('./scraper.js');
 
 const INPUT_FILE = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, 'locations.json');
 
@@ -23,7 +27,7 @@ const KNOWN_DISTINCT_CITIES = [
     ['חופית', 'נופית'], ['חורשים', 'חרשים'], ['חצב', 'חצבה'], ['חרות', 'שחרות'], ['טירה', 'טמרה'],
     ['כנות', 'מנות'], ['כפר כמא', 'כפר כנא'], ['מגדל', 'מגל'], ['מירון', 'עירון'], ['משמרת', 'שמרת'],
     ['נגבה', 'רגבה'], ['עומר', 'עופר'], ['עופר', 'עופרה'], ['עופר', 'צופר'], ['צופים', 'צוקים'],
-    ['קדימה', 'קדמה'], ['קיבוץ מגל', 'קיבוץ מגן'], ['שדרות', 'שחרות'], ['שומרה', 'שומריה'], ['שלומי', 'שלומית'],
+    ['קדימה', 'קדמה'], ['שדרות', 'שחרות'], ['שומרה', 'שומריה'], ['שלומי', 'שלומית'],
     ['אורות', 'דורות'], ['גונן', 'גורן'], ['חגור', 'חצור'], ['חולית', 'חופית'], ['כרמיה', 'כרמים'], ['שפיים', 'שפירים']
 ];
 
@@ -90,10 +94,10 @@ function main() {
         .filter(l => l.city === 'Unknown' || !l.city)
         .map(l => ({ id: l.id, reason: `city="${l.city}"` })));
 
-    // 4. No dead entries (לא פעיל / בוטל / כפול / כפילות / כפל / נסגר)
-    const deadPatterns = ['לא פעיל', 'בוטל', 'כפול', 'כפילות', 'כפל', 'נסגר'];
+    // 4. No dead entries. Same rule as the scraper (isMarkedInactive): לא פעיל / בוטל / כפילות / נסגר anywhere,
+    // כפול / כפל only as whole words, so a real name such as "מכפלה" is not flagged.
     check('4. No dead/inactive entries', locations
-        .filter(l => deadPatterns.some(p => (l.name || '').includes(p)))
+        .filter(l => isMarkedInactive(String(l.name || '')))
         .map(l => ({ id: l.id, reason: `"${l.name}"` })));
 
     // 5. No "רשות מקומית" boilerplate in names
@@ -179,12 +183,15 @@ function main() {
     };
 
     // 14a. More than 5 km from every other point of its own city.
-    // Cannot see: errors under 5 km, cities with one point, regional councils (מועצה אזורית, spread out by nature),
-    // and two wrong points of one city that sit next to each other.
+    // Cannot see: errors under 5 km, cities with one point, regional councils (names starting מועצה אזורית
+    // and the list below - spread out by nature), and two wrong points of one city that sit next to each other.
     const ISOLATED_KM = 5;
+    // Regional councils that appear in the data without the "מועצה אזורית" prefix
+    const COUNCIL_NAMES = ['משגב', 'מרום הגליל', 'גזר', 'אילות', 'באר טוביה', 'גוש עציון', 'לכיש'];
+    const isCouncil = city => city.startsWith('מועצה אזורית') || COUNCIL_NAMES.includes(city);
     const isolated = [];
     for (const [city, group] of Object.entries(byCity)) {
-        if (group.length < 2 || city.startsWith('מועצה אזורית')) continue;
+        if (group.length < 2 || isCouncil(city)) continue;
         for (const loc of group) {
             const nearest = Math.min(...group.filter(o => o !== loc).map(o => distanceKm(loc, o)));
             if (nearest > ISOLATED_KM) isolated.push({ loc, nearest });
@@ -195,12 +202,25 @@ function main() {
     isolated.forEach(f => console.log(`    id=${f.loc.id}: ${f.nearest.toFixed(1)} km - ${f.loc.city} - "${f.loc.name}"`));
 
     // 14b. One coordinate shared by points on different streets (the geocoder fell back to a city or street centre).
+    // The street is the first part of the address, compared with the scraper's streetKey. An address that is
+    // only the city name has no street and contradicts nobody. "אבא הלל" and "אבא הלל סילבר" count as one street
+    // (same rule as isStacked in scraper.js).
     // Cannot see: a fallback pin that only one point uses, or a group whose members all name the same street.
-    const streetKey = l => String(l.address || '').split(',')[0].replace(/[\d"'׳״.\-]/g, '').replace(/\s+/g, ' ').trim();
+    // May flag wrongly: two place names at one real spot ("בית ספר א'" and "מתנ"ס"), because the address
+    // does not say which part is a street.
+    const streetOf = l => {
+        const first = String(l.address || '').split(',')[0].trim();
+        return first === l.city ? '' : streetKey(first);
+    };
+    const sameStreet = (a, b) => (a + ' ').startsWith(b + ' ') || (b + ' ').startsWith(a + ' ');
+    const differentStreets = group => {
+        const streets = [...new Set(group.map(streetOf).filter(Boolean))];
+        return streets.some(a => streets.some(b => !sameStreet(a, b)));
+    };
     const byCoord = {};
     for (const loc of locations) (byCoord[`${loc.lat}, ${loc.lng}`] = byCoord[`${loc.lat}, ${loc.lng}`] || []).push(loc);
     const stacked = Object.entries(byCoord)
-        .filter(([, group]) => group.length > 1 && new Set(group.map(streetKey)).size > 1)
+        .filter(([, group]) => group.length > 1 && differentStreets(group))
         .sort((a, b) => b[1].length - a[1].length);
     const stackedPoints = stacked.reduce((sum, [, group]) => sum + group.length, 0);
     console.log(`[!] 14b. Same coordinate, different streets (warning): ${stackedPoints} points in ${stacked.length} groups to review`);
