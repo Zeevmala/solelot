@@ -14,7 +14,7 @@ const scraper = require('./scraper.js');
 const { transformMarker, buildLocations, determineChain, normalizeCity, municipalName } = scraper;
 const {
     clean, isMarkedInactive, joinStreet, parseCoordinate, distanceMeters,
-    streetKey, checkCount, parseArgs, run
+    streetKey, sameStreet, checkCount, parseArgs, run
 } = scraper;
 
 // A marker shaped like the real MAI API response
@@ -319,6 +319,104 @@ test('stacked coordinates: one street written short and long is still one street
     assert.deepStrictEqual(dropped.stacked, []);
 });
 
+test('sameStreet: one street spelled two ways is one street', () => {
+    const same = (a, b) => sameStreet(streetKey(a), streetKey(b));
+    // real pairs that share one coordinate in the MAI data (ids in the comments)
+    assert.ok(same('דיזינגוף 50', 'דיזנגוף 50'));             // 343312 / 343456  one letter
+    assert.ok(same('דוד סחרוב 21', 'סחרוב 21'));              // 343684 / 344598  first name left out
+    assert.ok(same('יהודה לוי 1', 'יהודה הלוי 1'));           // 344258 / 345147  leading ה
+    assert.ok(same('הרו"אה 2', 'הרא"ה 2'));                   // 343840 / 346781
+    assert.ok(same('שדרות דרום 3', 'דרך הדרום 3'));           // 343926 / 343957
+    assert.ok(same('יהשוע חנקין 14', 'יהושוע חנקין 14'));     // 345190 / 345380
+    assert.ok(same('נפחא 25', 'נפחה 25'));                    // 346326 / 346539
+    assert.ok(same('שדרות דוד טוביהו 125', 'שדרות טוביהו 25')); // 346327 / 346548
+    assert.ok(same('מלך חסן השני', 'שדרות המלך חסן 1'));      // 343753 / 344068
+    assert.ok(same('פייר קנינג 2', 'פייר קינג 26'));           // 344877 / 345039
+    assert.ok(same('התע"ש פינת אפעל', "תעש' 2"));             // 345554 / 345755
+    assert.ok(same('זבוטיסקי 5', "ז'בוטינסקי 5"));            // 346136 / 346565
+    assert.ok(same('אבא הלל סילבר 301', 'אבא הלל 301'));
+    assert.ok(same('הרצל 10', 'הרצל 10'));
+    // different streets stay different
+    assert.ok(!same('הרצל 10', 'ויצמן 10'));
+    assert.ok(!same('תלמוד בבלי 17', 'פינת נורדאו 195'));     // 342659 / 343789
+    assert.ok(!same('המנור 2', 'הפלד 7'));                    // 342660 / 344257
+    assert.ok(!same('בית ספר יסודי', 'בית ספר תיכון'));
+    assert.ok(!same('דוד המלך 1', 'דוד רמז 1'));              // one shared word is not enough
+    assert.ok(!same('גן 1', 'גת 1'));                         // too short to allow a different letter
+    assert.ok(!same('הדר 1', 'הדס 1'));
+});
+
+test('streetKey keeps a road number: כביש 40 is not כביש 4', () => {
+    const same = (a, b) => sameStreet(streetKey(a), streetKey(b));
+    assert.strictEqual(streetKey('כביש 40'), 'כביש 40');
+    assert.ok(!same('כביש 40', 'כביש 4'));
+    assert.ok(!same('כביש 443', 'כביש 444'));                 // numbers are never "one letter apart"
+    assert.ok(same('כביש 40', 'כביש 40, בין ביל"ו לרמלה'.split(',')[0]));
+    assert.strictEqual(streetKey('הרצל 40'), 'הרצל');         // a house number is still ignored
+    const { dropped } = buildLocations([
+        marker({ id: '81' }, { business_name: 'תחנה א', street: 'כביש 40', house_number: undefined }),
+        marker({ id: '82' }, { business_name: 'תחנה ב', street: 'כביש 4', house_number: undefined })
+    ], noCache);
+    assert.deepStrictEqual(dropped.stacked[0].ids, [81, 82]);
+});
+
+test('stacked coordinates: real groups that must be kept (one street, spelled differently)', () => {
+    const municipal = 'רשות מקומית - מוקד איסוף';
+    const markers = [
+        // Dizengoff Center, Tel Aviv
+        marker({ id: '343312' }, { city: 'תל אביב', street: 'דיזינגוף', house_number: '50', neighborhood: 'דיזינגוף סנטר', business_name: 'איידיגיטל' }),
+        marker({ id: '343444' }, { city: 'תל אביב', street: 'דיזינגוף', house_number: '50', neighborhood: 'דיזנגוף סנטר', business_name: 'טויס.אר.אס' }),
+        marker({ id: '343456' }, { city: 'תל אביב', street: 'דיזנגוף', house_number: '50', neighborhood: 'דיזנגוף סנטר, קומה מינוס 1,', business_name: 'באג' }),
+        // קניון הזהב, Rishon LeZion
+        marker({ id: '343684', lat: '31.989917' }, { city: 'ראשון לציון', street: 'דוד סחרוב', house_number: '21', neighborhood: 'קניון הזהב', business_name: 'קרביץ' }),
+        marker({ id: '344598', lat: '31.989917' }, { city: 'ראשון לציון', street: 'סחרוב', house_number: '21', business_name: 'באג' }),
+        // BIG Tiberias
+        marker({ id: '344258', lat: '32.790511' }, { city: 'טבריה', street: 'יהודה לוי', house_number: '1', neighborhood: 'גני הלוטוס', business_name: 'שקם אלקטריק' }),
+        marker({ id: '345147', lat: '32.790511' }, { city: 'טבריה', street: 'יהודה הלוי', house_number: '1', neighborhood: 'מתחם ביג טבריה', business_name: 'אייס קנה ובנה' }),
+        marker({ id: '345168', lat: '32.790511' }, { city: 'טבריה', street: 'יהודה הלוי', house_number: '1', neighborhood: 'מתחם ביג טבריה', business_name: 'באג' }),
+        // a village: nobody has a street, everybody is in כפר ג'וליס (two coordinates)
+        marker({ id: '345844', lat: '32.942235' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: "בית ספר יסודי ב'", business_name: 'רשות מקומית - מרכז איסוף' }),
+        marker({ id: '345846', lat: '32.942235' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: "בית ספר מקיף ג'וליס", business_name: municipal }),
+        marker({ id: '345845', lat: '32.945048' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: "בית ספר ממלכתי א'", business_name: 'רשות מקומית - מרכז איסוף' }),
+        marker({ id: '345848', lat: '32.945048' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, business_name: municipal })
+    ];
+    const { locations, dropped } = buildLocations(markers, noCache);
+    assert.deepStrictEqual(dropped.stacked, []);
+    assert.strictEqual(locations.length, markers.length);
+});
+
+test('stacked coordinates: real groups that must still be dropped', () => {
+    const municipal = 'רשות מקומית - מוקד איסוף';
+    const none = { street: undefined, house_number: undefined };
+    const markers = [
+        // three villages on one coordinate (nobody has a street, but the cities differ)
+        marker({ id: '343334', lat: '31.449' }, { ...none, city: 'שוקדה', business_name: municipal }),
+        marker({ id: '343471', lat: '31.449' }, { ...none, city: 'שיבולים', business_name: municipal }),
+        marker({ id: '343472', lat: '31.449' }, { ...none, city: 'שובה', business_name: municipal }),
+        // Tel Aviv city-centre fallback: five different addresses
+        marker({ id: '342659', lat: '32.085299' }, { city: 'תל אביב', street: 'תלמוד בבלי', house_number: '17', business_name: 'מגה' }),
+        marker({ id: '343317', lat: '32.085299' }, { ...none, city: 'תל אביב', neighborhood: 'חניון מוזיאון ישראל', business_name: 'תחנת דלק - פז YELLOW' }),
+        marker({ id: '343439', lat: '32.085299' }, { city: 'תל אביב', street: 'חניון מוזיאון ישראל', house_number: undefined, business_name: 'מוזיאון ישראל' }),
+        marker({ id: '343447', lat: '32.085299' }, { city: 'תל אביב', street: 'הרברט סמואל טיילת ת"א', house_number: undefined, neighborhood: 'בתוך חניון גן לונדון', business_name: 'תחנת דלק - דלק מנטה' }),
+        marker({ id: '343789', lat: '32.085299' }, { city: 'תל אביב', street: 'פינת נורדאו', house_number: '195', business_name: 'AM.PM' }),
+        // Jerusalem: one real street and two places that are somewhere else
+        marker({ id: '344860', lat: '31.768319' }, { city: 'ירושלים', street: 'דרך אגודת ספורט בית"ר', house_number: '1', neighborhood: 'קניון מלחה', business_name: 'איידיגיטל' }),
+        marker({ id: '345044', lat: '31.768319' }, { ...none, city: 'ירושלים', neighborhood: 'א.ת תלפיות', business_name: 'תחנת דלק - פז YELLOW' }),
+        marker({ id: '345049', lat: '31.768319' }, { ...none, city: 'ירושלים', neighborhood: 'גבעונים גבעת זאב', business_name: 'תחנת דלק - דלק מנטה' }),
+        // two real, different streets in one village (פסוטה) - a street is a claim we can check
+        marker({ id: '344213', lat: '33.046997' }, { city: 'פסוטה', street: 'יחיא אל עדי', house_number: undefined, neighborhood: 'מתנ"ס', business_name: municipal }),
+        marker({ id: '344505', lat: '33.046997' }, { city: 'פסוטה', street: 'אל אחטל', house_number: undefined, neighborhood: 'בית ספר אלחואר', business_name: municipal })
+    ];
+    const { locations, dropped } = buildLocations(markers, noCache);
+    assert.deepStrictEqual(locations, []);
+    assert.deepStrictEqual(dropped.stacked.map(g => g.ids), [
+        [342659, 343317, 343439, 343447, 343789],
+        [343334, 343471, 343472],
+        [344213, 344505],
+        [344860, 345044, 345049]
+    ]);
+});
+
 test('stacked coordinates: a point without a street', () => {
     // same city: "somewhere in חיפה" does not contradict "הרצל 10, חיפה" -> kept
     const sameCity = buildLocations([
@@ -462,13 +560,13 @@ test('parseArgs: --input needs a path', () => {
     assert.throws(() => parseArgs(['--input', '--force']), /--input needs a file/);
 });
 
-// --- the real fixture: 27 markers copied from the MAI API on 2026-11-25 ---
+// --- the real fixture: 33 markers copied from the MAI API on 2026-11-25 ---
 
 const FIXTURE = path.join(__dirname, 'test-fixtures', 'raw_sample.json');
 
 test('fixture: every kind of real marker ends up where it should', () => {
     const markers = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
-    assert.strictEqual(markers.length, 27);
+    assert.strictEqual(markers.length, 33);
     const { locations, skipped, dropped, stats, farTwins } = buildLocations(markers, noCache, {});
     const byId = new Map(locations.map(l => [l.id, l]));
 
@@ -495,8 +593,13 @@ test('fixture: every kind of real marker ends up where it should', () => {
     }
 
     // stacked: one coordinate, two different streets -> both gone, ids logged
-    assert.deepStrictEqual(dropped.stacked.map(g => g.ids), [[344484, 345700], [346139, 346162]]);
-    assert.strictEqual(stats.stackedPoints, 4);
+    // (343334 + 343471: two villages, שוקדה and שיבולים, on one coordinate)
+    assert.deepStrictEqual(dropped.stacked.map(g => g.ids), [[343334, 343471], [344484, 345700], [346139, 346162]]);
+    assert.strictEqual(stats.stackedPoints, 6);
+    // one street spelled two ways (דיזינגוף / דיזנגוף 50, Dizengoff Center) -> kept
+    for (const id of [343312, 343456]) assert.ok(byId.has(id), id + ' must be kept');
+    // one village, no street on either record (כפר ג'וליס, two schools) -> kept
+    for (const id of [345844, 345846]) assert.ok(byId.has(id), id + ' must be kept');
     // shopping centre (קניון רמת אביב, three shops, one coordinate) -> all kept
     for (const id of [343313, 343460, 343463]) assert.ok(byId.has(id), id + ' must be kept');
 
@@ -516,7 +619,7 @@ test('fixture: every kind of real marker ends up where it should', () => {
     // one point listed twice at the same coordinate -> the lower id stays
     assert.deepStrictEqual(dropped.sameSpot, [{ id: 342617, sameAs: 342611 }]);
 
-    assert.strictEqual(locations.length, 14);
+    assert.strictEqual(locations.length, 18);
     assert.deepStrictEqual(locations.map(l => l.id), [...byId.keys()].sort((a, b) => a - b));
     assert.strictEqual(new Set(locations.map(l => l.name + '|' + l.city)).size, locations.length);
 });

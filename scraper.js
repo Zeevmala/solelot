@@ -338,7 +338,9 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
         },
         // Kept only while building; removed before saving
         detail: place || street,
-        street: addressParts.length > 1 ? addressParts[0].split(',')[0].trim() : '' // '' = the address is only the city
+        street: addressParts.length > 1 ? addressParts[0].split(',')[0].trim() : '', // '' = the address is only the city
+        // false when "street" above is really a place name (MAI's neighbourhood field)
+        hasStreetField: Boolean(street) && addressParts[0] === street
     };
 }
 
@@ -406,36 +408,91 @@ function disambiguate(entries) {
 // Words that do not tell two streets apart: "שדרות יגאל אלון" and "יגאל אלון" are one street
 const STREET_WORDS = ['רחוב', 'רח', 'שדרות', 'שד', 'דרך'];
 
-// The street without numbers, quotes, dots, hyphens and street words,
+// The words of a street that tell it apart from other streets, joined by spaces:
+// no house numbers, quotes, dots, hyphens or street words.
 // e.g. "רח' הרצל 10" -> "הרצל". Double yod/vav is ignored (איינשטיין = אינשטיין).
+// A road number is part of the name and stays: "כביש 40" -> "כביש 40".
 function streetKey(street) {
-    return street
+    const words = street
         .replace(/["'׳״]/g, '')      // ז'בוטינסקי = זבוטינסקי, ביל"ו = בילו
-        .replace(/[\d.\-]/g, ' ')
+        .replace(/[.\-]/g, ' ')
         .split(/\s+/)
-        .filter(word => word && !STREET_WORDS.includes(word))
-        .join(' ')
-        .replace(/יי/g, 'י')
-        .replace(/וו/g, 'ו');
+        .filter(Boolean);
+    const kept = [];
+    words.forEach((word, index) => {
+        if (STREET_WORDS.includes(word)) return;
+        const isRoadNumber = /^\d+$/.test(word) && words[index - 1] === 'כביש';
+        const text = isRoadNumber ? word : word.replace(/\d/g, '');
+        if (text) kept.push(text.replace(/יי/g, 'י').replace(/וו/g, 'ו'));
+    });
+    return kept.join(' ');
+}
+
+// True when one word can be turned into the other by changing, adding or
+// removing a single letter ("דיזינגוף" / "דיזנגוף", "נפחא" / "נפחה").
+function oneLetterApart(a, b) {
+    if (Math.abs(a.length - b.length) > 1) return false;
+    const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+    let start = 0; // letters that agree from the start
+    while (start < short.length && short[start] === long[start]) start++;
+    let end = 0;   // letters that agree from the end
+    while (end < short.length - start && short[short.length - 1 - end] === long[long.length - 1 - end]) end++;
+    // what is left in the middle is the difference: at most one letter in the longer word
+    return long.length - start - end <= 1;
+}
+
+// Two words of a street name are the same word when they are equal after
+// dropping a leading "ה" ("הלוי" = "לוי"), or when they are one letter apart.
+// Short words and numbers must be exactly equal: "הדר" and "הדס" are two
+// streets, so a different letter is allowed only when both words have 3+
+// letters and at least one of them has 4+.
+function sameStreetWord(a, b) {
+    const bare = word => (word.length > 3 && word.startsWith('ה') ? word.slice(1) : word);
+    const x = bare(a);
+    const y = bare(b);
+    if (x === y) return true;
+    if (/\d/.test(x + y)) return false;
+    if (Math.min(x.length, y.length) < 3 || Math.max(x.length, y.length) < 4) return false;
+    return oneLetterApart(x, y);
+}
+
+// Compares two street keys (see streetKey). People write one street in many
+// ways: "דוד סחרוב" / "סחרוב", "יהודה לוי" / "יהודה הלוי", "דיזינגוף" / "דיזנגוף".
+// The streets are the same when every word of the shorter key is also a word
+// of the longer key (see sameStreetWord for what "the same word" means).
+// The house number is not looked at: a city-centre fallback can share a number.
+function sameStreet(keyA, keyB) {
+    const a = keyA.split(' ');
+    const b = keyB.split(' ');
+    const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+    return short.every(word => long.some(other => sameStreetWord(word, other)));
 }
 
 // MAI's geocoder puts an address it cannot find at the centre of the city, so
 // several different addresses end up on exactly the same coordinate. Such a pin
 // is not where its address says, and we cannot tell which one (if any) is right.
 //
-// A group of points on one exact coordinate is "stacked" when:
-//   1. its members name more than one street (compared with streetKey), or
-//   2. a member has no street at all and the members are not all in one city.
-// A shopping centre (same street, different shops) is not stacked. Neither is a
-// point with no street next to points of the same city: it does not contradict them.
+// Each member has a "street": its street field, or (without one) the place it
+// names instead, such as "בית ספר יסודי". A group of points on one exact
+// coordinate is "stacked", and all of it is dropped, when:
+//   1. nobody has a street field and the members are in more than one city, or
+//   2. somebody has a street field and two members name different streets
+//      (compared with sameStreet), or
+//   3. somebody has a street field, a member names nothing at all, and the
+//      members are in more than one city.
+// Kept on purpose:
+//   - a shopping centre (same street, different shops);
+//   - a village where nobody has a street field and everybody is in the same
+//     place: the pin is the village centre, which is still inside the village;
+//   - a point that names nothing, next to points of the same city.
 function isStacked(group) {
-    const streets = [...new Set(group.map(entry => streetKey(entry.street)).filter(Boolean))];
-    // "אבא הלל" and "אבא הלל סילבר" are one street: a key that starts another is the same street.
-    const sameStreet = (a, b) => (a + ' ').startsWith(b + ' ') || (b + ' ').startsWith(a + ' ');
-    if (streets.some(a => streets.some(b => !sameStreet(a, b)))) return true;
-    const someoneHasNoStreet = group.some(entry => !streetKey(entry.street));
     const cities = new Set(group.map(entry => entry.location.city));
-    return someoneHasNoStreet && cities.size > 1;
+    if (!group.some(entry => entry.hasStreetField)) return cities.size > 1;
+
+    const keys = [...new Set(group.map(entry => streetKey(entry.street)).filter(Boolean))];
+    if (keys.some(a => keys.some(b => !sameStreet(a, b)))) return true;
+    const someoneNamesNothing = group.some(entry => !streetKey(entry.street));
+    return someoneNamesNothing && cities.size > 1;
 }
 
 // Removes every member of every stacked group. Returns the entries that stay
@@ -697,6 +754,6 @@ if (require.main === module) {
 
 module.exports = {
     transformMarker, buildLocations, determineChain, normalizeCity, municipalName, clean,
-    isMarkedInactive, joinStreet, parseCoordinate, distanceMeters, streetKey, dropStacked,
+    isMarkedInactive, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
     disambiguate, checkCount, parseArgs, run
 };
