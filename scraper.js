@@ -461,6 +461,9 @@ function sameStreetWord(a, b) {
 // The streets are the same when every word of the shorter key is also a word
 // of the longer key (see sameStreetWord for what "the same word" means).
 // The house number is not looked at: a city-centre fallback can share a number.
+// Limit: this is deliberately forgiving, so it also treats some really different
+// streets as one ("רמב"ם" / "רמב"ן", "הרצל" / "הרצל רוזנבלום"). If two such streets
+// ever share one coordinate, the group is kept and nobody is warned.
 function sameStreet(keyA, keyB) {
     const a = keyA.split(' ');
     const b = keyB.split(' ');

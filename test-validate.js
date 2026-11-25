@@ -132,6 +132,11 @@ test('14b does not flag one street written two ways, or an address that is only 
         // same street: street word and house number differ
         point(101, 32.09, 34.79, { address: 'שדרות יגאל אלון 3, תל אביב' }),
         point(102, 32.09, 34.79, { address: 'יגאל אלון 7, תל אביב' }),
+        // same street, spelled differently: only the scraper's sameStreet sees these as one
+        point(105, 32.092, 34.79, { address: 'דיזינגוף 50, תל אביב' }),
+        point(106, 32.092, 34.79, { address: 'דיזנגוף 50, תל אביב' }),
+        point(107, 32.093, 34.79, { address: 'דוד סחרוב 21, תל אביב' }),
+        point(108, 32.093, 34.79, { address: 'סחרוב 21, תל אביב' }),
         // a place name next to a city-only address
         point(103, 32.091, 34.79, { address: 'בית ספר ממלכתי א\', תל אביב' }),
         point(104, 32.091, 34.79, { address: 'תל אביב' })]);

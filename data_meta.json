@@ -1,13 +1,13 @@
 {
   "source": "https://mai.org.il/wp-json/wpgmza/v1/markers",
-  "fetched_at": "2026-11-25T17:13:19.146Z",
+  "fetched_at": "2026-11-25T17:30:18.140Z",
   "raw_markers": 8603,
-  "kept": 4119,
+  "kept": 4115,
   "skipped": {
     "old map": 3641,
     "no name": 416,
     "not a battery point": 87,
-    "excluded by data_overrides.json": 88,
+    "excluded by data_overrides.json": 92,
     "outside Israel bounds": 1,
     "marked inactive by MAI": 15
   },

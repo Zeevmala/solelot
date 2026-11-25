@@ -8,6 +8,7 @@
     "Added 2026-11-25 (launch-readiness B-3): 346143 is at the entrance to Kibbutz Eilon, 0.6 km from the other אילון point, so its city is אילון (MAI wrote איילון). 344355 is the fuel station by Kibbutz Dvir, which MAI lists under the kibbutz's other name דבירה; its city is דביר so the two points are found together.",
     "Added 2026-11-25 (data-quality audit of the refreshed file), each checked with a Nominatim reverse geocode of the pin: 30 city fixes where the pin is right and MAI lists a neighbouring town or a label that is not a town (דיפו ירושלים, סינרמה, צומת שילת, מ.א. עמק חפר ...), always using a spelling already in the data; and 22 excludes from the 25 same-name-same-address pairs - 15 where the pin is in a different locality or on a different street than the address names, and 7 second entries of one point (pins under 500 m apart, the higher id is left out).",
     "Added 2026-11-25: 346330 and 346351 share one coordinate at the centre of באר שבע with no street (\"בכניסה הצפונית\", \"פארק אופיק\"). In a city that size a centre pin can be kilometres from the place, so both are left out.",
+    "Added 2026-11-25 after review of the refreshed file: 345747 (address נתב\"ג לוד, pin in באר שבע, 76 km away) and 342784 (address רמות ירושלים, pin in north תל אביב, 46 km away) came back when same-name twins stopped being dropped; 345502 and 345653 share one coordinate in מגדל העמק but name two different industrial zones with no street.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -248,6 +249,9 @@
     "342705": {
       "exclude": true
     },
+    "342784": {
+      "exclude": true
+    },
     "342884": {
       "exclude": true
     },
@@ -389,6 +393,9 @@
     "345492": {
       "exclude": true
     },
+    "345502": {
+      "exclude": true
+    },
     "345522": {
       "exclude": true
     },
@@ -405,6 +412,12 @@
       "exclude": true
     },
     "345640": {
+      "exclude": true
+    },
+    "345653": {
+      "exclude": true
+    },
+    "345747": {
       "exclude": true
     },
     "345748": {
