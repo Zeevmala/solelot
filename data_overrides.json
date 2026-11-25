@@ -4,6 +4,7 @@
     "{ \"city\": \"X\" }    - the pin is in the right place but MAI lists the wrong city.",
     "{ \"exclude\": true } - the coordinates contradict the address (pin is 12-190 km from the listed city), so the point is left off the map rather than sending someone to the wrong place.",
     "Found in November 2026 by comparing every point with the median position of its city and reverse-geocoding the outliers with OpenStreetMap Nominatim.",
+    "Added 2026-11-25 (launch-readiness B-2), each checked with a Nominatim reverse geocode: 15 more excludes where the pin is in a different locality than the address (3.5-190 km away), 13 city fixes where the pin is right and the city was wrong, and 347251 excluded because its name is a coordinate and it has no address.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -28,6 +29,15 @@
     "344864": {
       "city": "בית שמש"
     },
+    "344881": {
+      "city": "מישור אדומים"
+    },
+    "344911": {
+      "city": "צמח"
+    },
+    "345212": {
+      "city": "נווה זיו"
+    },
     "345247": {
       "city": "פתח תקווה"
     },
@@ -47,6 +57,9 @@
       "city": "אלעד"
     },
     "345902": {
+      "city": "שפרעם"
+    },
+    "345903": {
       "city": "שפרעם"
     },
     "345904": {
@@ -79,6 +92,9 @@
     "345913": {
       "city": "שפרעם"
     },
+    "345969": {
+      "city": "רמת גן"
+    },
     "346031": {
       "city": "קריית אתא"
     },
@@ -100,16 +116,49 @@
     "346168": {
       "city": "גוש עציון"
     },
+    "346338": {
+      "city": "ניצן"
+    },
+    "346508": {
+      "city": "נאות חובב"
+    },
+    "346560": {
+      "city": "גן יבנה"
+    },
+    "346664": {
+      "city": "ניצנה"
+    },
     "346715": {
       "city": "עין בוקק"
     },
+    "346745": {
+      "city": "כפר קרע"
+    },
+    "346746": {
+      "city": "כפר קרע"
+    },
+    "346747": {
+      "city": "כפר קרע"
+    },
+    "346748": {
+      "city": "כפר קרע"
+    },
     "347289": {
       "city": "אום אל פחם"
+    },
+    "342705": {
+      "exclude": true
     },
     "342884": {
       "exclude": true
     },
     "342975": {
+      "exclude": true
+    },
+    "342999": {
+      "exclude": true
+    },
+    "343316": {
       "exclude": true
     },
     "343383": {
@@ -119,6 +168,9 @@
       "exclude": true
     },
     "343500": {
+      "exclude": true
+    },
+    "343509": {
       "exclude": true
     },
     "343510": {
@@ -154,6 +206,12 @@
     "344021": {
       "exclude": true
     },
+    "344034": {
+      "exclude": true
+    },
+    "344114": {
+      "exclude": true
+    },
     "344222": {
       "exclude": true
     },
@@ -187,6 +245,9 @@
     "345057": {
       "exclude": true
     },
+    "345186": {
+      "exclude": true
+    },
     "345235": {
       "exclude": true
     },
@@ -199,19 +260,37 @@
     "345266": {
       "exclude": true
     },
+    "345271": {
+      "exclude": true
+    },
     "345465": {
       "exclude": true
     },
     "345480": {
       "exclude": true
     },
+    "345492": {
+      "exclude": true
+    },
+    "345522": {
+      "exclude": true
+    },
+    "345533": {
+      "exclude": true
+    },
     "345558": {
+      "exclude": true
+    },
+    "345588": {
       "exclude": true
     },
     "345639": {
       "exclude": true
     },
     "345640": {
+      "exclude": true
+    },
+    "345748": {
       "exclude": true
     },
     "345803": {
@@ -224,6 +303,9 @@
       "exclude": true
     },
     "346018": {
+      "exclude": true
+    },
+    "346046": {
       "exclude": true
     },
     "346132": {
@@ -247,7 +329,13 @@
     "346615": {
       "exclude": true
     },
+    "347251": {
+      "exclude": true
+    },
     "347274": {
+      "exclude": true
+    },
+    "347280": {
       "exclude": true
     }
   }
