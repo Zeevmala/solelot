@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 // Shared with the scraper so the two cannot disagree on what "inactive" or "same street" means.
 // Requiring scraper.js runs nothing: it only calls its main() when executed directly.
-const { isMarkedInactive, streetKey } = require('./scraper.js');
+const { isMarkedInactive, streetKey, sameStreet } = require('./scraper.js');
 
 const INPUT_FILE = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, 'locations.json');
 
@@ -203,8 +203,8 @@ function main() {
 
     // 14b. One coordinate shared by points on different streets (the geocoder fell back to a city or street centre).
     // The street is the first part of the address, compared with the scraper's streetKey. An address that is
-    // only the city name has no street and contradicts nobody. "אבא הלל" and "אבא הלל סילבר" count as one street
-    // (same rule as isStacked in scraper.js).
+    // only the city name has no street and contradicts nobody. Two spellings of one street count as one street:
+    // the comparison is the scraper's own sameStreet, so the two files cannot disagree about what a street is.
     // Cannot see: a fallback pin that only one point uses, or a group whose members all name the same street.
     // May flag wrongly: two place names at one real spot ("בית ספר א'" and "מתנ"ס"), because the address
     // does not say which part is a street.
@@ -212,7 +212,6 @@ function main() {
         const first = String(l.address || '').split(',')[0].trim();
         return first === l.city ? '' : streetKey(first);
     };
-    const sameStreet = (a, b) => (a + ' ').startsWith(b + ' ') || (b + ' ').startsWith(a + ' ');
     const differentStreets = group => {
         const streets = [...new Set(group.map(streetOf).filter(Boolean))];
         return streets.some(a => streets.some(b => !sameStreet(a, b)));

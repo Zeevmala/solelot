@@ -25,8 +25,8 @@ for f in $json; do
 done
 echo "ok: $json"
 
-echo "== 3. Scraper tests"
-node --test test-scraper.js
+echo "== 3. Scraper and validator tests"
+node --test test-scraper.js test-validate.js
 
 echo "== 4. Data quality"
 node validate_data.js
