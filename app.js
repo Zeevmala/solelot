@@ -457,10 +457,10 @@ const userSvg = `<svg viewBox="0 0 28 28" width="28" height="28" xmlns="http://w
         <circle class="pin-casing" cx="14" cy="14" r="4"/>
     </svg>`;
 
-function createMarkerIcon(type, width, height) {
+function createMarkerIcon(type, width, height, extraClass = '') {
     return L.divIcon({
         html: pinSvg(type, width, height),
-        className: 'battery-marker battery-marker-' + type,
+        className: 'battery-marker battery-marker-' + type + extraClass,
         iconSize: [width, height],
         iconAnchor: [width / 2, height],
         popupAnchor: [0, -height]
@@ -478,6 +478,12 @@ const icons = {
         iconAnchor: [14, 14],
         popupAnchor: [0, -14]
     })
+};
+
+// The same pins with the class "selected" (drawn larger, see style.css)
+const selectedIcons = {
+    store: createMarkerIcon('store', 30, 40, ' selected'),
+    facility: createMarkerIcon('facility', 34, 46, ' selected')
 };
 
 // Hebrew names for types
@@ -752,34 +758,41 @@ const cachedSidebar = document.getElementById('sidebar');
 const cachedSidebarContent = document.getElementById('sidebar-content');
 const cachedSidebarClose = document.getElementById('sidebar-close');
 
-// The pin whose details are open is drawn larger and above its neighbours.
-// The "selected" class is styled in style.css.
-let selectedMarker = null;
-let selectedMarkerZIndex = 0; // the pin's own zIndexOffset, put back when it is deselected
-function setSelectedMarker(marker) {
-    if (selectedMarker === marker) return;
-    if (selectedMarker) {
-        const oldElement = selectedMarker.getElement();
-        if (oldElement) oldElement.classList.remove('selected');
-        selectedMarker.setZIndexOffset(selectedMarkerZIndex);
+// The point whose details are open gets a pin of its own, larger, on a layer above
+// the clusters. So it can be seen at any zoom, also while its ordinary pin is still
+// counted inside a cluster bubble. The "selected" class is styled in style.css.
+const selectedLayer = L.layerGroup().addTo(map);
+const selectedPin = L.marker([0, 0], {
+    icon: selectedIcons.store,
+    zIndexOffset: 1500, // above facilities (1000), below the user dot (2000)
+    keyboard: false     // the ordinary pin under it is the one the keyboard reaches
+});
+function setSelectedLocation(location) {
+    if (!location) {
+        selectedLayer.removeLayer(selectedPin);
+        return;
     }
-    selectedMarker = marker;
-    if (marker) {
-        selectedMarkerZIndex = marker.options.zIndexOffset;
-        marker.setZIndexOffset(1500); // above facilities (1000), below the user dot (2000)
-        const element = marker.getElement();
-        if (element) element.classList.add('selected');
-    }
+    selectedPin.setLatLng([location.lat, location.lng]);
+    selectedPin.setIcon(selectedIcons[location.type] || selectedIcons.store);
+    selectedLayer.addLayer(selectedPin);
 }
 
 // On phones the details open as a sheet over the bottom of the map.
+// sheetHeight() is how much of the map's bottom the open sheet covers (0 on a desktop).
+function sheetHeight() {
+    if (!cachedSidebar || window.innerWidth > MOBILE_BREAKPOINT) return 0;
+    if (cachedSidebar.style.display === 'none') return 0;
+    if (cachedSidebar.offsetWidth < map.getSize().x) return 0; // landscape: a side panel, not a sheet
+    return cachedSidebar.offsetHeight;
+}
+
 // Move the map just enough for the pin to stay visible above the sheet.
-function keepPinAboveSheet(marker) {
-    if (!cachedSidebar || window.innerWidth > MOBILE_BREAKPOINT) return;
-    if (cachedSidebar.offsetWidth < map.getSize().x) return; // landscape: a side panel, not a sheet
-    map.panInside(marker.getLatLng(), {
+function keepPinAboveSheet(location) {
+    const covered = sheetHeight();
+    if (covered === 0) return;
+    map.panInside([location.lat, location.lng], {
         paddingTopLeft: [20, 60], // room for the pin itself, which is drawn above its point
-        paddingBottomRight: [20, cachedSidebar.offsetHeight + 20]
+        paddingBottomRight: [20, covered + 20]
     });
 }
 
@@ -793,8 +806,7 @@ function showSidebar(location) {
 
     map.closePopup();
     selectedLocationId = location.id;
-    const markerItem = allMarkers.find(item => item.location.id === location.id);
-    setSelectedMarker(markerItem ? markerItem.marker : null);
+    setSelectedLocation(location);
     cachedSidebarContent.innerHTML = createSidebarContent(location);
     cachedSidebar.style.transform = ''; // clear leftover swipe position
     cachedSidebar.style.display = 'flex';
@@ -814,19 +826,16 @@ function hideSidebar() {
         }, 300);
     }
     selectedLocationId = null;
-    setSelectedMarker(null);
+    setSelectedLocation(null);
 }
 
 // Adding thousands of pins to the cluster layer takes several batches, with pauses
-// in between so a slow phone does not freeze. Two rules keep that safe:
-// 1. Never start a new add while one is running: the cluster layer would go on adding
-//    the rest of the OLD list, and the map would show pins the search does not match.
-//    A change that arrives meanwhile is remembered and drawn once, when the add ends.
-// 2. The layer cannot zoom to a pin before the last batch is in (it throws an error).
-//    whenMarkersAdded(fn) runs fn now if the map is up to date, or right after it is.
+// in between so a slow phone does not freeze.
+// Never start a new add while one is running: the cluster layer would go on adding
+// the rest of the OLD list, and the map would show pins the search does not match.
+// A change that arrives meanwhile is remembered and drawn once, when the add ends.
 let markerAddRunning = false;   // markerCluster.addLayers() has not finished
 let redrawWanted = false;       // the search or the legend changed during that add
-let afterMarkersAdded = null;   // the one thing waiting for the pins (the latest request wins)
 function markerBatchesDone() {
     // The cluster layer also reports an (empty) add of its own when it is put on the map
     if (!markerAddRunning) return;
@@ -834,59 +843,6 @@ function markerBatchesDone() {
     if (redrawWanted) {
         redrawWanted = false;
         drawMarkers(); // reads the search as it is now, so states in between are skipped
-        return;
-    }
-    const run = afterMarkersAdded;
-    afterMarkersAdded = null;
-    if (run) run();
-}
-function whenMarkersAdded(fn) {
-    if (!markerAddRunning && !redrawWanted) fn();
-    else afterMarkersAdded = fn;
-}
-
-// Zoom the cluster layer in until one pin is drawn by itself, then call done().
-// The cluster layer does this with listeners of its own on the map. If the pins are
-// replaced while it is still zooming, those listeners stay behind and throw an error on
-// every later map movement. So they are written down here while the layer registers
-// them, and cancelReveal() takes them off again before the pins are replaced.
-let cancelReveal = null;
-// While the cluster layer plays its own split/merge animation it ignores map movements.
-// A reveal that moved the map during that time would wait forever, so when the
-// animation ends the layer is told once more that the map has moved.
-markerCluster.on('animationend', () => {
-    if (cancelReveal) map.fire('moveend');
-});
-function zoomToClusteredMarker(marker, done) {
-    if (cancelReveal) cancelReveal();
-    map.stop(); // end a flight to another place first; the layer must start from a still map
-    const listeners = [];
-    const targets = [map, markerCluster];
-    targets.forEach(target => {
-        const realOn = target.on;
-        target.on = function(type, fn, context) {
-            // only the two the reveal itself waits on; Leaflet registers others meanwhile
-            if (context === markerCluster && (type === 'moveend' || type === 'animationend')) {
-                listeners.push([target, type, fn, context]);
-            }
-            return realOn.call(this, type, fn, context);
-        };
-    });
-    let cancelled = false;
-    const cancel = () => {
-        cancelled = true;
-        listeners.forEach(([target, type, fn, context]) => target.off(type, fn, context));
-        if (cancelReveal === cancel) cancelReveal = null;
-    };
-    cancelReveal = cancel;
-    try {
-        markerCluster.zoomToShowLayer(marker, () => {
-            if (cancelled) return;
-            if (cancelReveal === cancel) cancelReveal = null;
-            done();
-        });
-    } finally {
-        targets.forEach(target => { delete target.on; }); // back to the normal on()
     }
 }
 
@@ -908,7 +864,6 @@ function visibleMarkerItems() {
 // Put those markers on the map, replacing what was there
 function drawMarkers() {
     const clusteredMarkers = [];
-    if (cancelReveal) cancelReveal();
     facilityLayer.clearLayers();
     visibleMarkerItems().forEach(item => {
         if (item.location.type === 'facility') {
@@ -960,27 +915,14 @@ function closeSuggestions() {
     updateEmptyState(); // it may have been waiting for the list to close
 }
 
-// Open a marker's popup, first zooming in until it is no longer inside a cluster
-function revealMarker(marker) {
-    whenMarkersAdded(() => {
-        if (markerCluster.hasLayer(marker)) {
-            zoomToClusteredMarker(marker, () => marker.openPopup());
-        } else {
-            marker.openPopup();
-        }
-    });
-}
-
 // Auto-zoom to visible markers
 function zoomToVisibleMarkers(visibleMarkers) {
     if (visibleMarkers.length === 0) return;
 
     if (visibleMarkers.length === 1) {
-        const marker = visibleMarkers[0];
-        const latlng = marker.getLatLng();
-        // Wait for the flight to really finish instead of guessing with a timer
-        map.once('moveend', () => revealMarker(marker));
-        map.flyTo(latlng, 15, { duration: 0.8 });
+        // One result: open it, the same as picking it from the suggestions
+        const only = allMarkers.find(item => item.marker === visibleMarkers[0]);
+        if (only) focusOnLocation(only.location.id);
     } else {
         const group = L.featureGroup(visibleMarkers);
         map.flyToBounds(group.getBounds(), {
@@ -1178,44 +1120,27 @@ function setupAutocomplete() {
     });
 }
 
-// Focus on a location (show on map and sidebar)
+// Focus on a location: open its details and fly the map to it
 function focusOnLocation(locationId) {
     const location = allLocations.find(l => l.id === locationId);
     if (!location) return;
 
-    // Details first: opening them closes any open popup, and the pin's popup comes after
+    // Details first: the flight below needs to know how high the sheet is
     showSidebar(location);
 
-    const markerItem = allMarkers.find(item => item.location.id === locationId);
-    if (markerItem) {
-        const marker = markerItem.marker;
-        // Every step below can happen late (after a flight, or after the pins were added).
-        // By then the details may be closed or show another place: then do nothing.
-        const stillWanted = () => selectedLocationId === locationId;
-        const arrive = () => {
-            if (!stillWanted()) return;
-            marker.openPopup();
-            keepPinAboveSheet(marker);
-        };
-        const flyClose = () => {
-            if (!stillWanted()) return;
-            map.once('moveend', arrive);
-            map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
-        };
-        // Picking a suggestion has just put every pin back on the map; on a slow
-        // phone that is still going on, so wait for it to finish.
-        whenMarkersAdded(() => {
-            if (!stillWanted()) return;
-            if (markerCluster.hasLayer(marker)) {
-                // The cluster layer zooms in, and opens a group of pins that share one spot,
-                // until this pin itself is drawn. Flying first and asking afterwards left
-                // the pin hidden inside a cluster on phones.
-                zoomToClusteredMarker(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
-            } else {
-                flyClose();
-            }
-        });
-    }
+    // On a phone the sheet covers the bottom of the map, so aim for the middle of
+    // the part that stays visible: the map centre goes half a sheet below the point.
+    const zoom = Math.max(map.getZoom(), 16);
+    const centre = map.unproject(map.project([location.lat, location.lng], zoom).add([0, sheetHeight() / 2]), zoom);
+
+    // flyTo ends a flight or pan that is still running, and ending a pan fires
+    // "moveend" at once. So the listener is added after flyTo: the next "moveend"
+    // is then the end of this flight.
+    map.flyTo(centre, zoom, { duration: 0.8 });
+    map.once('moveend', () => {
+        // The details may be closed or show another place by now: then do nothing
+        if (selectedLocationId === locationId) keepPinAboveSheet(location);
+    });
 }
 
 // === GPS GEOLOCATION ===
@@ -1472,7 +1397,7 @@ function loadLocations() {
             }
 
             // Clear previous markers if retrying
-            setSelectedMarker(null);
+            setSelectedLocation(null);
             allMarkers = [];
             markerCluster.clearLayers();
 
@@ -1491,7 +1416,7 @@ function loadLocations() {
 
                 marker.on('click', () => {
                     showSidebar(location);
-                    keepPinAboveSheet(marker);
+                    keepPinAboveSheet(location);
                 });
 
                 // Add aria-label when marker is added to map.
@@ -1501,8 +1426,6 @@ function loadLocations() {
                     const element = marker.getElement();
                     if (element) {
                         element.setAttribute('aria-label', `${location.name} - ${typeNames[location.type]}`);
-                        // Clustering builds a new element each time the pin comes back
-                        element.classList.toggle('selected', marker === selectedMarker);
                     }
                 });
 

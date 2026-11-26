@@ -274,30 +274,52 @@ async function pickFromSuggestions(viewport, cpuSlowdown) {
     expect(target, 'data changed: no location with two close neighbours');
     if (cpuSlowdown > 1) await slowDown(context, page, cpuSlowdown);
     await page.locator('#search-input').fill(target.name); // long enough to wait out the typing delay below
+    await page.evaluate(() => { window.smokeZoomEnds = 0; map.on('zoomend', () => { window.smokeZoomEnds++; }); });
     await page.locator(`.suggestion-item[data-id="${target.id}"]`).click({ timeout: 60000 });
     // wait until the map stops moving, not for a fixed time: a slowed-down browser needs longer
     await mapSettled(page);
     const result = { pins: await visibleSelectedPins(page), zoom: await page.evaluate(() => map.getZoom()),
+        zoomEnds: await page.evaluate(() => window.smokeZoomEnds),
         title: await page.evaluate(() => (document.querySelector('#sidebar h2') || {}).textContent) };
     const errors = problems.filter(p => p.startsWith('page error'));
     // closing the details takes the "selected" mark off again
     await page.keyboard.press('Escape'); await page.waitForTimeout(600 * Math.max(1, cpuSlowdown / 2));
     const afterClose = await page.evaluate(() => document.querySelectorAll('.battery-marker.selected').length);
-    // tapping a pin that is already drawn marks it selected too
-    let afterTap = 1;
+    // tapping a pin that is drawn on its own marks it selected too (the picked one
+    // may still be counted inside a cluster: it was drawn on its own layer)
+    let afterTap = { pins: 1, title: '', name: '' };
     if (cpuSlowdown === 1) {
-        await page.locator(`.battery-marker[aria-label^="${target.name} - "]`).click({ force: true });
+        afterTap.name = await tagDrawnPin(page);
+        expect(afterTap.name, `${viewport.width}px: no pin drawn on its own near "${target.name}" to tap`);
+        await page.locator('[data-smoke-tap]').click({ force: true });
         await page.waitForTimeout(600);
-        afterTap = await visibleSelectedPins(page);
+        afterTap.pins = await visibleSelectedPins(page);
+        afterTap.title = await page.evaluate(() => (document.querySelector('#sidebar h2') || {}).textContent);
     }
     await context.close();
     const where = `${viewport.width}px, CPU ${cpuSlowdown}x slower, "${target.name}"`;
     expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
     expect(result.title === target.name, `${where}: details show "${result.title}"`);
     expect(result.pins === 1, `${where}: ${result.pins} visible selected pins at zoom ${result.zoom} (wanted exactly 1)`);
+    expect(result.zoomEnds === 1, `${where}: the map zoomed ${result.zoomEnds} times to show the pick (wanted one flight)`);
     expect(afterClose === 0, `${where}: ${afterClose} pins still marked selected after the details were closed`);
-    expect(afterTap === 1, `${where}: ${afterTap} visible selected pins after tapping the pin (wanted exactly 1)`);
+    expect(afterTap.pins === 1, `${where}: ${afterTap.pins} visible selected pins after tapping a pin (wanted exactly 1)`);
+    expect(cpuSlowdown > 1 || afterTap.title === afterTap.name, `${where}: tapped "${afterTap.name}", details show "${afterTap.title}"`);
 }
+// Marks one ordinary pin that is drawn on its own in the open part of the screen
+// (data-smoke-tap) and returns its location name, or null
+const tagDrawnPin = page => page.evaluate(async () => {
+    const find = () => [...document.querySelectorAll('.battery-marker:not(.selected)[aria-label]')].find(el => {
+        const box = el.getBoundingClientRect();
+        return box.top > 80 && box.bottom < window.innerHeight - 80 && box.left > 20 && box.right < window.innerWidth - 20;
+    });
+    let el = find();
+    if (!el) { map.setZoom(18, { animate: false }); await new Promise(done => setTimeout(done, 800)); el = find(); }
+    if (!el) return null;
+    el.dataset.smokeTap = '1';
+    const label = el.getAttribute('aria-label');
+    return label.slice(0, label.lastIndexOf(' - '));
+});
 check('picking a location inside a tight cluster shows it as the one selected pin (desktop)', () => pickFromSuggestions(DESKTOP, 1));
 check('picking a location inside a tight cluster shows it as the one selected pin (phone)', () => pickFromSuggestions(PHONE, 1));
 check('the same on a slow phone (CPU 4x slower): pins are still being added when it is picked', () => pickFromSuggestions(PHONE, 4));
@@ -373,9 +395,13 @@ const pickInPage = (page, place) => page.evaluate(p => {
 }, place);
 const enterInPage = page => page.evaluate(() =>
     document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
-// "Zooming to a clustered pin" has started / has just ended
-const revealRunning = page => page.waitForFunction(() => cancelReveal !== null, null, { polling: 'raf', timeout: 15000 });
-const revealOver = page => page.waitForFunction(() => cancelReveal === null, null, { polling: 'raf', timeout: 15000 });
+// The map is flying somewhere: watchFlights() must run before the pick that starts the flight
+const watchFlights = page => page.evaluate(() => {
+    window.smokeMoving = false;
+    map.on('movestart', () => { window.smokeMoving = true; });
+    map.on('moveend', () => { window.smokeMoving = false; });
+});
+const flightRunning = page => page.waitForFunction(() => window.smokeMoving, null, { polling: 'raf', timeout: 15000 });
 const endsAt = async (page, place, step) => {
     await mapSettled(page);
     const end = await page.evaluate(b => ({ km: getDistance(map.getCenter().lat, map.getCenter().lng, b.lat, b.lng), title: document.querySelector('#sidebar h2').textContent }), place);
@@ -390,14 +416,16 @@ check('a second pick right after the first ends at the second place', async () =
     await pickInPage(page, first); await pickInPage(page, second);
     await endsAt(page, second, 'two picks with no pause');
     await context.close();
-    // 2. the second pick while the map is still zooming in to the first one
+    // 2. the second pick while the map is still flying to the first one
     ({ context, page, problems } = await openApp());
-    await pickInPage(page, first); await revealRunning(page); await pickInPage(page, second);
-    await endsAt(page, second, 'second pick while zooming to the first');
+    await watchFlights(page);
+    await pickInPage(page, first); await flightRunning(page); await pickInPage(page, second);
+    await endsAt(page, second, 'second pick while flying to the first');
     await context.close();
     // 3. on a phone, the second pick while the map is flying the last stretch to the first one
     ({ context, page, problems } = await openApp({ viewport: PHONE }));
-    await pickInPage(page, first); await revealRunning(page); await revealOver(page); await pickInPage(page, second);
+    await watchFlights(page);
+    await pickInPage(page, first); await flightRunning(page); await page.waitForTimeout(600); await pickInPage(page, second);
     await endsAt(page, second, 'second pick during the flight to the first (phone)');
     const errors = problems.filter(p => p.startsWith('page error'));
     await context.close();
@@ -408,7 +436,8 @@ check('a search while the map is zooming to a picked place leaves no broken list
     const { context, page, problems } = await openApp();
     const [first] = await farApartPlaces(page);
     const own = await inCity(page, CITY);
-    await pickInPage(page, first); await revealRunning(page);
+    await watchFlights(page);
+    await pickInPage(page, first); await flightRunning(page);
     await typeInPage(page, CITY); await enterInPage(page);
     await mapSettled(page);
     // move the map a few times: a listener left behind throws on every movement
