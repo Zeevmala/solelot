@@ -88,15 +88,13 @@ function fuzzyMatch(text, query, maxDist = 2) {
     return false;
 }
 
-function normalizeText(text) {
-    return String(text || '')
+function normalizeText(text, keepDoubled = false) {
+    let result = String(text || '')
         .toLowerCase()
         .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
-        .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/י+/g, 'י')
-        .replace(/ו+/g, 'ו')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .replace(/[-\u05BE\u2013]/g, ' ');
+    if (!keepDoubled) result = result.replace(/י+/g, 'י').replace(/ו+/g, 'ו');
+    return result.replace(/\s+/g, ' ').trim();
 }
 
 const QUERY_ALIASES = {
@@ -119,16 +117,83 @@ const QUERY_ALIASES = {
     'שוהם': 'שהם',
     'יהוד מונוסון': 'יהוד',
     'מודיעין מכבים רעות': 'מודיעין',
-    'פרדס חנה כרכור': 'פרדס חנה'
+    'פרדס חנה כרכור': 'פרדס חנה',
+    'כ"ס': 'כפר סבא',
+    // English names of the large cities
+    'jerusalem': 'ירושלים',
+    'haifa': 'חיפה',
+    'beer sheva': 'באר שבע',
+    'petah tikva': 'פתח תקווה',
+    'rishon lezion': 'ראשון לציון',
+    'netanya': 'נתניה',
+    'ashdod': 'אשדוד',
+    'holon': 'חולון',
+    'ramat gan': 'רמת גן',
+    'bnei brak': 'בני ברק',
+    'eilat': 'אילת',
+    // Chains, as people type them
+    'bug': 'באג',
+    'ikea': 'איקאה',
+    'ace': 'אייס',
+    'אם פם': 'am.pm',
+    'ampm': 'am.pm',
+    'am:pm': 'am.pm'
 };
 
-function normalizeQuery(text) {
+function normalizeQuery(text, keepDoubled = false) {
     const query = normalizeText(text);
     const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
     const alias = Object.keys(QUERY_ALIASES).find(name =>
         normalizeText(name) === query && (typedQuote || !name.includes('"')));
-    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
+    return normalizeText(alias ? QUERY_ALIASES[alias] : text, keepDoubled);
 }
+
+function locationSearchText(location) {
+    const text = [location.name, location.address, location.city].join(' ').replace(/,/g, ' ');
+    return { folded: normalizeText(text), asTyped: normalizeText(text, true) };
+}
+
+
+function findContaining(locations, query) {
+    const texts = locations.map(location => location.searchText || locationSearchText(location));
+    const withAll = (words, kind) => locations.filter((location, i) => words.every(word => texts[i][kind].includes(word)));
+    const typed = String(query || '').replace(/,/g, ' '); // an address pasted as written
+    const asTyped = normalizeQuery(typed, true);
+    const folded = normalizeQuery(typed);
+    if (asTyped !== folded) {
+        const found = withAll(asTyped.split(' '), 'asTyped');
+        if (found.length > 0) return found;
+    }
+    return withAll(folded.split(' '), 'folded');
+}
+
+
+function matchCities(cityCounts, text, exactLocationCount = 0) {
+    const query = normalizeQuery(text);
+    const maxDist = fuzzyTolerance(query.length);
+    const matches = [];
+    if (query === '') return matches;
+    cityCounts.forEach((count, name) => {
+        const city = normalizeText(name);
+        if (city.includes(query)) matches.push({ type: 'city', name, count, exact: true, same: city === query });
+    });
+    if (matches.length === 0 && exactLocationCount === 0 && maxDist > 0) {
+        cityCounts.forEach((count, name) => {
+            if (fuzzyMatch(normalizeText(name), query, maxDist)) {
+                matches.push({ type: 'city', name, count, exact: false, same: false });
+            }
+        });
+    }
+    // The city that is the typed text first, then cities containing it, then near
+    // matches; inside each group the city with more locations first
+    matches.sort((a, b) => {
+        if (a.same !== b.same) return a.same ? -1 : 1;
+        if (a.exact !== b.exact) return a.exact ? -1 : 1;
+        return b.count - a.count;
+    });
+    return matches;
+}
+
 
 function fuzzyTolerance(queryLength) {
     if (queryLength < 5) return 0;
@@ -142,16 +207,16 @@ function searchLocations(locations, query, cityFilter) {
     const q = normalizeQuery(query);
     if (q === '') return locations.slice();
 
+    const exact = findContaining(locations, query);
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
     const fields = locations.map(location => [
         normalizeText(location.name),
         normalizeText(location.address),
         normalizeText(location.city)
     ]);
-    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
-    if (exact.length > 0) return exact;
-
-    const maxDist = fuzzyTolerance(q.length);
-    if (maxDist === 0) return [];
     return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
 }
 
@@ -469,6 +534,34 @@ function createSidebarContent(location) {
             var tlv = '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1';
             assert(searchLocations(locations, tlv + ' \u05D9\u05E4\u05D5', null).length === searchLocations(locations, tlv, null).length,
                 'Search: "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1 \u05D9\u05E4\u05D5" gives the same points as "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1"');
+
+            // Words in any order, doubled letters, aliases (great-map A3), on the real data.
+            // The page builds the search text once per location when the data loads; so does this test.
+            locations.forEach(function(loc) { loc.searchText = locationSearchText(loc); });
+            var sample = locations.filter(function(loc, i) { return i % 9 === 0; }).slice(0, 400);
+            var missed = sample.filter(function(loc) {
+                var street = loc.address.split(',')[0].replace(/[0-9]+/g, ' ').trim();
+                return searchLocations(locations, street + ' ' + loc.city, null).indexOf(loc) === -1;
+            });
+            assert(sample.length === 400 && missed.length < 20, 'Search: "street city" finds its own point for at least 95% of 400 addresses (' + missed.length + ' missed' + (missed[0] ? ', e.g. ' + missed[0].address : '') + ')');
+            var gvirol = searchLocations(locations, 'אבן גבירול תל אביב', null);
+            assert(gvirol.length > 0 && gvirol.every(function(loc) { return loc.city === tlv && (loc.name + loc.address).indexOf('אבן גבירול') !== -1; }),
+                'Search: "אבן גבירול תל אביב" shows only אבן גבירול in תל אביב (' + gvirol.length + ')');
+            var ace = searchLocations(locations, 'אייס', null);
+            var aceRaw = locations.filter(function(loc) { return (loc.name + '|' + loc.address + '|' + loc.city).indexOf('אייס') !== -1; }).length;
+            assert(ace.length > 0 && ace.length === aceRaw, 'Search: "אייס" shows only the ' + aceRaw + ' records containing it (got ' + ace.length + ')');
+            var ptk = searchLocations(locations, 'פתח תקוה', null).filter(function(loc) { return loc.city === 'פתח תקווה'; }).length;
+            var ptkOwn = locations.filter(function(loc) { return loc.city === 'פתח תקווה'; }).length;
+            assert(ptkOwn > 0 && ptk === ptkOwn, 'Search: "פתח תקוה" finds all ' + ptkOwn + ' points of פתח תקווה (got ' + ptk + ')');
+            var kiryat = searchLocations(locations, 'קרית אתא', null);
+            assert(kiryat.length > 0 && kiryat.every(function(loc) { return (loc.name + loc.address + loc.city).indexOf('קריית אתא') !== -1 || (loc.name + loc.address + loc.city).indexOf('קרית אתא') !== -1; }), 'Search: "קרית אתא" finds קריית אתא (' + kiryat.length + ')');
+            ['jerusalem', 'haifa', 'beer sheva', 'petah tikva', 'rishon lezion', 'netanya', 'ashdod', 'holon', 'ramat gan', 'bnei brak', 'eilat', 'כ"ס', 'bug', 'ikea', 'ace', 'אם פם', 'ampm', 'am:pm'].forEach(function(typed) {
+                assert(searchLocations(locations, typed, null).length > 0, 'Search: alias "' + typed + '" finds points on the map');
+            });
+            var cityCountsReal = new Map();
+            locations.forEach(function(loc) { cityCountsReal.set(loc.city, (cityCountsReal.get(loc.city) || 0) + 1); });
+            assert(matchCities(cityCountsReal, 'ספריה', findContaining(locations, 'ספריה').length).length === 0, 'Suggestions: "ספריה" offers no city row (it is found in locations)');
+            assert(matchCities(cityCountsReal, 'קרית אתא', findContaining(locations, 'קרית אתא').length).map(function(c) { return c.name; }).join() === 'קריית אתא', 'Suggestions: "קרית אתא" offers exactly one city');
 
             // --- Sidebar State Machine ---
             section('Sidebar State Machine');

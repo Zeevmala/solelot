@@ -189,15 +189,14 @@ function fuzzyMatch(text, query, maxDist = 2) {
 // Makes two spellings of the same thing equal before they are compared:
 // Latin letters in lower case, no quote marks (מתנ"ס = מתנס), hyphens as spaces,
 // and a doubled י or ו as a single one (תקווה = תקוה, קריית = קרית).
-function normalizeText(text) {
-    return String(text || '')
+// keepDoubled leaves a doubled י or ו as it is (for the "as typed" search below).
+function normalizeText(text, keepDoubled = false) {
+    let result = String(text || '')
         .toLowerCase()
         .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
-        .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/י+/g, 'י')
-        .replace(/ו+/g, 'ו')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .replace(/[-\u05BE\u2013]/g, ' ');
+    if (!keepDoubled) result = result.replace(/י+/g, 'י').replace(/ו+/g, 'ו');
+    return result.replace(/\s+/g, ' ').trim();
 }
 
 // Short and old names people type for a city -> the city name used in the data.
@@ -223,18 +222,65 @@ const QUERY_ALIASES = {
     'שוהם': 'שהם',
     'יהוד מונוסון': 'יהוד',
     'מודיעין מכבים רעות': 'מודיעין',
-    'פרדס חנה כרכור': 'פרדס חנה'
+    'פרדס חנה כרכור': 'פרדס חנה',
+    'כ"ס': 'כפר סבא',
+    // English names of the large cities
+    'jerusalem': 'ירושלים',
+    'haifa': 'חיפה',
+    'beer sheva': 'באר שבע',
+    'petah tikva': 'פתח תקווה',
+    'rishon lezion': 'ראשון לציון',
+    'netanya': 'נתניה',
+    'ashdod': 'אשדוד',
+    'holon': 'חולון',
+    'ramat gan': 'רמת גן',
+    'bnei brak': 'בני ברק',
+    'eilat': 'אילת',
+    // Chains, as people type them
+    'bug': 'באג',
+    'ikea': 'איקאה',
+    'ace': 'אייס',
+    'אם פם': 'am.pm',
+    'ampm': 'am.pm',
+    'am:pm': 'am.pm'
 };
 
 // The search text as it is compared with the data
 // A short name written with a quote mark (ב"ש) counts only when the quote mark was
 // typed: the bare letters "בש" are also part of ordinary words and names.
-function normalizeQuery(text) {
+// keepDoubled: see normalizeText().
+function normalizeQuery(text, keepDoubled = false) {
     const query = normalizeText(text);
     const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
     const alias = Object.keys(QUERY_ALIASES).find(name =>
         normalizeText(name) === query && (typedQuote || !name.includes('"')));
-    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
+    return normalizeText(alias ? QUERY_ALIASES[alias] : text, keepDoubled);
+}
+
+// What a search looks through for one location: name, address and city as one text,
+// commas as spaces ("החרש 1, רמת השרון"). "folded" is compared normally; "asTyped"
+// keeps a doubled י or ו. loadLocations() builds it once per location (location.searchText).
+function locationSearchText(location) {
+    const text = [location.name, location.address, location.city].join(' ').replace(/,/g, ' ');
+    return { folded: normalizeText(text), asTyped: normalizeText(text, true) };
+}
+
+// The locations whose text contains every typed word, in any order
+// ("אבן גבירול תל אביב" finds "אבן גבירול 91, תל אביב").
+// A doubled י or ו that was typed is looked for as typed first: "אייס" must not turn
+// into "איס", which is inside every "מוקד איסוף". Only when that finds nothing is it
+// folded, so "קריית אתא" still finds a record spelled "קרית אתא".
+function findContaining(locations, query) {
+    const texts = locations.map(location => location.searchText || locationSearchText(location));
+    const withAll = (words, kind) => locations.filter((location, i) => words.every(word => texts[i][kind].includes(word)));
+    const typed = String(query || '').replace(/,/g, ' '); // an address pasted as written
+    const asTyped = normalizeQuery(typed, true);
+    const folded = normalizeQuery(typed);
+    if (asTyped !== folded) {
+        const found = withAll(asTyped.split(' '), 'asTyped');
+        if (found.length > 0) return found;
+    }
+    return withAll(folded.split(' '), 'folded');
 }
 
 // How many wrong letters a query may have: none in a short word, where one
@@ -255,16 +301,16 @@ function searchLocations(locations, query, cityFilter) {
     const q = normalizeQuery(query);
     if (q === '') return locations.slice();
 
+    const exact = findContaining(locations, query);
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
     const fields = locations.map(location => [
         normalizeText(location.name),
         normalizeText(location.address),
         normalizeText(location.city)
     ]);
-    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
-    if (exact.length > 0) return exact;
-
-    const maxDist = fuzzyTolerance(q.length);
-    if (maxDist === 0) return [];
     return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
 }
 
@@ -272,18 +318,25 @@ function searchLocations(locations, query, cityFilter) {
 // cityCounts is a Map of city name -> number of locations. "same" marks the city
 // that IS the typed text (or what its short name stands for): the only kind of
 // suggestion Enter may pick by itself.
-function matchCities(cityCounts, text) {
+// Near spellings (typing mistakes) are offered only when no city contains the text
+// and no location does (exactLocationCount: how many findContaining() found):
+// "ספריה" is found in 11 places, so the cities סתריה and קיסריה are not offered.
+function matchCities(cityCounts, text, exactLocationCount = 0) {
     const query = normalizeQuery(text);
     const maxDist = fuzzyTolerance(query.length);
     const matches = [];
     if (query === '') return matches;
     cityCounts.forEach((count, name) => {
         const city = normalizeText(name);
-        const exact = city.includes(query);
-        if (exact || (maxDist > 0 && fuzzyMatch(city, query, maxDist))) {
-            matches.push({ type: 'city', name, count, exact, same: city === query });
-        }
+        if (city.includes(query)) matches.push({ type: 'city', name, count, exact: true, same: city === query });
     });
+    if (matches.length === 0 && exactLocationCount === 0 && maxDist > 0) {
+        cityCounts.forEach((count, name) => {
+            if (fuzzyMatch(normalizeText(name), query, maxDist)) {
+                matches.push({ type: 'city', name, count, exact: false, same: false });
+            }
+        });
+    }
     // The city that is the typed text first, then cities containing it, then near
     // matches; inside each group the city with more locations first
     matches.sort((a, b) => {
@@ -911,14 +964,15 @@ function setupAutocomplete() {
 
         searchTimeout = setTimeout(() => setSearch(text, null), 300);
 
-        const cityMatches = matchCities(cityCounts, text);
+        // Cities with a near spelling are offered only when no location has the text itself
+        const cityMatches = matchCities(cityCounts, text, findContaining(allLocations, text).length);
 
         // Locations: the same ones the map will show for this text
         const locationMatches = searchLocations(allLocations, text, null).map(location => ({
             type: 'location',
             id: location.id,
             name: location.name,
-            city: location.city,
+            address: location.address, // it ends with the city
             locationType: location.type
         }));
 
@@ -957,7 +1011,7 @@ function setupAutocomplete() {
                         <span class="suggestion-icon">${icon}</span>
                         <div class="suggestion-text">
                             <div class="suggestion-name">${escapeHtml(match.name)}</div>
-                            <div class="suggestion-city">${escapeHtml(match.city)}</div>
+                            <div class="suggestion-city">${escapeHtml(match.address)}</div>
                         </div>
                     </div>
                 `;
@@ -1324,6 +1378,8 @@ function loadLocations() {
             // Validate and filter location data
             allLocations = data.locations.filter(isValidLocation);
             totalLocations = allLocations.length;
+            // The text each search looks through, built once instead of on every keystroke
+            allLocations.forEach(location => { location.searchText = locationSearchText(location); });
 
             // Pre-compute city counts for fast autocomplete
             cityCounts.clear();

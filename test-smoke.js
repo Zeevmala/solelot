@@ -270,6 +270,35 @@ const nearestState = page => page.evaluate(() => {
 });
 const tapLocate = async page => { await page.click('.locate-btn'); await page.waitForTimeout(300); await mapSettled(page); await page.waitForTimeout(400); };
 
+check('address search: "street city" in any order; "אייס" is not "איסוף"; the suggestion row shows the address', async () => {
+    const { context, page, problems } = await openApp({ viewport: PHONE });
+    const onMap = () => page.evaluate(() => {
+        const drawn = new Set(markerCluster.getLayers());
+        return allMarkers.filter(item => drawn.has(item.marker)).map(item => item.location);
+    });
+    for (const text of ['אבן גבירול תל אביב', 'תל אביב אבן גבירול']) {
+        await page.locator('#search-input').fill(text); await settle(page);
+        const points = await onMap();
+        const rows = await page.evaluate(() => [...document.querySelectorAll('.suggestion-item[data-type="location"]')].map(row => {
+            const location = allLocations.find(l => l.id === Number(row.dataset.id));
+            return { shown: row.querySelector('.suggestion-city').textContent, address: location.address };
+        }));
+        expect(points.length > 0 && points.every(l => l.city === 'תל אביב' && (l.name + l.address).includes('אבן גבירול')),
+            `"${text}": ${points.length} pins, cities ${[...new Set(points.map(l => l.city))].slice(0, 4)}`);
+        expect(rows.length > 0 && rows.every(r => r.shown === r.address), `"${text}": suggestion rows ${JSON.stringify(rows.slice(0, 2))}`);
+        await clearSearch(page);
+    }
+    await page.locator('#search-input').fill('אייס'); await settle(page);
+    const ace = (await onMap()).length, aceText = await containing(page, 'אייס');
+    await clearSearch(page);
+    await page.locator('#search-input').fill('haifa'); await settle(page);
+    const haifaRow = await page.evaluate(() => (document.querySelector('.suggestion-item') || {}).dataset);
+    await context.close();
+    expect(ace === aceText, `"אייס": ${ace} pins, ${aceText} records contain it`);
+    expect(haifaRow && haifaRow.type === 'city' && haifaRow.value === 'חיפה', '"haifa": first suggestion ' + JSON.stringify(haifaRow));
+    expect(problems.length === 0, problems.join(' ; '));
+});
+
 check('?action=nearest waits for the data, then opens the nearest point', async () => {
     const { context, page, problems } = await openPage({ viewport: PHONE, geolocation: TEL_AVIV, permissions: ['geolocation'] });
     // locations.json arrives 2 seconds late, as on a slow connection
