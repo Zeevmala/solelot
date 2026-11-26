@@ -77,6 +77,7 @@ test('a clean file of 1,000 points passes every check with no warnings', () => {
     assert.match(result.block('14a'), /: 0 to review/);
     assert.match(result.block('14b'), /: 0 points in 0 groups/);
     assert.match(result.block('14c'), /: 0 to review/);
+    assert.match(result.block('14d'), /: 0 to review/);
     assert.match(result.block('24'), /: 0 pairs to review/);
 });
 
@@ -150,6 +151,63 @@ test('14c warns (exit 0) about the only point of a city that sits inside another
         point(101, 32.0841, 34.7821, { city: 'גבעתיים', address: 'כצנלסון 1, גבעתיים' })]);
     assert.strictEqual(result.status, 0, result.stdout);
     assert.match(result.block('14c'), /^\[!\].*: 1 to review\n    id=101: 5 of 5 nearest are תל אביב - גבעתיים/);
+});
+
+test('14d warns (exit 0) about two points of one street in one city 3 km apart, not 200 m apart', () => {
+    const north = km => Number((32.09 + km / KM_PER_DEGREE_LAT).toFixed(6));
+    const far = validate([...cleanPoints(),
+        point(101, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, north(3), 34.79, { address: 'הרצל 40, תל אביב' })]);
+    assert.strictEqual(far.status, 0, far.stdout);
+    assert.match(far.block('14d'), /^\[!\].*: 2 to review/);
+    assert.match(far.block('14d'), /id=101: 3\.0 km from id=102 on the same street - תל אביב - "הרצל 5, תל אביב"/);
+    assert.match(far.block('14d'), /id=102: 3\.0 km from id=101/);
+
+    const close = validate([...cleanPoints(),
+        point(101, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, north(0.2), 34.79, { address: 'הרצל 40, תל אביב' })]);
+    assert.strictEqual(close.status, 0, close.stdout);
+    assert.match(close.block('14d'), /^\[!\].*: 0 to review/);
+});
+
+test('14d flags only a point with a house number, and not two different streets', () => {
+    const north = km => Number((32.09 + km / KM_PER_DEGREE_LAT).toFixed(6));
+    const result = validate([...cleanPoints(),
+        // the street without a number can be anywhere along it, so only the numbered point is flagged
+        point(101, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, north(3), 34.79, { address: 'הרצל, תל אביב' }),
+        // two different streets, a road number is not a house number
+        point(103, north(1), 34.80, { address: 'ויצמן 3, תל אביב' }),
+        point(104, north(4), 34.80, { address: 'כביש 4, תל אביב' }),
+        point(105, north(1), 34.81, { address: 'כביש 4, תל אביב' })]);
+    assert.strictEqual(result.status, 0, result.stdout);
+    assert.match(result.block('14d'), /^\[!\].*: 1 to review\n    id=101: 3\.0 km/);
+});
+
+test('14a-14d count an id in REVIEWED_OK on one line and still list an id that is not in it', () => {
+    // 345243 and 343966 are in REVIEWED_OK for 14a (fuel stations filed under the nearest town)
+    // one point north of the grid, one south of it (the grid's bottom row is lat 32.08)
+    const north = km => Number((GRID_TOP_LAT + km / KM_PER_DEGREE_LAT).toFixed(6));
+    const south = km => Number((32.08 - km / KM_PER_DEGREE_LAT).toFixed(6));
+    const result = validate([...cleanPoints(),
+        point(345243, north(5.25), 34.78), point(101, south(5.25), 34.78)]);
+    assert.strictEqual(result.status, 0, result.stdout);
+    assert.match(result.block('14a'), /^\[!\].*: 1 to review\n    id=101: /);
+    assert.match(result.block('14a'), /\n    \+ 1 reviewed earlier \(REVIEWED_OK in validate_data\.js\), not listed/);
+    assert.doesNotMatch(result.block('14a'), /id=345243/);
+
+    // A listed id hides only that check: 345243 is not listed for 14d, so 14d still shows it
+    const street = validate([...cleanPoints(),
+        point(345243, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, 32.117, 34.79, { address: 'הרצל 40, תל אביב' })]);
+    assert.match(street.block('14d'), /id=345243: /);
+
+    // 14b: a group is hidden only when every member is listed (344450-344453: one village, no street)
+    const group = (ids, lat) => ids.map((id, i) => point(id, lat, 34.79, { address: ['מבנה רווחה', 'בנין מועצה', 'מועדון נוער', 'מרכז צעירים'][i] + ', תל אביב' }));
+    const villages = validate([...cleanPoints(), ...group([344450, 344451, 344452, 344453], 32.09), ...group([101, 346488], 32.095)]);
+    assert.match(villages.block('14b'), /: 2 points in 1 groups/);
+    assert.match(villages.block('14b'), /id=101: /);
+    assert.match(villages.block('14b'), /\+ 1 group reviewed earlier/);
 });
 
 test('check 15 fails under 1,000 locations', () => {
