@@ -81,15 +81,18 @@ function isMarkedInactive(name) {
 // Each pattern must match a whole word, so "אלישיב" (a moshav) is not a "ישיבה"
 // and "התיכונים" (a street) is not a "תיכון".
 const SCHOOL_WORDS = [
-    'בית ה?ספר', 'בתי[ -]ה?ספר', 'בי"ס', 'ביה"ס', 'ה?תיכון', 'חט"ב', 'חטיבת', 'ישיבה', 'ישיבת',
-    'אולפנה', 'אולפנת', 'ממ"ד', 'תלמוד תורה', 'גני ילדים', 'בית חינוך', 'קרי?ית ה?חינוך'
+    'בית ה?ספר', 'בתי[ -]ה?ספר', 'בי"ס', 'ביה"ס', 'ה?תיכון', 'תיכונט', 'חט"ב', 'חטיבת', 'ישיבה', 'ישיבת',
+    'אולפנה', 'אולפנת', 'ממ"ד', 'חמ"ד', 'תלמוד תורה', 'גני ילדים', 'בית חינוך', 'קרי?ית ה?חינוך'
 ];
-const SCHOOL_PATTERN = new RegExp('(^|[^א-ת])(' + SCHOOL_WORDS.join('|') + ')($|[^א-ת])');
+// "מול בית הספר" / "ליד התיכון": opposite or next to a school is not inside it
+const SCHOOL_PATTERN = new RegExp('(^|[^א-ת])(?<!(?:מול|ליד) )(' + SCHOOL_WORDS.join('|') + ')($|[^א-ת])');
+// "חטיבת אלכסנדרוני 2": a brigade name followed by a house number is a street address
+const BRIGADE_STREET = /חטיבת [א-ת"']+ \d+/g;
 
 function isSchool(name) {
     // "חטיבת הנח"ל 30" is a street; petrol stations are named after the street they are on
     if (name.startsWith('תחנת דלק')) return false;
-    return SCHOOL_PATTERN.test(name);
+    return SCHOOL_PATTERN.test(name.replace(BRIGADE_STREET, ''));
 }
 
 // Order matters: the first match wins, so specific names come first.
@@ -346,7 +349,9 @@ function transformMarker(marker, overrides = {}) {
         name = 'נקודת איסוף - ' + (addressParts.slice(0, -1).join(', ') || city);
     }
 
-    if (isSchool(name) || isSchool(rawName) || isSchool(place)) return { skip: 'school (not open to the public)' };
+    // A petrol station's place field names the junction or street it is on ("צומת גולני-בית ספר כדורי")
+    const placeIsSchool = !rawName.startsWith('תחנת דלק') && isSchool(place);
+    if (isSchool(name) || isSchool(rawName) || placeIsSchool) return { skip: 'school (not open to the public)' };
 
     return {
         location: {

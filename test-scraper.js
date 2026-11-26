@@ -814,6 +814,13 @@ test('isSchool: schools, yeshivas and kindergartens, but not streets, shops or c
         'מוקד איסוף - ישיבת הסדר', 'מוקד איסוף - אולפנת בהרן', 'מוקד איסוף - ממ"ד גוננים', 'מוקד איסוף - גני ילדים',
         'מוקד איסוף - קריית החינוך', 'מוקד איסוף - "התיכון הישראלי למדעים ואומנויות"', 'מוקד איסוף - בית חינוך קהילתי גאולה', 'מוקד איסוף - תלמוד תורה'
     ]) assert.ok(isSchool(name), name);
+    // a school campus that does not use the word "school" (found on the map in the November 2026 audit)
+    for (const name of ['מוקד איסוף - תיכונט ע"ש אלתרמן', 'מוקד איסוף - חמ"ד מודיעים - יהלום, כניסה ראשית']) assert.ok(isSchool(name), name);
+    // opposite or next to a school is not inside it; "חטיבת <name> <number>" is a street address
+    for (const name of [
+        'נחלת החדשה, מול בית הספר', 'מוקד איסוף - ליד בי"ס קשת', 'מוקד איסוף - מול התיכון',
+        'עיריית רמת השרון - מרכז איסוף - חשמלית - חטיבת אלכסנדרוני 2', 'מוקד איסוף - חטיבת גולני 14'
+    ]) assert.ok(!isSchool(name), name);
     for (const name of [
         'תחנת דלק - סונול סו גוד - חטיבת הנח"ל 30', 'תחנת דלק - פז YELLOW - חטיבה תשע פינת הולנד', 'חשמלית - אלישיב',
         'מוקד איסוף - סמוך לגן ילדים', 'באג - אוניברסיטת ת"א, שער 8', 'מוקד איסוף - מכללת לוינסקי', 'בית מדרש דרכי דוד',
@@ -828,4 +835,31 @@ test('a school is skipped, whether the school is in the name or in the place fie
     assert.strictEqual(inPlace.skip, 'school (not open to the public)');
     const onSchoolStreet = transformMarker(marker({}, { business_name: 'שופרסל', street: 'בית הספר', house_number: '4' }));
     assert.ok(onSchoolStreet.location, 'a shop on a street named after a school stays');
+});
+
+test('real records the school rule used to drop by mistake are kept', () => {
+    // 344744: a petrol station whose place field names the junction by the school next to it
+    const station = transformMarker(marker({ id: '344744' }, {
+        city: 'צומת גולני דרומה', street: undefined, house_number: undefined,
+        neighborhood: 'צומת גולני דרומה-בית ספר כדורי', business_name: 'תחנת דלק - דור אלון'
+    }));
+    assert.strictEqual(station.location.name, 'תחנת דלק - דור אלון');
+    // 342750: a collection centre opposite a school
+    const opposite = transformMarker(marker({ id: '342750' }, {
+        city: 'ראשון לציון', street: 'העצמאות', house_number: undefined,
+        neighborhood: 'נחלת החדשה, מול בית הספר', business_name: 'רשות מקומית - מרכז איסוף'
+    }));
+    assert.ok(opposite.location, 'opposite a school: ' + opposite.skip);
+    // 346995: "חטיבת אלכסנדרוני 2" is the street address
+    const street = transformMarker(marker({ id: '346995' }, {
+        city: 'רמת השרון', street: 'חטיבת אלכסנדרוני', house_number: '2', neighborhood: 'מורשה',
+        business_name: 'עיריית רמת השרון - מרכז איסוף - חשמלית - חטיבת אלכסנדרוני 2'
+    }));
+    assert.ok(street.location, 'a street named after a brigade: ' + street.skip);
+    // still a school: the bin is in the car park of the high school (342792, left out until the owner decides)
+    const carPark = transformMarker(marker({ id: '342792' }, {
+        city: 'מודיעין', street: 'נחל עיון', house_number: undefined,
+        neighborhood: 'החנייה האחורית של תיכון עירוני ב\' ע"ש רבין', business_name: 'רשות מקומית - מרכז איסוף - חשמלית'
+    }));
+    assert.strictEqual(carPark.skip, 'school (not open to the public)');
 });

@@ -222,3 +222,13 @@ test('check 22 fails on a school, not on a shop in a street named after one', ()
     assert.match(result.block('22'), /^\[X\].*: 1 issues/);
     assert.match(result.block('22'), /id=101/);
 });
+
+test('check 22 fails on a school campus named תיכונט or חמ"ד', () => {
+    const result = validate([...cleanPoints(),
+        point(101, 32.09, 34.79, { name: 'מוקד איסוף - תיכונט ע"ש אלתרמן' }),
+        point(102, 32.10, 34.79, { name: 'מוקד איסוף - חמ"ד מודיעים - יהלום, כניסה ראשית' }),
+        point(103, 32.11, 34.79, { name: 'מוקד איסוף - נחלת החדשה, מול בית הספר' })]);
+    assert.strictEqual(result.status, 1, result.stdout);
+    assert.match(result.block('22'), /^\[X\].*: 2 issues/);
+    assert.doesNotMatch(result.block('22'), /id=103/);
+});

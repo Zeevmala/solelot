@@ -11,6 +11,7 @@
     "Added 2026-11-25 after review of the refreshed file: 345747 (address נתב\"ג לוד, pin in באר שבע, 76 km away) and 342784 (address רמות ירושלים, pin in north תל אביב, 46 km away) came back when same-name twins stopped being dropped; 345502 and 345653 share one coordinate in מגדל העמק but name two different industrial zones with no street.",
     "Added 2026-11-25: 346434 (רמי לוי, העמל 20) had the city \"ים\"; Nominatim puts the pin in the industrial area of כפר סבא.",
     "Added 2026-11-26: 25 city entries for markers that MAI publishes with a street but no city (343975-343996, 346749, 346774, 347297). Until now the scraper took their city from the previous locations.json by coordinate, so a lost file or a coordinate nudged by 1 m would have removed them for good; the cities here are the ones that file had.",
+    "Added 2026-11-26: 343108 is inside the ביאליק רוגוזין school campus (\\\"ביאליק רוגוזין, כניסה ראשית\\\"), which does not say school in words the school rule can see; schools are left off the map.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -342,6 +343,9 @@
       "exclude": true
     },
     "343022": {
+      "exclude": true
+    },
+    "343108": {
       "exclude": true
     },
     "343248": {
