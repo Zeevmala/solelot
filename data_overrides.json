@@ -4,17 +4,65 @@
     "{ \"city\": \"X\" }    - the pin is in the right place but MAI lists the wrong city.",
     "{ \"exclude\": true } - the coordinates contradict the address (pin is 12-190 km from the listed city), so the point is left off the map rather than sending someone to the wrong place.",
     "Found in November 2026 by comparing every point with the median position of its city and reverse-geocoding the outliers with OpenStreetMap Nominatim.",
+    "Added 2026-11-25 (launch-readiness B-2), each checked with a Nominatim reverse geocode: 15 more excludes where the pin is in a different locality than the address (3.5-190 km away), 13 city fixes where the pin is right and the city was wrong, and 347251 excluded because its name is a coordinate and it has no address.",
+    "Added 2026-11-25 (launch-readiness B-3): 346143 is at the entrance to Kibbutz Eilon, 0.6 km from the other אילון point, so its city is אילון (MAI wrote איילון). 344355 is the fuel station by Kibbutz Dvir, which MAI lists under the kibbutz's other name דבירה; its city is דביר so the two points are found together.",
+    "Added 2026-11-25 (data-quality audit of the refreshed file), each checked with a Nominatim reverse geocode of the pin: 30 city fixes where the pin is right and MAI lists a neighbouring town or a label that is not a town (דיפו ירושלים, סינרמה, צומת שילת, מ.א. עמק חפר ...), always using a spelling already in the data; and 22 excludes from the 25 same-name-same-address pairs - 15 where the pin is in a different locality or on a different street than the address names, and 7 second entries of one point (pins under 500 m apart, the higher id is left out).",
+    "Added 2026-11-25: 346330 and 346351 share one coordinate at the centre of באר שבע with no street (\"בכניסה הצפונית\", \"פארק אופיק\"). In a city that size a centre pin can be kilometres from the place, so both are left out.",
+    "Added 2026-11-25 after review of the refreshed file: 345747 (address נתב\"ג לוד, pin in באר שבע, 76 km away) and 342784 (address רמות ירושלים, pin in north תל אביב, 46 km away) came back when same-name twins stopped being dropped; 345502 and 345653 share one coordinate in מגדל העמק but name two different industrial zones with no street.",
+    "Added 2026-11-25: 346434 (רמי לוי, העמל 20) had the city \"ים\"; Nominatim puts the pin in the industrial area of כפר סבא.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
+    "343180": {
+      "city": "כפר מונש"
+    },
     "343647": {
       "city": "נתיבות"
     },
     "343803": {
       "city": "כפר תבור"
     },
+    "344147": {
+      "city": "דליאת א-כרמל"
+    },
+    "344151": {
+      "city": "ירושלים"
+    },
+    "344152": {
+      "city": "חיפה"
+    },
+    "344153": {
+      "city": "אשדוד"
+    },
+    "344159": {
+      "city": "תל אביב"
+    },
+    "344170": {
+      "city": "אלעד"
+    },
+    "344228": {
+      "city": "נהריה"
+    },
+    "344254": {
+      "city": "פתח תקווה"
+    },
+    "344352": {
+      "city": "הרצליה"
+    },
+    "344355": {
+      "city": "דביר"
+    },
+    "344424": {
+      "city": "כנות"
+    },
     "344449": {
       "city": "נצרת"
+    },
+    "344456": {
+      "city": "עידן"
+    },
+    "344714": {
+      "city": "מודיעין"
     },
     "344753": {
       "city": "נוף הגליל"
@@ -28,8 +76,35 @@
     "344864": {
       "city": "בית שמש"
     },
+    "344881": {
+      "city": "מישור אדומים"
+    },
+    "344890": {
+      "city": "יגור"
+    },
+    "344911": {
+      "city": "צמח"
+    },
+    "345128": {
+      "city": "קריית טבעון"
+    },
+    "345148": {
+      "city": "חיפה"
+    },
+    "345212": {
+      "city": "נווה זיו"
+    },
+    "345220": {
+      "city": "פתח תקווה"
+    },
     "345247": {
       "city": "פתח תקווה"
+    },
+    "345286": {
+      "city": "תל אביב"
+    },
+    "345296": {
+      "city": "תל אביב"
     },
     "345329": {
       "city": "תל אביב"
@@ -46,7 +121,16 @@
     "345597": {
       "city": "אלעד"
     },
+    "345764": {
+      "city": "ירכא"
+    },
+    "345868": {
+      "city": "חורפיש"
+    },
     "345902": {
+      "city": "שפרעם"
+    },
+    "345903": {
       "city": "שפרעם"
     },
     "345904": {
@@ -79,6 +163,9 @@
     "345913": {
       "city": "שפרעם"
     },
+    "345969": {
+      "city": "רמת גן"
+    },
     "346031": {
       "city": "קריית אתא"
     },
@@ -97,19 +184,100 @@
     "346051": {
       "city": "שפרעם"
     },
+    "346114": {
+      "city": "תפן"
+    },
+    "346143": {
+      "city": "אילון"
+    },
     "346168": {
       "city": "גוש עציון"
+    },
+    "346338": {
+      "city": "ניצן"
+    },
+    "346434": {
+      "city": "כפר סבא"
+    },
+    "346508": {
+      "city": "נאות חובב"
+    },
+    "346560": {
+      "city": "גן יבנה"
+    },
+    "346619": {
+      "city": "חיפה"
+    },
+    "346627": {
+      "city": "מבשרת ציון"
+    },
+    "346664": {
+      "city": "ניצנה"
+    },
+    "346677": {
+      "city": "תל מונד"
+    },
+    "346707": {
+      "city": "תל מונד"
+    },
+    "346708": {
+      "city": "תל מונד"
     },
     "346715": {
       "city": "עין בוקק"
     },
+    "346723": {
+      "city": "יוקנעם"
+    },
+    "346734": {
+      "city": "תל מונד"
+    },
+    "346745": {
+      "city": "כפר קרע"
+    },
+    "346746": {
+      "city": "כפר קרע"
+    },
+    "346747": {
+      "city": "כפר קרע"
+    },
+    "346748": {
+      "city": "כפר קרע"
+    },
+    "346821": {
+      "city": "אלעד"
+    },
     "347289": {
       "city": "אום אל פחם"
+    },
+    "342705": {
+      "exclude": true
+    },
+    "342784": {
+      "exclude": true
     },
     "342884": {
       "exclude": true
     },
     "342975": {
+      "exclude": true
+    },
+    "342999": {
+      "exclude": true
+    },
+    "343022": {
+      "exclude": true
+    },
+    "343248": {
+      "exclude": true
+    },
+    "343267": {
+      "exclude": true
+    },
+    "343274": {
+      "exclude": true
+    },
+    "343316": {
       "exclude": true
     },
     "343383": {
@@ -119,6 +287,9 @@
       "exclude": true
     },
     "343500": {
+      "exclude": true
+    },
+    "343509": {
       "exclude": true
     },
     "343510": {
@@ -131,6 +302,9 @@
       "exclude": true
     },
     "343679": {
+      "exclude": true
+    },
+    "343745": {
       "exclude": true
     },
     "343755": {
@@ -154,6 +328,12 @@
     "344021": {
       "exclude": true
     },
+    "344034": {
+      "exclude": true
+    },
+    "344114": {
+      "exclude": true
+    },
     "344222": {
       "exclude": true
     },
@@ -167,6 +347,9 @@
       "exclude": true
     },
     "344702": {
+      "exclude": true
+    },
+    "344773": {
       "exclude": true
     },
     "344803": {
@@ -187,6 +370,9 @@
     "345057": {
       "exclude": true
     },
+    "345186": {
+      "exclude": true
+    },
     "345235": {
       "exclude": true
     },
@@ -199,13 +385,31 @@
     "345266": {
       "exclude": true
     },
+    "345271": {
+      "exclude": true
+    },
     "345465": {
       "exclude": true
     },
     "345480": {
       "exclude": true
     },
+    "345492": {
+      "exclude": true
+    },
+    "345502": {
+      "exclude": true
+    },
+    "345522": {
+      "exclude": true
+    },
+    "345533": {
+      "exclude": true
+    },
     "345558": {
+      "exclude": true
+    },
+    "345588": {
       "exclude": true
     },
     "345639": {
@@ -214,10 +418,22 @@
     "345640": {
       "exclude": true
     },
+    "345653": {
+      "exclude": true
+    },
+    "345747": {
+      "exclude": true
+    },
+    "345748": {
+      "exclude": true
+    },
     "345803": {
       "exclude": true
     },
     "345838": {
+      "exclude": true
+    },
+    "345841": {
       "exclude": true
     },
     "345901": {
@@ -226,7 +442,16 @@
     "346018": {
       "exclude": true
     },
+    "346046": {
+      "exclude": true
+    },
+    "346071": {
+      "exclude": true
+    },
     "346132": {
+      "exclude": true
+    },
+    "346281": {
       "exclude": true
     },
     "346323": {
@@ -235,7 +460,16 @@
     "346328": {
       "exclude": true
     },
+    "346330": {
+      "exclude": true
+    },
     "346332": {
+      "exclude": true
+    },
+    "346351": {
+      "exclude": true
+    },
+    "346463": {
       "exclude": true
     },
     "346484": {
@@ -247,7 +481,49 @@
     "346615": {
       "exclude": true
     },
+    "346687": {
+      "exclude": true
+    },
+    "346710": {
+      "exclude": true
+    },
+    "346742": {
+      "exclude": true
+    },
+    "346751": {
+      "exclude": true
+    },
+    "346766": {
+      "exclude": true
+    },
+    "346768": {
+      "exclude": true
+    },
+    "346772": {
+      "exclude": true
+    },
+    "346940": {
+      "exclude": true
+    },
+    "346941": {
+      "exclude": true
+    },
+    "347247": {
+      "exclude": true
+    },
+    "347249": {
+      "exclude": true
+    },
+    "347251": {
+      "exclude": true
+    },
+    "347253": {
+      "exclude": true
+    },
     "347274": {
+      "exclude": true
+    },
+    "347280": {
       "exclude": true
     }
   }

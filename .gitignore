@@ -14,5 +14,9 @@ nul
 .vscode/
 .idea/
 
-# Claude Code local settings
-.claude/
+# Claude Code local settings (the team definitions in .claude/agents/ are shared)
+.claude/*
+!.claude/agents/
+
+# Factory run scratch
+.factory-run/

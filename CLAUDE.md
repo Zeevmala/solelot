@@ -10,7 +10,7 @@ Interactive map for battery recycling locations in Israel
 HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Locations to Include
-- **Stores**: Superpharm, Shufersal, Office Depot, Home Center, Pelephone, Cellcom
+- **Collection points**: whatever the MAI map lists under batteries. Mostly shops and chains, petrol stations, municipal points and street e-waste bins (~3,600 points, Nov 2026). **Schools are left out on purpose** (owner's decision, Nov 2026: a bin inside a school is not open to the public) — `isSchool()` in `scraper.js` skips them and validator check 22 fails if one appears. Colleges and universities stay. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
 - **Facilities**: none shown. Batte-Re and RE-CAR were added and then removed at the owner's request (Nov 2026). `facilities.json` is empty; the app still supports the type
 
 ## Current Features
@@ -46,14 +46,23 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `scraper.js` | Builds `locations.json` from the MAI API + `facilities.json` + `data_overrides.json` |
 | `facilities.json` | Hand-curated recycling plants (type `facility`, ids 1–99). **Currently empty on purpose** |
 | `data_overrides.json` | Manual fixes to MAI records, keyed by MAI marker id (`city` or `exclude`) |
-| `validate_data.js` | Data quality checks — run after every data change (`node validate_data.js`) |
+| `validate_data.js` | Data quality checks — run after every data change (`node validate_data.js`). Takes an optional file path |
+| `test-validate.js` | Tests for the validator checks (`node --test test-validate.js`) |
+| `data_meta.json` | Written by `scraper.js` on every refresh: source, fetch time, counts of kept/skipped/dropped. **Do not edit by hand** |
+| `test-fixtures/` | A small sample of real MAI markers used by `test-scraper.js` |
 | `test-scraper.js` | Scraper tests on the real functions (`node --test test-scraper.js`) |
-| `fix_names.js`, `fix-unknown-cities.py`, `reverse_geocode.py` | **Legacy** one-off cleanup scripts. Their logic now lives in `scraper.js`; do not run them on current data |
 | `cartowolf/` | The Cartowolf design system, copied from `Zeevmala/factory` (`design/`): `tokens.css` (all colours, sizes, shadows as `--cw-*` variables), `fonts.css` + `fonts/` (IBM Plex, self-hosted), `check-colors.mjs` (finds hand-written colours). **Do not edit `tokens.css` here** — change it in the factory repo and copy it again |
+| `vendor/` | Leaflet 1.9.4 and Leaflet.markercluster 1.5.3, copied unchanged from unpkg and served from this repo (no CDN). **Do not edit**; see `vendor/README.md` to update |
 | `sw.js` | Service worker for offline/PWA support |
 | `manifest.json` | PWA manifest |
 | `test.html` | Unit tests (pure function tests, runs in browser) |
 | `test-map.html` | Integration tests (map/UI tests, runs in browser) |
+| `test-smoke.js` | Smoke test of the real page in a real browser: search, Enter, city pick, nearest, failure states, service worker. **Not in the gate** (needs Playwright installed outside the repo, and the network for map tiles). Run `node test-smoke.js` before a release |
+| `.factory/` | The gate: `bash .factory/check.sh` runs every check below in one command. Also the review checklist |
+| `docs/designs/` | Approved designs (start with `SITEMAP.md`) |
+| `docs/brain/` | Project decisions and lessons learned, dated, never edited after the fact |
+| `docs/teams.md` | The six team leads (`.claude/agents/`) and how work moves between them |
+| `LICENSE` | MIT licence for the code (the location data belongs to MAI) |
 | `CLAUDE.md` | Project instructions for Claude Code |
 | `README.md` | Project documentation |
 | `spec.md` | Project specification |
@@ -62,7 +71,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 | `icons/` | App icons in various sizes |
 
 ## Conventions
-- **Colours come from the design system.** Use `var(--cw-...)` from `cartowolf/tokens.css`; do not write hex/rgb colours in `style.css`, `app.js` or `index.html`. Check with `node cartowolf/check-colors.mjs style.css app.js index.html` (must print nothing)
+- **Colours come from the design system.** Use `var(--cw-...)` from `cartowolf/tokens.css`; do not write hex/rgb colours in `style.css`, `app.js` or `index.html`. Check with `node cartowolf/check-colors.mjs style.css app.js index.html` (must exit 0 and print "No hand-written colours.")
 - Map colours: collection point = `--cw-data-cat-3` (sea green), facility = `--cw-data-cat-2` (orange), user location = `--cw-accent`. SVGs in `app.js` use `fill="currentColor"` and the class `pin-casing` for white parts; the colour itself is set in `style.css`
 - The page is fixed to the light theme (`data-theme="light"` on `<html>`): the OSM basemap is a light picture, and the dark-theme pin colours are made for a dark map
 - Font: IBM Plex Sans / IBM Plex Sans Hebrew, served from `cartowolf/fonts/` (no Google Fonts). Weights 400, 500, 600 only
@@ -79,7 +88,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - `locations.json` schema: `{ "locations": [{ id, name, address, city, type, chain, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `description` is optional and shown in popup/sidebar.
 - `type` must be exactly `"store"` or `"facility"`. Adding a third value requires updating `typeNames` in `app.js` AND adding a test.
 - All UI strings are Hebrew. Layout is RTL. Do not add English UI text.
-- `test.html` runs in-browser (open the file). Pure functions are copied verbatim from `app.js` — keep test copies in sync. The copies can drift silently, so a green test page does NOT prove the app works: also load the real page and check the browser console.
+- `test.html` and `test-map.html` run in the browser (open the file) and in the gate (headless Chrome). Pure functions are copied verbatim from `app.js`; the gate fails if a copy differs from `app.js`. A green test page still does NOT prove the app works: also load the real page and check the browser console.
 - **Bump `STATIC_CACHE` version in `sw.js` on every deploy** or returning users get stale assets.
 
 ### Known Bugs (Fix These)
@@ -123,7 +132,9 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Do NOT call `response.json()` without first checking `response.ok`.
 - Do NOT add event listeners inside functions callable multiple times without a cleanup path.
 - Do NOT add new `location.type` values without updating `typeNames` in `app.js` and tests.
-- Do NOT forget to bump `STATIC_CACHE` version in `sw.js` after changing any cached file.
+- Do NOT forget to bump `STATIC_CACHE` version in `sw.js` after changing any cached file (the gate checks this against the default branch).
+- Do NOT call `markerCluster.zoomToShowLayer` right after `updateMarkers()`: markers are added in chunks, and on a slow phone the marker is not there yet. Wrap it in `whenMarkersAdded(...)`.
+- Do NOT say something passes without running `bash .factory/check.sh` and reading its last line (`GATE PASSED`).
 - Do NOT use inline `onclick` handlers in template strings. Use `data-*` attributes + event delegation.
 - Do NOT edit `locations.json` by hand — it is overwritten by `scraper.js`. Put manual fixes in `data_overrides.json` and facilities in `facilities.json`.
 - Do NOT use `escapeHtml()` with `setAttribute()` / `textContent` — those take plain text. Escape only when building HTML strings.
@@ -133,18 +144,26 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 ### Testing Notes
 - `CHAIN_PATTERNS` / `determineChain` live in `scraper.js` only (the app does not use `chain`). They are tested in `test-scraper.js`, which imports the real functions.
 - XSS tests cover `<script>`, `<img>`, SVG `onload`, `javascript:` and `data:` strings.
-- `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance, empty state logic, `?action=nearest`.
-- Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install.
+- `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance. Empty state and `?action=nearest` are covered by `test-smoke.js` on the real page.
+- `test-validate.js` runs the real `validate_data.js` on small fixtures and checks the exit code.
+- Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install. The wiring of the real page (search box, Enter, picks, `?action=nearest`, failure states, selected pin, service worker install and update) is covered by `node test-smoke.js`, which is run by hand because it needs Playwright (not installed on the gate's runner) and the network for map tiles.
 
 ### Data Integrity Notes
-- Refresh flow: `node scraper.js` → `node validate_data.js` (must print ALL CHECKS PASSED) → review warning 14.
+- Refresh flow: `node scraper.js` → `node validate_data.js` (must print ALL CHECKS PASSED) → review warnings 14a/14b/14c → `bash .factory/check.sh`. The scraper prints every id it drops and writes `data_meta.json`.
 - MAI API facts (Nov 2026): `map_id "5"` is the live map (`"2"` is an old unnamed copy — ignore); category `12` = batteries; `address` is always null; use `custom_field_data` (city, street, house_number, neighborhood, business_name).
 - ~416 live markers have no name or address at all. They are skipped on purpose (nothing useful to show).
-- MAI has records whose coordinates belong to a different record (pin up to 190 km from the listed city). `validate_data.js` check 14 lists points >12 km from their city's median position. Confirm with a reverse geocode, then add `{ "city": ... }` or `{ "exclude": true }` to `data_overrides.json`.
-- Check 14 cannot see errors smaller than 12 km or in cities with fewer than 3 points.
+- MAI has records whose coordinates belong to a different record (pin up to 190 km from the listed city). `validate_data.js` lists suspects as warnings: 14a = more than 5 km from every other point of its city, 14b = one exact coordinate shared by different streets, 14c = the only point of its city, sitting inside another city. Confirm with a reverse geocode (Nominatim), then add `{ "city": ... }` or `{ "exclude": true }` to `data_overrides.json` and a dated line in its `_about` list.
+- The position checks cannot see errors under 5 km, or a single wrong pin that sits alone at a city centre.
+- **Stacked pins**: MAI's geocoder puts an address it cannot find at the centre of the city. The scraper drops every group of points that share one exact coordinate but name different streets (162 points in Nov 2026) — nobody can tell which, if any, is right. Same street spelled two ways (a shopping centre) is kept; so is a group with no street in one village.
+- The scraper also refuses to save when the new count is under 90% of the previous file, unless run with `--force`.
 - The scraper refuses to save if fewer than 1,000 points parse (protects against another API change wiping the data).
 - Runtime bounds check (29–34°N, 34–36°E) in `app.js` is a safety net, not a substitute for clean source data.
 - City names are normalised in `normalizeCity()` (e.g. קרית → קריית, תל אביב-יפו → תל אביב). Add new variants to `CITY_ALIASES`.
+
+### Launch readiness (Nov 2026)
+The full list of what was found and fixed is in `docs/designs/launch-readiness.md`. Fixed there: search showed other cities' points (fuzzy match too loose) and kept a stale filter; ~250 pins were not at their address; no credit to MAI on the page; a failed service worker update could delete the working offline cache; no gate.
+
+- Schools left off the map and Leaflet served from `vendor/` (owner's decisions after the review, Nov 2026).
 
 ### Spec Drift
 - M2 (facility locations): **REMOVED** by the owner's decision — no facility points on the map.
@@ -166,8 +185,43 @@ Was 40×40px. Now 44×44px.
 **LOW — Search input height 37px (`style.css`)**
 Slightly under 44px touch target. Consider increasing to 44px.
 
-### Performance Notes (at ~4,200 locations)
+### Performance Notes (at ~3,600 locations)
 - **Search**: Full scan (7 string ops × ~4,200 markers) per debounce tick. Fine at 4K. At 10K+, pre-build a `Map<city, locations[]>` index.
 - **Markers**: ~4,200 markers × 2–3 event listeners each. Marker SVGs are flat (no per-marker gradients/filters). Fine at 4K. At 10K+, switch to virtual markers (create on `moveend` for visible bounds only).
 - **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 40 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
 - **Tiles**: 200-tile cache cap with cleanup every 20 puts. Adequate. At high zoom/pan frequency, reduce cleanup interval to 10.
+
+<!-- factory:start -->
+## Factory
+
+This repo is built by a design-gated factory. Humans approve designs and merge pull requests. Unattended runs build one ticket at a time and give it a first review.
+
+- Approved designs live in `docs/designs/`, indexed by `docs/designs/SITEMAP.md`. A ticket implements one slice of one design and links it.
+- EGM artifact directory: docs/designs/drafts
+- The gate is `bash .factory/check.sh`.
+- Ticket labels: `needs-triage`, `needs-info`, `ready-for-agent`, `agent-in-progress`, `in-review`, `ready-for-human`.
+
+### Brain
+Shared context lives in the factory repository's `brain/` (unattended runs get a copy in `.factory-run/brain/`); this project's own is `docs/brain/`.
+- Read `brain/FACTS.md`, `brain/PRINCIPLES.md`, `brain/STACK.md` and the playbook for your role before any task, and `docs/brain/DECISIONS.md` and `docs/brain/lessons/` before changing this project. Search the decisions and lessons for the ticket's key terms before you design anything.
+- Never overwrite a brain entry. Add a new dated entry that says what it replaces.
+- Always date: entries start with `YYYY-MM-DD`; new lesson files are named `docs/brain/lessons/YYYY-MM-DD-issue-N.md` and start with YAML frontmatter (`date`, `ticket`, `tags`).
+- State facts about the owner or the project only if they are in `brain/FACTS.md` or provable from the code. Otherwise leave them out.
+
+### Always
+- Write the failing test before the code that makes it pass.
+- Run the gate commands and report what they printed before saying anything passes.
+- Use the terms in `GLOSSARY.md` for names. Keep changes inside the ticket.
+
+### Ask first
+In a session with a person, ask. In an unattended run, write the question to `.factory-run/BLOCKED.md` and stop.
+- Adding or upgrading a dependency the design does not name.
+- Changing a public interface, a database schema, or a data format.
+- Anything the ticket and the design disagree about.
+
+### Never
+- Edit `.github/` or `.factory/` from an unattended run.
+- Weaken or delete a test, lint rule or type check to get to green.
+- Commit credentials, `.env` files, model weights or data files.
+- Push to the default branch or merge a pull request.
+<!-- factory:end -->

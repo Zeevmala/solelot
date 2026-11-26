@@ -1,5 +1,5 @@
 // Service Worker for Battery Recycling Map
-const STATIC_CACHE = 'static-v37';
+const STATIC_CACHE = 'static-v39';
 const TILES_CACHE = 'tiles-v2';
 let tileCacheCount = 0;
 
@@ -18,16 +18,16 @@ const CRITICAL_ASSETS = [
     './app.js',
     './manifest.json',
     './cartowolf/tokens.css',
-    './cartowolf/fonts.css'
+    './cartowolf/fonts.css',
+    './vendor/leaflet/leaflet.css',
+    './vendor/leaflet/leaflet.js',
+    './vendor/markercluster/MarkerCluster.css',
+    './vendor/markercluster/leaflet.markercluster.js'
 ];
 
 // Optional assets — best-effort caching (install continues if these fail)
 const OPTIONAL_ASSETS = [
     './locations.json',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
     './cartowolf/fonts/ibm-plex-mono-latin-400-normal.woff2',
     './cartowolf/fonts/ibm-plex-sans-hebrew-hebrew-400-normal.woff2',
     './cartowolf/fonts/ibm-plex-sans-hebrew-hebrew-500-normal.woff2',
@@ -61,9 +61,9 @@ self.addEventListener('install', (event) => {
             .then(() => {
                 return self.skipWaiting();
             })
-            .catch((error) => {
-                console.error('Failed to cache critical assets:', error);
-            })
+        // No .catch here on purpose: if a critical asset fails, the install must
+        // reject. The browser then drops this worker and keeps the old worker and
+        // its cache. Swallowing the error would install a worker with an empty cache.
     );
 });
 

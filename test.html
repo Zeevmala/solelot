@@ -32,50 +32,169 @@
         condition ? passed++ : failed++;
     }
 
-    // === Import functions from app.js (copy the pure functions) ===
+    // >>> COPIED FROM app.js - exact copies, do not edit here (change app.js, then copy again)
+const EARTH_RADIUS_KM = 6371;
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
-    function fuzzyMatch(text, query, maxDist = 2) {
-        if (!text || !query) return false;
-        if (text.includes(query)) return true;
-        if (query.length <= 2) return false;
-        if (Math.abs(text.length - query.length) > 3) return false;
-        const qLen = query.length;
-        const tLen = text.length;
-        let prev = new Array(qLen + 1);
-        for (let j = 0; j <= qLen; j++) prev[j] = j;
-        for (let i = 1; i <= tLen; i++) {
-            const curr = new Array(qLen + 1);
-            curr[0] = 0;
-            for (let j = 1; j <= qLen; j++) {
-                const cost = text[i - 1] === query[j - 1] ? 0 : 1;
-                curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
-            }
-            if (curr[qLen] <= maxDist) return true;
-            prev = curr;
+function fuzzyMatch(text, query, maxDist = 2) {
+    if (!text || !query) return false;
+    if (text.includes(query)) return true;
+    if (query.length <= 2) return false; // too short for fuzzy
+    if (Math.abs(text.length - query.length) > 3) return false; // too different to match
+
+    // Sliding window Levenshtein: check if any substring of text
+    // of length ~query.length is within maxDist edits
+    const qLen = query.length;
+    const tLen = text.length;
+
+    // Initialize DP row — allow free start position in text
+    let prev = new Array(qLen + 1);
+    for (let j = 0; j <= qLen; j++) prev[j] = j;
+
+    for (let i = 1; i <= tLen; i++) {
+        const curr = new Array(qLen + 1);
+        curr[0] = 0; // free start position
+        for (let j = 1; j <= qLen; j++) {
+            const cost = text[i - 1] === query[j - 1] ? 0 : 1;
+            curr[j] = Math.min(
+                prev[j] + 1,      // deletion
+                curr[j - 1] + 1,  // insertion
+                prev[j - 1] + cost // substitution
+            );
         }
-        return false;
+        // Check if we found a good enough match ending here
+        if (curr[qLen] <= maxDist) return true;
+        prev = curr;
     }
+    return false;
+}
 
-    function getDistance(lat1, lng1, lat2, lng2) {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLng/2) * Math.sin(dLng/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    }
+function normalizeText(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
+        .replace(/[-\u05BE\u2013]/g, ' ')
+        .replace(/י+/g, 'י')
+        .replace(/ו+/g, 'ו')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+const QUERY_ALIASES = {
+    'ת"א': 'תל אביב',
+    'תל אביב יפו': 'תל אביב',
+    'tel aviv': 'תל אביב',
+    'ראשל"צ': 'ראשון לציון',
+    'ראשלצ': 'ראשון לציון',
+    'פ"ת': 'פתח תקווה',
+    'ב"ש': 'באר שבע',
+    'ר"ג': 'רמת גן',
+    'כפ"ס': 'כפר סבא',
+    'י-ם': 'ירושלים',
+    'נצרת עילית': 'נוף הגליל',
+    'נצרת עלית': 'נוף הגליל',
+    'זכרון יעקב': 'זיכרון יעקב',
+    'יקנעם': 'יוקנעם',
+    'יקנעם עילית': 'יוקנעם',
+    'יוקנעם עילית': 'יוקנעם',
+    'שוהם': 'שהם',
+    'יהוד מונוסון': 'יהוד',
+    'מודיעין מכבים רעות': 'מודיעין',
+    'פרדס חנה כרכור': 'פרדס חנה'
+};
+
+function normalizeQuery(text) {
+    const query = normalizeText(text);
+    const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
+    const alias = Object.keys(QUERY_ALIASES).find(name =>
+        normalizeText(name) === query && (typedQuote || !name.includes('"')));
+    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
+}
+
+function fuzzyTolerance(queryLength) {
+    if (queryLength < 5) return 0;
+    if (queryLength < 8) return 1;
+    return 2;
+}
+
+function searchLocations(locations, query, cityFilter) {
+    if (cityFilter) return locations.filter(location => location.city === cityFilter);
+
+    const q = normalizeQuery(query);
+    if (q === '') return locations.slice();
+
+    const fields = locations.map(location => [
+        normalizeText(location.name),
+        normalizeText(location.address),
+        normalizeText(location.city)
+    ]);
+    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
+    return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
+}
+
+function matchCities(cityCounts, text) {
+    const query = normalizeQuery(text);
+    const maxDist = fuzzyTolerance(query.length);
+    const matches = [];
+    if (query === '') return matches;
+    cityCounts.forEach((count, name) => {
+        const city = normalizeText(name);
+        const exact = city.includes(query);
+        if (exact || (maxDist > 0 && fuzzyMatch(city, query, maxDist))) {
+            matches.push({ type: 'city', name, count, exact, same: city === query });
+        }
+    });
+    // The city that is the typed text first, then cities containing it, then near
+    // matches; inside each group the city with more locations first
+    matches.sort((a, b) => {
+        if (a.same !== b.same) return a.same ? -1 : 1;
+        if (a.exact !== b.exact) return a.exact ? -1 : 1;
+        return b.count - a.count;
+    });
+    return matches;
+}
+
+function isValidLocation(loc) {
+    if (!loc || !Number.isInteger(loc.id) || loc.id <= 0) return false;
+    if (!loc.name || !loc.address || !loc.city || !loc.type) return false;
+    if (!['store', 'facility'].includes(loc.type)) return false;
+    if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return false;
+    if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
+    if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
+    return true;
+}
+
+function getDistance(lat1, lng1, lat2, lng2) {
+    const R = EARTH_RADIUS_KM;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function formatDistance(km) {
+    const metres = Math.round(km * 100) * 10;
+    if (metres < 1000) return `${metres} מ׳`;
+    return `${km.toFixed(1)} ק"מ`;
+}
+    // <<< END OF COPIES
 
     // === escapeHtml tests ===
     assert(escapeHtml('hello') === 'hello', 'escapeHtml: plain text unchanged');
@@ -103,6 +222,163 @@
     assert(fuzzyMatch('חיפה', 'חיפה', 1) === true, 'fuzzyMatch: maxDist=1 exact match');
     assert(fuzzyMatch('חיפה', 'חיפ', 1) === true, 'fuzzyMatch: maxDist=1 substring match');
 
+    // === Search tests (normalizeText, normalizeQuery, fuzzyTolerance, searchLocations) ===
+    const names = list => list.map(l => l.id).join(',');
+    const places = [
+        { id: 1, name: 'סופר פארם', address: 'הנשיא 10', city: 'חדרה' },
+        { id: 2, name: 'שופרסל', address: 'הרצל 5', city: 'חדרה' },
+        { id: 3, name: 'מכולת חדרה הקטנה', address: 'ויצמן 1', city: 'חיפה' },   // other city, name contains חדרה
+        { id: 4, name: 'KSP מחשבים', address: 'דרך חדרה 3', city: 'נתניה' },      // other city, address contains חדרה
+        { id: 5, name: 'בית ספר גדרה', address: 'הבנים 2', city: 'גדרה' },         // one letter away from חדרה
+        { id: 6, name: 'מרכז מסחרי', address: 'הרצל 1', city: 'לוד' },
+        { id: 7, name: 'מרכז מסחרי', address: 'הגפן 4', city: 'לוט' },             // one letter away from לוד
+        { id: 8, name: 'בנק', address: 'אלנבי 9', city: 'תל אביב' },
+        { id: 9, name: 'ביה״ס אורט', address: 'העצמאות 7', city: 'קרית אתא' },
+        { id: 10, name: 'דואר', address: 'יפו 20', city: 'ירושלים' },
+        { id: 11, name: 'מתנ"ס', address: 'בן גוריון 8', city: 'ג\'סר א-זרקא' }
+    ];
+
+    assert(normalizeText('KSP') === 'ksp', 'normalizeText: Latin letters become lower case');
+    assert(normalizeText('ביה״ס') === 'ביהס' && normalizeText('ביה"ס') === 'ביהס', 'normalizeText: double quote marks (Hebrew or plain) are dropped');
+    assert(normalizeText('ג׳סר') === 'גסר' && normalizeText("ג'סר") === 'גסר', 'normalizeText: single quote marks (Hebrew or plain) are dropped');
+    assert(normalizeText('פתח תקווה') === normalizeText('פתח תקוה'), 'normalizeText: doubled ו equals a single one');
+    assert(normalizeText('ירושליים') === normalizeText('ירושלים'), 'normalizeText: doubled י equals a single one');
+    assert(normalizeText('תל אביב-יפו') === 'תל אביב יפו', 'normalizeText: hyphen becomes a space');
+    assert(normalizeText('קרית אתא') === normalizeText('קריית אתא'), 'normalizeText: קרית equals קריית');
+    assert(normalizeText('  תל   אביב ') === 'תל אביב', 'normalizeText: extra spaces removed');
+    assert(normalizeText(null) === '', 'normalizeText: null returns empty');
+
+    assert(normalizeQuery('ת"א') === normalizeText('תל אביב'), 'normalizeQuery: alias ת"א');
+    assert(normalizeQuery('ת״א') === normalizeText('תל אביב'), 'normalizeQuery: alias ת״א (Hebrew gershayim)');
+    assert(normalizeQuery('תל אביב יפו') === normalizeText('תל אביב'), 'normalizeQuery: alias תל אביב יפו');
+    assert(normalizeQuery('תל אביב-יפו') === normalizeText('תל אביב'), 'normalizeQuery: alias תל אביב-יפו');
+    assert(normalizeQuery('Tel Aviv') === normalizeText('תל אביב'), 'normalizeQuery: alias Tel Aviv');
+    assert(normalizeQuery('ראשל"צ') === normalizeText('ראשון לציון'), 'normalizeQuery: alias ראשל"צ');
+    assert(normalizeQuery('פ"ת') === normalizeText('פתח תקווה'), 'normalizeQuery: alias פ"ת');
+    assert(normalizeQuery('ב"ש') === normalizeText('באר שבע'), 'normalizeQuery: alias ב"ש');
+    assert(normalizeQuery('י-ם') === normalizeText('ירושלים'), 'normalizeQuery: alias י-ם');
+    assert(normalizeQuery('toString') === 'tostring', 'normalizeQuery: built-in property names are not aliases');
+    assert(normalizeQuery('חיפה') === 'חיפה', 'normalizeQuery: other text unchanged');
+
+    assert(normalizeQuery('ראשלצ') === normalizeText('ראשון לציון'), 'normalizeQuery: alias ראשלצ (no quote mark)');
+    assert(normalizeQuery('ר"ג') === normalizeText('רמת גן'), 'normalizeQuery: alias ר"ג');
+    assert(normalizeQuery('כפ"ס') === normalizeText('כפר סבא'), 'normalizeQuery: alias כפ"ס');
+    assert(normalizeQuery('נצרת עלית') === normalizeText('נוף הגליל') && normalizeQuery('נצרת עילית') === normalizeText('נוף הגליל'), 'normalizeQuery: old name נצרת עילית / נצרת עלית');
+
+    // A two-letter short name needs its quote mark (rework after review)
+    const shops = [
+        { id: 1, name: 'זול בשפע', address: 'הרצל 1', city: 'אשדוד' },
+        { id: 2, name: 'פתאל', address: 'הים 2', city: 'אילת' },
+        { id: 3, name: 'מרגוע', address: 'הגן 3', city: 'צפת' },
+        { id: 4, name: 'תאורה', address: 'הנר 4', city: 'עכו' },
+        { id: 5, name: 'מוקד', address: 'רגר 5', city: 'באר שבע' },
+        { id: 6, name: 'מוקד', address: 'הרצל 6', city: 'פתח תקווה' },
+        { id: 7, name: 'מוקד', address: 'ביאליק 7', city: 'רמת גן' },
+        { id: 8, name: 'מוקד', address: 'אלנבי 8', city: 'תל אביב' }
+    ];
+    const ids = text => searchLocations(shops, text, null).map(l => l.id).join(',');
+    assert(normalizeQuery('בש') === 'בש' && normalizeQuery('פת') === 'פת' && normalizeQuery('רג') === 'רג' && normalizeQuery('תא') === 'תא', 'normalizeQuery: bare בש / פת / רג / תא are not short names');
+    assert(ids('בש') === '1', 'searchLocations: bare "בש" finds "זול בשפע", not באר שבע (got ' + ids('בש') + ')');
+    assert(ids('פת') === '2,3,6', 'searchLocations: bare "פת" is plain text (got ' + ids('פת') + ')');
+    assert(ids('רג') === '3,5', 'searchLocations: bare "רג" is plain text (got ' + ids('רג') + ')');
+    assert(ids('תא') === '2,4', 'searchLocations: bare "תא" is plain text (got ' + ids('תא') + ')');
+    assert(ids('ב"ש') === '5' && ids('ב״ש') === '5', 'searchLocations: ב"ש and ב״ש (with the quote mark) find באר שבע');
+    assert(ids('פ"ת') === '6' && ids('ר"ג') === '7' && ids('ת"א') === '8' && ids('ת״א') === '8', 'searchLocations: פ"ת, ר"ג, ת"א with the quote mark find their city');
+    assert(matchCities(new Map([['באר שבע', 5]]), 'בש').length === 0 && matchCities(new Map([['באר שבע', 5]]), 'ב"ש')[0].same === true, 'matchCities: Enter picks באר שבע for ב"ש but not for bare בש');
+
+    assert(fuzzyTolerance(3) === 0 && fuzzyTolerance(4) === 0, 'fuzzyTolerance: no edits under 5 letters');
+    assert(fuzzyTolerance(5) === 1 && fuzzyTolerance(7) === 1, 'fuzzyTolerance: 1 edit for 5-7 letters');
+    assert(fuzzyTolerance(8) === 2 && fuzzyTolerance(20) === 2, 'fuzzyTolerance: 2 edits from 8 letters');
+
+    assert(searchLocations(places, '', null).length === places.length, 'searchLocations: empty text shows everything');
+    assert(names(searchLocations(places, 'חדרה', 'חדרה')) === '1,2', 'searchLocations: a picked city shows exactly that city (got ' + names(searchLocations(places, 'חדרה', 'חדרה')) + ')');
+    assert(names(searchLocations(places, 'חדרה', null)) === '1,2,3,4', 'searchLocations: typed חדרה shows only records containing חדרה, not גדרה (got ' + names(searchLocations(places, 'חדרה', null)) + ')');
+    assert(names(searchLocations(places, 'לוד', null)) === '6', 'searchLocations: short text "לוד" does not match לוט (got ' + names(searchLocations(places, 'לוד', null)) + ')');
+    assert(names(searchLocations(places, 'ksp', null)) === '4', 'searchLocations: "ksp" finds KSP');
+    assert(names(searchLocations(places, 'ksp', null)) === names(searchLocations(places, 'KSP', null)), 'searchLocations: "ksp" equals "KSP"');
+    assert(names(searchLocations(places, 'ת"א', null)) === '8', 'searchLocations: ת"א finds תל אביב');
+    assert(names(searchLocations(places, 'ת״א', null)) === '8', 'searchLocations: ת״א finds תל אביב');
+    assert(names(searchLocations(places, 'תל אביב יפו', null)) === '8', 'searchLocations: תל אביב יפו finds תל אביב');
+    assert(names(searchLocations(places, 'י-ם', null)) === '10', 'searchLocations: י-ם finds ירושלים');
+    assert(names(searchLocations(places, 'קריית אתא', null)) === '9', 'searchLocations: קריית finds a record spelled קרית');
+    assert(names(searchLocations(places, 'ביה"ס', null)) === '9', 'searchLocations: plain quote finds a name written with ״');
+    assert(names(searchLocations(places, 'א זרקא', null)) === '11', 'searchLocations: space finds a name written with a hyphen');
+    assert(names(searchLocations(places, 'ירושלם', null)) === '10', 'searchLocations: typing mistake falls back to a near match (ירושלם -> ירושלים)');
+    assert(names(searchLocations(places, 'תל אבבי', null)) === '8', 'searchLocations: typing mistake falls back to a near match (תל אבבי -> תל אביב)');
+    assert(names(searchLocations(places, 'גדרה', null)) === '5', 'searchLocations: no near matches when the text itself is found');
+    assert(searchLocations(places, 'חיפא', null).length === 0, 'searchLocations: no near match for a 4-letter text (0 edits under 5 letters)');
+    assert(searchLocations(places, 'zzzzqqqq', null).length === 0, 'searchLocations: nonsense finds nothing');
+
+    // === Common spellings typed in full (rework of A1) ===
+    // Each city has 2 points; the "noise" records hold the stray substring hits
+    // that used to switch the near-match fallback off.
+    const towns = [];
+    ['פתח תקווה', 'זיכרון יעקב', 'נוף הגליל', 'יוקנעם', 'שהם', 'ראשון לציון', 'רמת גן', 'כפר סבא', 'יהוד', 'פרדס חנה', 'מודיעין', 'קריית שמונה', 'באר שבע', 'תל אביב', 'ירושלים'].forEach((city, n) => {
+        towns.push({ id: 100 + n * 2, name: 'מוקד איסוף', address: 'הראשי 1', city: city });
+        towns.push({ id: 101 + n * 2, name: 'מתנ"ס', address: 'הגפן 2', city: city });
+    });
+    towns.push({ id: 900, name: 'חנות', address: 'פתח תקוה 12', city: 'חולון' });       // street named with the other spelling
+    towns.push({ id: 901, name: 'מכולת', address: 'זכרון יעקב 3', city: 'חיפה' });
+    towns.push({ id: 902, name: 'קיוסק', address: 'יקנעם 4', city: 'עפולה' });
+    towns.push({ id: 903, name: 'מרכז', address: 'שוהם 5', city: 'חיפה' });
+    const cityPoints = (query, city) => {
+        const found = searchLocations(towns, query, null);
+        return found.filter(l => l.city === city).length + '/' + found.length;
+    };
+    assert(cityPoints('פתח תקוה', 'פתח תקווה') === '2/3', 'spelling: "פתח תקוה" finds the פתח תקווה points (got ' + cityPoints('פתח תקוה', 'פתח תקווה') + ')');
+    assert(cityPoints('זכרון יעקב', 'זיכרון יעקב') === '2/2', 'spelling: "זכרון יעקב" finds זיכרון יעקב (got ' + cityPoints('זכרון יעקב', 'זיכרון יעקב') + ')');
+    assert(cityPoints('נצרת עילית', 'נוף הגליל') === '2/2', 'spelling: "נצרת עילית" finds נוף הגליל');
+    assert(cityPoints('נצרת עלית', 'נוף הגליל') === '2/2', 'spelling: "נצרת עלית" finds נוף הגליל');
+    assert(cityPoints('יקנעם', 'יוקנעם') === '2/2', 'spelling: "יקנעם" finds יוקנעם (got ' + cityPoints('יקנעם', 'יוקנעם') + ')');
+    assert(cityPoints('שוהם', 'שהם') === '2/2', 'spelling: "שוהם" finds שהם (got ' + cityPoints('שוהם', 'שהם') + ')');
+    assert(cityPoints('ראשלצ', 'ראשון לציון') === '2/2', 'spelling: "ראשלצ" finds ראשון לציון');
+    assert(cityPoints('ר"ג', 'רמת גן') === '2/2', 'spelling: ר"ג finds רמת גן');
+    assert(cityPoints('כפ"ס', 'כפר סבא') === '2/2', 'spelling: כפ"ס finds כפר סבא');
+    assert(cityPoints('יהוד מונוסון', 'יהוד') === '2/2', 'spelling: "יהוד מונוסון" finds יהוד');
+    assert(cityPoints('פרדס חנה כרכור', 'פרדס חנה') === '2/2', 'spelling: "פרדס חנה כרכור" finds פרדס חנה');
+    assert(cityPoints('מודיעין מכבים רעות', 'מודיעין') === '2/2', 'spelling: "מודיעין מכבים רעות" finds מודיעין');
+    assert(searchLocations(towns, 'מתנס', null).length === 15, 'spelling: "מתנס" finds every מתנ"ס (got ' + searchLocations(towns, 'מתנס', null).length + ')');
+    assert(cityPoints('ירושליים', 'ירושלים') === '2/2', 'spelling: "ירושליים" finds ירושלים');
+    assert(cityPoints('קרית שמונה', 'קריית שמונה') === '2/2', 'spelling: "קרית שמונה" finds קריית שמונה');
+    assert(cityPoints('באר-שבע', 'באר שבע') === '2/2', 'spelling: "באר-שבע" finds באר שבע');
+    assert(cityPoints('תל-אביב', 'תל אביב') === '2/2', 'spelling: "תל-אביב" finds תל אביב');
+    assert(cityPoints('tel aviv', 'תל אביב') === '2/2', 'spelling: "tel aviv" finds תל אביב');
+
+    // === matchCities tests (the cities in the suggestion list; Enter picks only a "same" city) ===
+    const counts = new Map([['רמלה', 31], ['חדרה', 42], ['גדרה', 9], ['תל אביב', 375], ['שאג\'ור', 3], ['מגדל', 4], ['מגדל העמק', 20], ['אליפז', 1], ['נוף הגליל', 16], ['רגבה', 2], ['פתח תקווה', 140], ['תקומה', 1], ['לוד', 11], ['לוט', 1], ['ירושלים', 178]]);
+    const cityList = text => matchCities(counts, text).map(c => c.name + (c.same ? '=' : c.exact ? '' : '~')).join(',');
+    assert(cityList('מגה') === '', 'matchCities: "מגה" offers no city (was רמלה) (got ' + cityList('מגה') + ')');
+    assert(cityList('באג') === '', 'matchCities: "באג" offers no city (was שאג\'ור)');
+    assert(cityList('דלק') === '', 'matchCities: "דלק" offers no city (was מגדל)');
+    assert(cityList('לוד') === 'לוד=', 'matchCities: 3-letter city name has no near-miss city (got ' + cityList('לוד') + ')');
+    assert(cityList('חדרה') === 'חדרה=', 'matchCities: 4-letter city name has no near-miss city (got ' + cityList('חדרה') + ')');
+    assert(cityList('פז') === 'אליפז' && matchCities(counts, 'פז')[0].same === false, 'matchCities: "פז" is inside אליפז but is not that city, so Enter does not pick it');
+    assert(cityList('גלי') === 'נוף הגליל', 'matchCities: "גלי" is part of a city name, not a city');
+    assert(cityList('ר"ג') === '', 'matchCities: ר"ג offers no near-miss (was רגבה); רמת גן is not in this list');
+    assert(cityList('תקוה') === 'פתח תקווה', 'matchCities: "תקוה" offers פתח תקווה, not תקומה (got ' + cityList('תקוה') + ')');
+    assert(cityList('ת"א') === 'תל אביב=', 'matchCities: ת"א is the city תל אביב');
+    assert(cityList('תל אביב יפו') === 'תל אביב=', 'matchCities: "תל אביב יפו" is the city תל אביב');
+    assert(cityList('פתח תקוה') === 'פתח תקווה=', 'matchCities: "פתח תקוה" is the city פתח תקווה');
+    assert(cityList('מגדל') === 'מגדל=,מגדל העמק', 'matchCities: the city that was typed comes before a bigger city containing it (got ' + cityList('מגדל') + ')');
+    assert(cityList('ירושלם') === 'ירושלים~', 'matchCities: a 6-letter typing mistake still offers the city, marked as not the same');
+    assert(cityList('') === '', 'matchCities: empty text offers nothing');
+
+    // === isValidLocation tests (the filter applied to locations.json when it loads) ===
+    const goodLoc = { id: 100, name: 'א', address: 'ב', city: 'ג', type: 'store', lat: 32.1, lng: 34.8 };
+    const withField = (key, value) => Object.assign({}, goodLoc, { [key]: value });
+    assert(isValidLocation(goodLoc) === true, 'isValidLocation: a complete record passes');
+    assert(isValidLocation(withField('id', '1"><img src=x onerror=alert(1)>')) === false, 'isValidLocation: id with markup is rejected');
+    assert(isValidLocation(withField('id', '100')) === false, 'isValidLocation: id as a string is rejected');
+    assert(isValidLocation(withField('id', 1.5)) === false, 'isValidLocation: id that is not a whole number is rejected');
+    assert(isValidLocation(withField('id', 0)) === false, 'isValidLocation: id 0 is rejected');
+    assert(isValidLocation(withField('lat', '32.1')) === false, 'isValidLocation: lat as a string is rejected');
+    assert(isValidLocation(withField('lng', null)) === false, 'isValidLocation: missing lng is rejected');
+    assert(isValidLocation(withField('lat', 0)) === false, 'isValidLocation: lat 0 (outside Israel) is rejected');
+    assert(isValidLocation(withField('lat', NaN)) === false, 'isValidLocation: NaN is rejected');
+    assert(isValidLocation(withField('type', 'shop')) === false, 'isValidLocation: unknown type is rejected');
+    assert(isValidLocation(withField('name', '')) === false, 'isValidLocation: empty name is rejected');
+    assert(isValidLocation(null) === false, 'isValidLocation: null is rejected');
+
     // === getDistance tests ===
     const d1 = getDistance(32.0853, 34.7818, 31.7683, 35.2137); // Tel Aviv to Jerusalem
     assert(d1 > 50 && d1 < 70, 'getDistance: Tel Aviv to Jerusalem ~60km (got ' + d1.toFixed(1) + ')');
@@ -110,6 +386,17 @@
     assert(d2 === 0, 'getDistance: same point = 0');
     const d3 = getDistance(31.2530, 34.7915, 31.0461, 35.1489); // Beer Sheva to Arad
     assert(d3 > 30 && d3 < 50, 'getDistance: Beer Sheva to Arad ~40km (got ' + d3.toFixed(1) + ')');
+
+    // === formatDistance tests ===
+    assert(formatDistance(0.35) === '350 \u05DE\u05F3', 'formatDistance: 0.35 km is shown as 350 metres');
+    assert(formatDistance(0.04) === '40 \u05DE\u05F3', 'formatDistance: 0.04 km is 40 metres, not "0.0 km"');
+    assert(formatDistance(0.3549) === '350 \u05DE\u05F3', 'formatDistance: metres are rounded to the nearest 10');
+    assert(formatDistance(0) === '0 \u05DE\u05F3', 'formatDistance: 0 is 0 metres');
+    assert(formatDistance(0.994) === '990 \u05DE\u05F3', 'formatDistance: 994 m stays in metres');
+    assert(formatDistance(0.996) === '1.0 \u05E7"\u05DE', 'formatDistance: 996 m rounds up to 1.0 km, never "1000 metres"');
+    assert(formatDistance(1) === '1.0 \u05E7"\u05DE', 'formatDistance: 1 km is shown in km');
+    assert(formatDistance(12.34) === '12.3 \u05E7"\u05DE', 'formatDistance: km keep one decimal');
+    assert(!formatDistance(0.04).includes('0.0'), 'formatDistance: never "0.0"');
 
     // Chain detection lives in scraper.js and is tested by test-scraper.js (node --test)
 

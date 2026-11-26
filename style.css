@@ -134,11 +134,6 @@ body {
     padding-top: 56px;
 }
 
-/* Push Leaflet top controls below the header */
-.leaflet-top {
-    top: 60px !important;
-}
-
 /* Map container */
 #map {
     flex: 1;
@@ -191,11 +186,14 @@ body {
     display: none;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    /* A 44px touch target; the grey disc is drawn 28px wide inside the 8px padding */
+    left: -4px;
+    width: 44px;
+    height: 44px;
     border: none;
     border-radius: 50%;
-    background: var(--cw-text-muted);
+    background-color: var(--cw-text-muted);
+    background-clip: content-box;
     color: var(--cw-surface-1);
     font-size: 14px;
     cursor: pointer;
@@ -205,7 +203,7 @@ body {
 }
 
 .search-clear-btn:hover {
-    background: var(--cw-text);
+    background-color: var(--cw-text);
 }
 
 .map-search-container .search-suggestions {
@@ -376,7 +374,7 @@ body {
     color: var(--cw-text);
     font-family: var(--cw-font-mono);
     font-variant-numeric: tabular-nums;
-    font-weight: 600;
+    font-weight: 400; /* IBM Plex Mono is loaded in one weight only */
     font-size: 13px;
     box-shadow: var(--cw-shadow-1);
 }
@@ -421,6 +419,12 @@ body {
 .battery-marker:hover svg,
 .battery-marker:focus-visible svg {
     transform: scale(1.15);
+    transform-origin: 50% 100%;
+}
+
+/* The pin whose details are open (class set in app.js). Listed after :hover so it wins. */
+.battery-marker.selected svg {
+    transform: scale(1.3);
     transform-origin: 50% 100%;
 }
 
@@ -544,9 +548,10 @@ body {
     text-align: center;
 }
 
+/* Not the mono font: it has no Hebrew letters, so "מ׳" would fall back to a system font */
 .distance {
     color: var(--cw-accent-text);
-    font-family: var(--cw-font-mono);
+    font-variant-numeric: tabular-nums;
     font-weight: 600;
 }
 
@@ -675,6 +680,7 @@ body {
 
 .sidebar-title h2 {
     font-size: 20px;
+    font-weight: 600;
     color: var(--cw-text);
     margin-bottom: 6px;
     line-height: 1.3;
@@ -927,6 +933,7 @@ body {
     margin: 0;
     color: var(--cw-text);
     font-size: 20px;
+    font-weight: 600;
 }
 
 .empty-state p {
@@ -937,6 +944,7 @@ body {
 
 .clear-filters-btn {
     margin-top: 15px;
+    min-height: 44px;
     padding: 10px 25px;
     background: var(--cw-accent);
     color: var(--cw-text-on-accent);
@@ -972,6 +980,11 @@ body {
     opacity: 0;
     transition: transform 0.3s, opacity 0.3s;
     font-size: 14px;
+    /* As wide as its text, up to the screen width less a margin (left: 50% alone
+       squeezed it into half the screen) */
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    text-align: center;
 }
 
 .notification.show {
@@ -990,6 +1003,7 @@ body {
     height: 44px !important;
     line-height: 44px !important;
     font-size: 22px !important;
+    font-weight: 600; /* Leaflet sets bold (700); the design system stops at 600 */
 }
 
 /* Mobile Responsive */
@@ -1019,6 +1033,7 @@ body {
 
     .header-search .map-search-input {
         font-size: 16px; /* below 16px iOS Safari zooms the page when the field is focused */
+        min-height: 44px;
         padding: 8px 28px 8px 12px;
     }
 
@@ -1037,10 +1052,6 @@ body {
         height: 100dvh;
         flex-direction: column;
         padding-top: 48px;
-    }
-
-    .leaflet-top {
-        top: 52px !important;
     }
 
     .skeleton-header {
@@ -1096,7 +1107,7 @@ body {
 
     .sidebar-content {
         padding-top: 8px;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     }
 
     .leaflet-popup-content-wrapper {
@@ -1118,7 +1129,13 @@ body {
         font-size: 13px;
     }
 
+    /* The search box is narrow on a phone, so the list spans the screen under the header */
     .map-search-container .search-suggestions {
+        position: fixed;
+        top: 52px; /* header height + 4px */
+        right: 8px;
+        left: 8px;
+        margin-top: 0;
         max-height: 40vh;
     }
 }
@@ -1270,6 +1287,14 @@ body {
 
 .leaflet-container .leaflet-bar a:hover {
     background-color: var(--cw-surface-2);
+}
+
+/* Zoom button at its limit */
+.leaflet-container .leaflet-bar a.leaflet-disabled,
+.leaflet-container .leaflet-bar a.leaflet-disabled:hover {
+    background-color: var(--cw-surface-2);
+    color: color-mix(in srgb, var(--cw-text) calc(var(--cw-opacity-disabled) * 100%), transparent);
+    cursor: default;
 }
 
 .leaflet-popup-content-wrapper,

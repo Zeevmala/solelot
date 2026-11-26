@@ -3,7 +3,7 @@
 ## Requirements
 - Display interactive map of Israel
 - Show battery recycling locations with markers
-- Click markers to see location details (name, address, hours)
+- Click markers to see location details (name, address; the source has no opening hours)
 - Mobile-friendly design
 - Hebrew language support (RTL)
 
@@ -24,7 +24,7 @@
 
 ### M2: Real Location Data ✅
 - [x] Create locations data file (JSON)
-- [x] Add all store locations (Superpharm, Shufersal, etc.)
+- [x] Add all collection points the MAI map lists under batteries (shops, petrol stations, municipal points, schools)
 - [ ] Add recycling facilities (Batte-Re, RE-CAR, MILI) *(removed — plants are not public drop-off points and have no published street address; `facilities.json` is kept empty for future use)*
 - [x] Different marker icons by location type
 - [x] Location details in popups
@@ -45,7 +45,7 @@
 ### M5: PWA & Performance ✅
 - [x] Service worker for offline support
 - [x] PWA manifest (installable)
-- [x] Marker clustering for ~4,200 locations
+- [x] Marker clustering for ~3,600 locations
 - [x] Multiple basemap options (light, streets)
 
 ### M6: Accessibility & Security ✅

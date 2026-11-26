@@ -1,0 +1,9 @@
+# Extra tools the implementer run may use, one per line.
+# These are Claude Code permission rules; keep the list to what the gate needs.
+Bash(node:*)
+Bash(bash .factory/check.sh)
+# Headless Chrome runs test.html and test-map.html (gate step 7).
+Bash(google-chrome:*)
+Bash(google-chrome-stable:*)
+Bash(chromium:*)
+Bash(chromium-browser:*)

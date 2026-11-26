@@ -174,6 +174,154 @@ function fuzzyMatch(text, query, maxDist = 2) {
     return false;
 }
 
+// === SEARCH ===
+// Makes two spellings of the same thing equal before they are compared:
+// Latin letters in lower case, no quote marks (מתנ"ס = מתנס), hyphens as spaces,
+// and a doubled י or ו as a single one (תקווה = תקוה, קריית = קרית).
+function normalizeText(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
+        .replace(/[-\u05BE\u2013]/g, ' ')
+        .replace(/י+/g, 'י')
+        .replace(/ו+/g, 'ו')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// Short and old names people type for a city -> the city name used in the data.
+// Both sides are compared after normalizeText(), so write them the readable way.
+// The old names are the ones scraper.js folds in CITY_ALIASES.
+const QUERY_ALIASES = {
+    'ת"א': 'תל אביב',
+    'תל אביב יפו': 'תל אביב',
+    'tel aviv': 'תל אביב',
+    'ראשל"צ': 'ראשון לציון',
+    'ראשלצ': 'ראשון לציון',
+    'פ"ת': 'פתח תקווה',
+    'ב"ש': 'באר שבע',
+    'ר"ג': 'רמת גן',
+    'כפ"ס': 'כפר סבא',
+    'י-ם': 'ירושלים',
+    'נצרת עילית': 'נוף הגליל',
+    'נצרת עלית': 'נוף הגליל',
+    'זכרון יעקב': 'זיכרון יעקב',
+    'יקנעם': 'יוקנעם',
+    'יקנעם עילית': 'יוקנעם',
+    'יוקנעם עילית': 'יוקנעם',
+    'שוהם': 'שהם',
+    'יהוד מונוסון': 'יהוד',
+    'מודיעין מכבים רעות': 'מודיעין',
+    'פרדס חנה כרכור': 'פרדס חנה'
+};
+
+// The search text as it is compared with the data
+// A short name written with a quote mark (ב"ש) counts only when the quote mark was
+// typed: the bare letters "בש" are also part of ordinary words and names.
+function normalizeQuery(text) {
+    const query = normalizeText(text);
+    const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
+    const alias = Object.keys(QUERY_ALIASES).find(name =>
+        normalizeText(name) === query && (typedQuote || !name.includes('"')));
+    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
+}
+
+// How many wrong letters a query may have: none in a short word, where one
+// changed letter already makes a different word (לוד / לוט)
+function fuzzyTolerance(queryLength) {
+    if (queryLength < 5) return 0;
+    if (queryLength < 8) return 1;
+    return 2;
+}
+
+// The locations a search shows on the map.
+// A city picked from the suggestions shows exactly that city. Typed text shows the
+// locations that contain it; only when there are none does it fall back to
+// near matches (typing mistakes).
+function searchLocations(locations, query, cityFilter) {
+    if (cityFilter) return locations.filter(location => location.city === cityFilter);
+
+    const q = normalizeQuery(query);
+    if (q === '') return locations.slice();
+
+    const fields = locations.map(location => [
+        normalizeText(location.name),
+        normalizeText(location.address),
+        normalizeText(location.city)
+    ]);
+    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
+    return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
+}
+
+// The cities offered in the suggestion list for a typed text.
+// cityCounts is a Map of city name -> number of locations. "same" marks the city
+// that IS the typed text (or what its short name stands for): the only kind of
+// suggestion Enter may pick by itself.
+function matchCities(cityCounts, text) {
+    const query = normalizeQuery(text);
+    const maxDist = fuzzyTolerance(query.length);
+    const matches = [];
+    if (query === '') return matches;
+    cityCounts.forEach((count, name) => {
+        const city = normalizeText(name);
+        const exact = city.includes(query);
+        if (exact || (maxDist > 0 && fuzzyMatch(city, query, maxDist))) {
+            matches.push({ type: 'city', name, count, exact, same: city === query });
+        }
+    });
+    // The city that is the typed text first, then cities containing it, then near
+    // matches; inside each group the city with more locations first
+    matches.sort((a, b) => {
+        if (a.same !== b.same) return a.same ? -1 : 1;
+        if (a.exact !== b.exact) return a.exact ? -1 : 1;
+        return b.count - a.count;
+    });
+    return matches;
+}
+
+// === DATA CHECK ===
+// A record from locations.json is shown only if it has everything the page needs.
+// The id must be a whole number: it is written into HTML attributes.
+function isValidLocation(loc) {
+    if (!loc || !Number.isInteger(loc.id) || loc.id <= 0) return false;
+    if (!loc.name || !loc.address || !loc.city || !loc.type) return false;
+    if (!['store', 'facility'].includes(loc.type)) return false;
+    if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return false;
+    if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
+    if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
+    return true;
+}
+
+// === EMPTY STATE TEXT ===
+// The same panel says "no results" for a search and "error" when loading failed
+function setEmptyStateText(title, text, buttonText) {
+    const emptyState = document.getElementById('empty-state');
+    if (!emptyState) return;
+    const h3 = emptyState.querySelector('h3');
+    const p = emptyState.querySelector('p');
+    const btn = emptyState.querySelector('.clear-filters-btn');
+    if (h3) h3.textContent = title;
+    if (p) p.textContent = text;
+    if (btn) btn.textContent = buttonText;
+}
+
+// The map library is a separate file (vendor/leaflet). If it did not arrive, nothing
+// below can work: show the error panel instead of leaving the loading screen forever.
+if (typeof L === 'undefined' || typeof L.markerClusterGroup !== 'function') {
+    setEmptyStateText('שגיאה בטעינת המפה', 'בדוק את החיבור לאינטרנט ונסה שוב', 'טען מחדש');
+    const libraryErrorPanel = document.getElementById('empty-state');
+    const reloadBtn = document.getElementById('clear-filters');
+    if (reloadBtn) reloadBtn.addEventListener('click', () => window.location.reload());
+    if (libraryErrorPanel) libraryErrorPanel.style.display = 'block';
+    hideLoading();
+    // Stops the rest of this file, which needs the map library
+    throw new Error('Leaflet did not load');
+}
+
 // === MAP INITIALIZATION ===
 // The box that frames the whole country, Metula to Eilat.
 // fitBounds picks the zoom for the screen size (a fixed zoom left Israel tiny on desktop).
@@ -201,14 +349,19 @@ const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright
 const baseMaps = {
     'רחובות': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
+        crossOrigin: true, // lets the service worker read and cache the tiles
         attribution: OSM_ATTRIBUTION
     }),
     'בהיר': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
         className: 'basemap-light',
+        crossOrigin: true,
         attribution: OSM_ATTRIBUTION
     })
 };
+
+// Credit for the location data, shown next to the map credit
+map.attributionControl.addAttribution('<a href="https://mai.org.il" target="_blank" rel="noopener">נתונים: תאגיד מ.א.י</a>');
 
 // Track current basemap
 let currentBasemapName = 'בהיר';
@@ -256,8 +409,7 @@ basemapToggle.addTo(map);
     clearBtn.addEventListener('click', () => {
         input.value = '';
         clearBtn.style.display = 'none';
-        currentSearch = '';
-        updateMarkers();
+        setSearch('', null);
         const suggestions = document.getElementById('search-suggestions');
         if (suggestions) {
             suggestions.classList.remove('active');
@@ -371,7 +523,12 @@ const visibleTypes = { store: true, facility: true };
 // A cluster's size shows how many points it holds; colour only deepens slightly,
 // staying in the app's teal so clusters and pins read as the same data.
 const markerCluster = L.markerClusterGroup({
-    chunkedLoading: true,
+    chunkedLoading: true, // pins are added in small batches, so a slow phone does not freeze
+    // Called after every batch. The last batch is still being finished at that moment,
+    // so the "all added" step waits for the current piece of work to end (a microtask).
+    chunkProgress: (processed, total) => {
+        if (processed === total) queueMicrotask(markerBatchesDone);
+    },
     // Wider grouping when zoomed out keeps bubbles from piling on top of each other
     maxClusterRadius: zoom => (zoom <= 9 ? 70 : zoom <= 13 ? 55 : 40),
     spiderfyOnMaxZoom: true,
@@ -384,9 +541,7 @@ const markerCluster = L.markerClusterGroup({
         else if (count >= 100) { size = 'large'; diameter = 52; }
         else if (count >= 10) { size = 'medium'; diameter = 44; }
 
-        // Hebrew plural: 1 מיקום, 2+ מיקומים
-        const locationText = count === 1 ? 'מיקום' : 'מיקומים';
-        const ariaLabel = `${count} ${locationText}`;
+        const ariaLabel = count === 1 ? 'נקודת איסוף אחת' : `${count} נקודות איסוף`;
 
         return L.divIcon({
             html: `<div aria-label="${ariaLabel}"><span>${count.toLocaleString('he-IL')}</span></div>`,
@@ -405,7 +560,9 @@ const facilityLayer = L.layerGroup().addTo(map);
 const cityCounts = new Map();
 
 // Current state
-let currentSearch = '';
+let currentSearch = '';       // the text in the search box
+let currentCity = null;       // a city picked from the suggestions, or null
+let searchTimeout = null;     // the short wait after typing, before the map updates
 let selectedLocationId = null;
 
 // Calculate distance between two points (in km)
@@ -419,6 +576,13 @@ function getDistance(lat1, lng1, lat2, lng2) {
         Math.sin(dLng/2) * Math.sin(dLng/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+}
+
+// A distance as people read it: metres (rounded to 10) under 1 km, km above
+function formatDistance(km) {
+    const metres = Math.round(km * 100) * 10;
+    if (metres < 1000) return `${metres} מ׳`;
+    return `${km.toFixed(1)} ק"מ`;
 }
 
 // Build report URL with pre-filled location name, address, and city
@@ -475,7 +639,7 @@ function createPopupContent(location) {
         content += `
         <div class="popup-row distance">
             <span class="icon">📏</span>
-            <span>${distance.toFixed(1)} ק"מ ממיקומך</span>
+            <span>${formatDistance(distance)} ממיקומך</span>
         </div>`;
     }
 
@@ -515,7 +679,7 @@ function createSidebarContent(location) {
         distanceHtml = `
             <div class="info-row">
                 <span class="info-icon">📏</span>
-                <span class="info-text distance">${distance.toFixed(1)} ק"מ ממיקומך</span>
+                <span class="info-text distance">${formatDistance(distance)} ממיקומך</span>
             </div>
         `;
     }
@@ -575,6 +739,37 @@ const cachedSidebar = document.getElementById('sidebar');
 const cachedSidebarContent = document.getElementById('sidebar-content');
 const cachedSidebarClose = document.getElementById('sidebar-close');
 
+// The pin whose details are open is drawn larger and above its neighbours.
+// The "selected" class is styled in style.css.
+let selectedMarker = null;
+let selectedMarkerZIndex = 0; // the pin's own zIndexOffset, put back when it is deselected
+function setSelectedMarker(marker) {
+    if (selectedMarker === marker) return;
+    if (selectedMarker) {
+        const oldElement = selectedMarker.getElement();
+        if (oldElement) oldElement.classList.remove('selected');
+        selectedMarker.setZIndexOffset(selectedMarkerZIndex);
+    }
+    selectedMarker = marker;
+    if (marker) {
+        selectedMarkerZIndex = marker.options.zIndexOffset;
+        marker.setZIndexOffset(1500); // above facilities (1000), below the user dot (2000)
+        const element = marker.getElement();
+        if (element) element.classList.add('selected');
+    }
+}
+
+// On phones the details open as a sheet over the bottom of the map.
+// Move the map just enough for the pin to stay visible above the sheet.
+function keepPinAboveSheet(marker) {
+    if (!cachedSidebar || window.innerWidth > MOBILE_BREAKPOINT) return;
+    if (cachedSidebar.offsetWidth < map.getSize().x) return; // landscape: a side panel, not a sheet
+    map.panInside(marker.getLatLng(), {
+        paddingTopLeft: [20, 60], // room for the pin itself, which is drawn above its point
+        paddingBottomRight: [20, cachedSidebar.offsetHeight + 20]
+    });
+}
+
 // Show sidebar with location details
 let sidebarHideTimer = null;
 function showSidebar(location) {
@@ -585,6 +780,8 @@ function showSidebar(location) {
 
     map.closePopup();
     selectedLocationId = location.id;
+    const markerItem = allMarkers.find(item => item.location.id === location.id);
+    setSelectedMarker(markerItem ? markerItem.marker : null);
     cachedSidebarContent.innerHTML = createSidebarContent(location);
     cachedSidebar.style.transform = ''; // clear leftover swipe position
     cachedSidebar.style.display = 'flex';
@@ -604,59 +801,161 @@ function hideSidebar() {
         }, 300);
     }
     selectedLocationId = null;
+    setSelectedMarker(null);
 }
 
-// Does a location match the current search text?
-function matchesSearch(location) {
-    return currentSearch === '' ||
-        location.city.includes(currentSearch) ||
-        location.name.includes(currentSearch) ||
-        location.address.includes(currentSearch) ||
-        fuzzyMatch(location.city, currentSearch) ||
-        fuzzyMatch(location.name, currentSearch) ||
-        fuzzyMatch(location.address, currentSearch);
+// Adding thousands of pins to the cluster layer takes several batches, with pauses
+// in between so a slow phone does not freeze. Two rules keep that safe:
+// 1. Never start a new add while one is running: the cluster layer would go on adding
+//    the rest of the OLD list, and the map would show pins the search does not match.
+//    A change that arrives meanwhile is remembered and drawn once, when the add ends.
+// 2. The layer cannot zoom to a pin before the last batch is in (it throws an error).
+//    whenMarkersAdded(fn) runs fn now if the map is up to date, or right after it is.
+let markerAddRunning = false;   // markerCluster.addLayers() has not finished
+let redrawWanted = false;       // the search or the legend changed during that add
+let afterMarkersAdded = null;   // the one thing waiting for the pins (the latest request wins)
+function markerBatchesDone() {
+    // The cluster layer also reports an (empty) add of its own when it is put on the map
+    if (!markerAddRunning) return;
+    markerAddRunning = false;
+    if (redrawWanted) {
+        redrawWanted = false;
+        drawMarkers(); // reads the search as it is now, so states in between are skipped
+        return;
+    }
+    const run = afterMarkersAdded;
+    afterMarkersAdded = null;
+    if (run) run();
+}
+function whenMarkersAdded(fn) {
+    if (!markerAddRunning && !redrawWanted) fn();
+    else afterMarkersAdded = fn;
 }
 
-// Update which markers are visible based on search and the legend switches
-function updateMarkers() {
-    const visibleMarkers = [];
+// Zoom the cluster layer in until one pin is drawn by itself, then call done().
+// The cluster layer does this with listeners of its own on the map. If the pins are
+// replaced while it is still zooming, those listeners stay behind and throw an error on
+// every later map movement. So they are written down here while the layer registers
+// them, and cancelReveal() takes them off again before the pins are replaced.
+let cancelReveal = null;
+// While the cluster layer plays its own split/merge animation it ignores map movements.
+// A reveal that moved the map during that time would wait forever, so when the
+// animation ends the layer is told once more that the map has moved.
+markerCluster.on('animationend', () => {
+    if (cancelReveal) map.fire('moveend');
+});
+function zoomToClusteredMarker(marker, done) {
+    if (cancelReveal) cancelReveal();
+    map.stop(); // end a flight to another place first; the layer must start from a still map
+    const listeners = [];
+    const targets = [map, markerCluster];
+    targets.forEach(target => {
+        const realOn = target.on;
+        target.on = function(type, fn, context) {
+            // only the two the reveal itself waits on; Leaflet registers others meanwhile
+            if (context === markerCluster && (type === 'moveend' || type === 'animationend')) {
+                listeners.push([target, type, fn, context]);
+            }
+            return realOn.call(this, type, fn, context);
+        };
+    });
+    let cancelled = false;
+    const cancel = () => {
+        cancelled = true;
+        listeners.forEach(([target, type, fn, context]) => target.off(type, fn, context));
+        if (cancelReveal === cancel) cancelReveal = null;
+    };
+    cancelReveal = cancel;
+    try {
+        markerCluster.zoomToShowLayer(marker, () => {
+            if (cancelled) return;
+            if (cancelReveal === cancel) cancelReveal = null;
+            done();
+        });
+    } finally {
+        targets.forEach(target => { delete target.on; }); // back to the normal on()
+    }
+}
+
+// Set what the map is filtered by, and redraw. Every change of the search goes
+// through here, so a typing timer that is still waiting can never bring old text back.
+function setSearch(text, city) {
+    clearTimeout(searchTimeout);
+    currentSearch = text;
+    currentCity = city;
+    return updateMarkers();
+}
+
+// The markers that the search text and the legend switches leave visible right now
+function visibleMarkerItems() {
+    const matches = new Set(searchLocations(allLocations, currentSearch, currentCity));
+    return allMarkers.filter(item => visibleTypes[item.location.type] && matches.has(item.location));
+}
+
+// Put those markers on the map, replacing what was there
+function drawMarkers() {
     const clusteredMarkers = [];
-
+    if (cancelReveal) cancelReveal();
     facilityLayer.clearLayers();
-
-    allMarkers.forEach((item) => {
-        const location = item.location;
-        if (!visibleTypes[location.type] || !matchesSearch(location)) return;
-
-        visibleMarkers.push(item.marker);
-        if (location.type === 'facility') {
+    visibleMarkerItems().forEach(item => {
+        if (item.location.type === 'facility') {
             facilityLayer.addLayer(item.marker);
         } else {
             clusteredMarkers.push(item.marker);
         }
     });
-
     markerCluster.clearLayers();
+    markerAddRunning = true; // markerBatchesDone() switches it off, also for an empty list
     markerCluster.addLayers(clusteredMarkers);
+}
 
-    // Show the empty state only when the user filtered everything away
-    const isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
-    const emptyState = document.getElementById('empty-state');
-    if (emptyState) {
-        const isEmpty = visibleMarkers.length === 0 && isFiltered && allMarkers.length > 0;
-        emptyState.style.display = isEmpty ? 'block' : 'none';
-    }
+// Update which markers are visible based on search and the legend switches.
+// Returns the markers that will be shown; they may still be on their way to the map.
+function updateMarkers() {
+    const visibleMarkers = visibleMarkerItems().map(item => item.marker);
+
+    if (markerAddRunning) redrawWanted = true;
+    else drawMarkers();
+
+    visibleMarkerCount = visibleMarkers.length;
+    updateEmptyState();
 
     return visibleMarkers;
 }
 
+// Show the "no results" panel only when the search or the legend hides every pin.
+// While the suggestion list is open the panel stays hidden, because the list may be
+// offering the right spelling (typing "ירושלם" suggests ירושלים) and the two would overlap.
+let visibleMarkerCount = 0;
+function updateEmptyState() {
+    const emptyState = document.getElementById('empty-state');
+    if (!emptyState) return;
+    const suggestions = document.getElementById('search-suggestions');
+    const listOpen = suggestions && suggestions.classList.contains('active') && suggestions.children.length > 0;
+    const isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
+    const isEmpty = visibleMarkerCount === 0 && isFiltered && allMarkers.length > 0;
+    emptyState.style.display = isEmpty && !listOpen ? 'block' : 'none';
+}
+
+// Close the suggestion list without picking from it
+function closeSuggestions() {
+    const suggestions = document.getElementById('search-suggestions');
+    const searchInput = document.getElementById('search-input');
+    if (!suggestions || !suggestions.classList.contains('active')) return;
+    suggestions.classList.remove('active');
+    if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
+    updateEmptyState(); // it may have been waiting for the list to close
+}
+
 // Open a marker's popup, first zooming in until it is no longer inside a cluster
 function revealMarker(marker) {
-    if (markerCluster.hasLayer(marker)) {
-        markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
-    } else {
-        marker.openPopup();
-    }
+    whenMarkersAdded(() => {
+        if (markerCluster.hasLayer(marker)) {
+            zoomToClusteredMarker(marker, () => marker.openPopup());
+        } else {
+            marker.openPopup();
+        }
+    });
 }
 
 // Auto-zoom to visible markers
@@ -691,75 +990,36 @@ function setupAutocomplete() {
 
     let highlightedIndex = -1;
 
-    let searchTimeout;
     searchInput.addEventListener('input', () => {
-        const query = searchInput.value.trim().substring(0, 50);
+        const text = searchInput.value.trim().substring(0, 50);
+        const query = normalizeQuery(text);
 
-        // Debounced marker update when suggestions aren't showing
+        // The map follows the text in the box, with or without a suggestion list.
+        // Typing also ends an earlier city pick.
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            currentSearch = query;
-            if (!suggestions.classList.contains('active')) {
-                updateMarkers();
-            }
-        }, 300);
+        currentCity = null;
 
         if (query.length < 2) {
             suggestions.classList.remove('active');
             searchInput.setAttribute('aria-expanded', 'false');
             suggestions.innerHTML = '';
             highlightedIndex = -1;
-            currentSearch = query;
-            updateMarkers();
+            setSearch(text, null);
             return;
         }
 
-        const cityMatches = [];
-        const locationMatches = [];
-        const addedCities = new Set();
+        searchTimeout = setTimeout(() => setSearch(text, null), 300);
 
-        allLocations.forEach(location => {
-            // Location matching — tag exact vs fuzzy
-            const exactLocation = location.name.includes(query) || location.address.includes(query);
-            const fuzzyLocation = !exactLocation && (fuzzyMatch(location.name, query) || fuzzyMatch(location.address, query));
-            if (exactLocation || fuzzyLocation) {
-                locationMatches.push({
-                    type: 'location',
-                    id: location.id,
-                    name: location.name,
-                    city: location.city,
-                    locationType: location.type,
-                    exact: exactLocation
-                });
-            }
+        const cityMatches = matchCities(cityCounts, text);
 
-            // City matching — maxDist=1 for tighter fuzzy, tag exact vs fuzzy
-            if (!addedCities.has(location.city)) {
-                const exactCity = location.city.includes(query);
-                const fuzzyCity = !exactCity && fuzzyMatch(location.city, query, 1);
-                if (exactCity || fuzzyCity) {
-                    addedCities.add(location.city);
-                    cityMatches.push({
-                        type: 'city',
-                        name: location.city,
-                        count: cityCounts.get(location.city) || 0,
-                        exact: exactCity
-                    });
-                }
-            }
-        });
-
-        // Sort cities: exact first (by count desc), then fuzzy (by count desc)
-        cityMatches.sort((a, b) => {
-            if (a.exact !== b.exact) return a.exact ? -1 : 1;
-            return b.count - a.count;
-        });
-
-        // Sort locations: exact first, then fuzzy
-        locationMatches.sort((a, b) => {
-            if (a.exact !== b.exact) return a.exact ? -1 : 1;
-            return 0;
-        });
+        // Locations: the same ones the map will show for this text
+        const locationMatches = searchLocations(allLocations, text, null).map(location => ({
+            type: 'location',
+            id: location.id,
+            name: location.name,
+            city: location.city,
+            locationType: location.type
+        }));
 
         const limitedMatches = [...cityMatches, ...locationMatches].slice(0, 8);
 
@@ -781,7 +1041,7 @@ function setupAutocomplete() {
                         <span class="suggestion-icon">🏙️</span>
                         <div class="suggestion-text">
                             <div class="suggestion-name">${escapeHtml(match.name)}</div>
-                            <div class="suggestion-city">${match.count} נקודות</div>
+                            <div class="suggestion-city">${match.count === 1 ? 'נקודה אחת' : `${match.count} נקודות`}</div>
                         </div>
                     </div>
                 `;
@@ -820,12 +1080,27 @@ function setupAutocomplete() {
             e.preventDefault();
             highlightedIndex = Math.max(highlightedIndex - 1, -1);
             updateHighlight(items);
-        } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+        } else if (e.key === 'Enter') {
             e.preventDefault();
-            selectSuggestion(items[highlightedIndex]);
+            const listOpen = suggestions.classList.contains('active') && items.length > 0;
+            const text = searchInput.value.trim().substring(0, 50);
+            // Decided from the text, not from the list: the list may be closed already
+            // (a second Enter, or Escape first) and the answer must stay the same
+            const typedCity = matchCities(cityCounts, text)[0];
+            if (listOpen && highlightedIndex >= 0) {
+                selectSuggestion(items[highlightedIndex]);
+            } else if (typedCity && typedCity.same) {
+                // The text is a city name (or a short name for one): show that city
+                pickCity(typedCity.name);
+            } else {
+                // Anything else (a shop name, part of a word): show the typed text on the map
+                const visibleMarkers = setSearch(text, null);
+                closeSuggestions();
+                highlightedIndex = -1;
+                zoomToVisibleMarkers(visibleMarkers);
+            }
         } else if (e.key === 'Escape') {
-            suggestions.classList.remove('active');
-            searchInput.setAttribute('aria-expanded', 'false');
+            closeSuggestions();
             highlightedIndex = -1;
         }
     });
@@ -847,26 +1122,35 @@ function setupAutocomplete() {
         }
     }
 
-    function selectSuggestion(item) {
-        const type = item.dataset.type;
-
-        if (type === 'city') {
-            const city = item.dataset.value;
-            searchInput.value = city;
-            currentSearch = city;
-            const visibleMarkers = updateMarkers();
-            zoomToVisibleMarkers(visibleMarkers);
-        } else {
-            const locationId = parseInt(item.dataset.id, 10);
-            if (isNaN(locationId)) return;
-            searchInput.value = '';
-            focusOnLocation(locationId);
-        }
-
+    function emptySuggestions() {
         suggestions.classList.remove('active');
         searchInput.setAttribute('aria-expanded', 'false');
         suggestions.innerHTML = '';
         highlightedIndex = -1;
+    }
+
+    // Show exactly one city on the map
+    function pickCity(city) {
+        searchInput.value = city;
+        const visibleMarkers = setSearch(city, city);
+        zoomToVisibleMarkers(visibleMarkers);
+        emptySuggestions();
+    }
+
+    function selectSuggestion(item) {
+        if (item.dataset.type === 'city') {
+            pickCity(item.dataset.value);
+            return;
+        }
+        const locationId = parseInt(item.dataset.id, 10);
+        if (isNaN(locationId)) return;
+        // The box is emptied, so the map goes back to showing everything
+        searchInput.value = '';
+        const clearBtn = document.getElementById('search-clear');
+        if (clearBtn) clearBtn.style.display = 'none';
+        setSearch('', null);
+        focusOnLocation(locationId);
+        emptySuggestions();
     }
 
     suggestions.addEventListener('click', (e) => {
@@ -876,8 +1160,7 @@ function setupAutocomplete() {
 
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
-            suggestions.classList.remove('active');
-            searchInput.setAttribute('aria-expanded', 'false');
+            closeSuggestions();
         }
     });
 }
@@ -887,13 +1170,39 @@ function focusOnLocation(locationId) {
     const location = allLocations.find(l => l.id === locationId);
     if (!location) return;
 
+    // Details first: opening them closes any open popup, and the pin's popup comes after
+    showSidebar(location);
+
     const markerItem = allMarkers.find(item => item.location.id === locationId);
     if (markerItem) {
-        map.once('moveend', () => revealMarker(markerItem.marker));
-        map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
+        const marker = markerItem.marker;
+        // Every step below can happen late (after a flight, or after the pins were added).
+        // By then the details may be closed or show another place: then do nothing.
+        const stillWanted = () => selectedLocationId === locationId;
+        const arrive = () => {
+            if (!stillWanted()) return;
+            marker.openPopup();
+            keepPinAboveSheet(marker);
+        };
+        const flyClose = () => {
+            if (!stillWanted()) return;
+            map.once('moveend', arrive);
+            map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
+        };
+        // Picking a suggestion has just put every pin back on the map; on a slow
+        // phone that is still going on, so wait for it to finish.
+        whenMarkersAdded(() => {
+            if (!stillWanted()) return;
+            if (markerCluster.hasLayer(marker)) {
+                // The cluster layer zooms in, and opens a group of pins that share one spot,
+                // until this pin itself is drawn. Flying first and asking afterwards left
+                // the pin hidden inside a cluster on phones.
+                zoomToClusteredMarker(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
+            } else {
+                flyClose();
+            }
+        });
     }
-
-    showSidebar(location);
 }
 
 // === GPS GEOLOCATION ===
@@ -1012,7 +1321,7 @@ locateControl.onAdd = function() {
                 if (nearest && nearest.distance <= NEAREST_MAX_KM) {
                     const view = L.latLngBounds([[lat, lng], [nearest.location.lat, nearest.location.lng]]);
                     map.flyToBounds(view, { padding: [80, 80], maxZoom: 16, duration: 0.8 });
-                    showNotification(`הנקודה הקרובה: ${nearest.location.name} (${nearest.distance.toFixed(1)} ק"מ)`, 4000);
+                    showNotification(`הנקודה הקרובה: ${nearest.location.name} (${formatDistance(nearest.distance)})`, 4000);
                 } else {
                     map.flyTo([lat, lng], 14, { duration: 0.8 });
                     showNotification('מיקום נמצא');
@@ -1048,6 +1357,7 @@ legendControl.onAdd = function() {
     const container = L.DomUtil.create('div', 'map-legend');
     container.setAttribute('role', 'group');
     container.setAttribute('aria-label', 'מקרא וסינון לפי סוג');
+    container.hidden = true; // shown by updateLegendCounts() once the data has loaded
     container.innerHTML = Object.keys(visibleTypes).map(type => `
         <button type="button" class="legend-item" data-legend-type="${type}" aria-pressed="true">
             <span class="legend-icon">${pinSvg(type, 18, 24)}</span>
@@ -1125,7 +1435,7 @@ function hideLoading() {
 // === INITIALIZATION ===
 function loadLocations() {
     autocompleteInitialized = false;
-    showLoading('טוען נקודות מיחזור...');
+    showLoading('טוען נקודות איסוף...');
 
     fetch('locations.json')
         .then(response => {
@@ -1134,14 +1444,7 @@ function loadLocations() {
         })
         .then(data => {
             // Validate and filter location data
-            const VALID_TYPES = ['store', 'facility'];
-            allLocations = data.locations.filter(loc => {
-                if (!loc.id || !loc.name || !loc.address || !loc.city || !loc.type) return false;
-                if (!VALID_TYPES.includes(loc.type)) return false;
-                if (!isFinite(loc.lat) || !isFinite(loc.lng)) return false;
-                if (loc.lat < 29 || loc.lat > 34 || loc.lng < 34 || loc.lng > 36) return false;
-                return true;
-            });
+            allLocations = data.locations.filter(isValidLocation);
             totalLocations = allLocations.length;
 
             // Pre-compute city counts for fast autocomplete
@@ -1152,10 +1455,11 @@ function loadLocations() {
 
             const loadingText = document.getElementById('loading-text');
             if (loadingText) {
-                loadingText.textContent = `טוען ${totalLocations} נקודות...`;
+                loadingText.textContent = `טוען ${totalLocations} נקודות איסוף...`;
             }
 
             // Clear previous markers if retrying
+            setSelectedMarker(null);
             allMarkers = [];
             markerCluster.clearLayers();
 
@@ -1174,6 +1478,7 @@ function loadLocations() {
 
                 marker.on('click', () => {
                     showSidebar(location);
+                    keepPinAboveSheet(marker);
                 });
 
                 // Add aria-label when marker is added to map.
@@ -1183,6 +1488,8 @@ function loadLocations() {
                     const element = marker.getElement();
                     if (element) {
                         element.setAttribute('aria-label', `${location.name} - ${typeNames[location.type]}`);
+                        // Clustering builds a new element each time the pin comes back
+                        element.classList.toggle('selected', marker === selectedMarker);
                     }
                 });
 
@@ -1191,11 +1498,18 @@ function loadLocations() {
 
             setupAutocomplete();
             updateLegendCounts();
+
+            // After a failed load the panel still holds the error texts: put the
+            // "no results" texts back. updateMarkers() then shows or hides the panel.
+            setEmptyStateText('לא נמצאו תוצאות', 'נסה לשנות את הסינון או לחפש מונח אחר', 'נקה סינון');
             updateMarkers();
 
-            // Hide error state if it was showing
-            const emptyState = document.getElementById('empty-state');
-            if (emptyState) emptyState.style.display = 'none';
+            // PWA shortcut ?action=nearest: only now is there data to find the nearest point in
+            if (pendingNearest) {
+                pendingNearest = false;
+                const locateBtn = document.querySelector('.locate-btn');
+                if (locateBtn) locateBtn.click();
+            }
 
             setTimeout(() => {
                 hideLoading();
@@ -1206,26 +1520,16 @@ function loadLocations() {
             hideLoading();
 
             // Show empty state with retry option
+            setEmptyStateText('שגיאה בטעינת הנתונים', 'בדוק את החיבור לאינטרנט ונסה שוב', 'נסה שוב');
             const emptyState = document.getElementById('empty-state');
-            if (emptyState) {
-                const h3 = emptyState.querySelector('h3');
-                const p = emptyState.querySelector('p');
-                if (h3) h3.textContent = 'שגיאה בטעינת הנתונים';
-                if (p) p.textContent = 'בדוק את החיבור לאינטרנט ונסה שוב';
-                const retryBtn = emptyState.querySelector('.clear-filters-btn');
-                if (retryBtn) retryBtn.textContent = 'נסה שוב';
-                emptyState.style.display = 'block';
-            }
+            if (emptyState) emptyState.style.display = 'block';
         });
 }
 
-loadLocations();
+// PWA shortcut ?action=nearest: remembered here, carried out when the data has loaded
+let pendingNearest = new URLSearchParams(window.location.search).get('action') === 'nearest';
 
-// Handle PWA shortcut: ?action=nearest
-if (new URLSearchParams(window.location.search).get('action') === 'nearest') {
-    const locateBtn = document.querySelector('.locate-btn');
-    if (locateBtn) locateBtn.click();
-}
+loadLocations();
 
 // === EVENT LISTENERS ===
 
@@ -1295,13 +1599,12 @@ if (clearFiltersBtn) {
             loadLocations();
         } else {
             // Clear the search and switch every legend type back on
-            currentSearch = '';
             const searchInput = document.getElementById('search-input');
             if (searchInput) searchInput.value = '';
             const clearBtn = document.getElementById('search-clear');
             if (clearBtn) clearBtn.style.display = 'none';
             Object.keys(visibleTypes).forEach(type => setTypeVisible(type, true));
-            updateMarkers();
+            setSearch('', null);
         }
     });
 }
@@ -1310,11 +1613,7 @@ if (clearFiltersBtn) {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         hideSidebar();
-
-        const suggestions = document.getElementById('search-suggestions');
-        if (suggestions) suggestions.classList.remove('active');
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
+        closeSuggestions();
     }
 });
 
