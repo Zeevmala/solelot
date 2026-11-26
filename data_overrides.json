@@ -12,14 +12,40 @@
     "Added 2026-11-25: 346434 (רמי לוי, העמל 20) had the city \"ים\"; Nominatim puts the pin in the industrial area of כפר סבא.",
     "Added 2026-11-26: 25 city entries for markers that MAI publishes with a street but no city (343975-343996, 346749, 346774, 347297). Until now the scraper took their city from the previous locations.json by coordinate, so a lost file or a coordinate nudged by 1 m would have removed them for good; the cities here are the ones that file had.",
     "Added 2026-11-26: 343108 is inside the ביאליק רוגוזין school campus (\\\"ביאליק רוגוזין, כניסה ראשית\\\"), which does not say school in words the school rule can see; schools are left off the map.",
+    "Added 2026-11-26 (\"good to great\" audit), 33 city fixes where the pin is right and the city label is wrong. 11 from the data-quality report, each checked there against OpenStreetMap (342668 מודיעין עילית, 346666 סכנין, 346665 כסרא סמיע, 344436 ירושלים, 346222 גבעת חן, 342842 רמת יוחנן, 342845 כפר הנוער הדתי, 347324 עין בוקק, 346155 באר שבע, 344330 חולון, 344132 משמר השבעה). 344902 and 344905 name קריית חיים as their place and sit among its points, so they join that city. 12 from the spatial report, where the pin sits among points of the neighbouring town (346693, 344847, 347124, 345339, 343571, 343676, 346245, 344139, 344699, 344708, 345879, 345956). 8 where one building was listed under two or three cities: מרכז מסחרי תל חנן and דרך בר יהודה 111 are in נשר (343443, 345153, 345364, 346694); מבצע קדש 56 is in בני ברק and דרך העמק 41 in נוף הגליל by a Nominatim reverse geocode of the pin (344033, 345259, 345577); 344549 shares its coordinate with a נתניה point (פולג is a part of נתניה).",
+    "Added 2026-11-26: 343449 (תל חנן), 344534 (עמק שרה) and 344555 (פולג) each were the only point of a neighbourhood listed as a city, sitting among points of נשר, באר שבע and נתניה (validator warning 14c). 343053 has the regional council as its city; Nominatim puts the pin in פארק תעשיות משגב תרדיון, so its city is תרדיון (as משגב it had the same name as 343050, 2 km away).",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
+    "342668": {
+      "city": "מודיעין עילית"
+    },
+    "342842": {
+      "city": "רמת יוחנן"
+    },
+    "342845": {
+      "city": "כפר הנוער הדתי"
+    },
+    "343053": {
+      "city": "תרדיון"
+    },
     "343180": {
       "city": "כפר מונש"
     },
+    "343443": {
+      "city": "נשר"
+    },
+    "343449": {
+      "city": "נשר"
+    },
+    "343571": {
+      "city": "מעלות תרשיחא"
+    },
     "343647": {
       "city": "נתיבות"
+    },
+    "343676": {
+      "city": "עפולה"
     },
     "343803": {
       "city": "כפר תבור"
@@ -90,6 +116,15 @@
     "343996": {
       "city": "תל אביב"
     },
+    "344033": {
+      "city": "בני ברק"
+    },
+    "344132": {
+      "city": "משמר השבעה"
+    },
+    "344139": {
+      "city": "בני דרור"
+    },
     "344147": {
       "city": "דליאת א-כרמל"
     },
@@ -114,6 +149,9 @@
     "344254": {
       "city": "פתח תקווה"
     },
+    "344330": {
+      "city": "חולון"
+    },
     "344352": {
       "city": "הרצליה"
     },
@@ -123,11 +161,29 @@
     "344424": {
       "city": "כנות"
     },
+    "344436": {
+      "city": "ירושלים"
+    },
     "344449": {
       "city": "נצרת"
     },
     "344456": {
       "city": "עידן"
+    },
+    "344534": {
+      "city": "באר שבע"
+    },
+    "344549": {
+      "city": "נתניה"
+    },
+    "344555": {
+      "city": "נתניה"
+    },
+    "344699": {
+      "city": "באר טוביה"
+    },
+    "344708": {
+      "city": "צמח"
     },
     "344714": {
       "city": "מודיעין"
@@ -141,6 +197,9 @@
     "344824": {
       "city": "עוספייה"
     },
+    "344847": {
+      "city": "מעלה אדומים"
+    },
     "344864": {
       "city": "בית שמש"
     },
@@ -149,6 +208,12 @@
     },
     "344890": {
       "city": "יגור"
+    },
+    "344902": {
+      "city": "קריית חיים"
+    },
+    "344905": {
+      "city": "קריית חיים"
     },
     "344911": {
       "city": "צמח"
@@ -159,6 +224,9 @@
     "345148": {
       "city": "חיפה"
     },
+    "345153": {
+      "city": "נשר"
+    },
     "345212": {
       "city": "נווה זיו"
     },
@@ -167,6 +235,9 @@
     },
     "345247": {
       "city": "פתח תקווה"
+    },
+    "345259": {
+      "city": "נוף הגליל"
     },
     "345286": {
       "city": "תל אביב"
@@ -177,8 +248,17 @@
     "345329": {
       "city": "תל אביב"
     },
+    "345339": {
+      "city": "פתח תקווה"
+    },
+    "345364": {
+      "city": "נשר"
+    },
     "345424": {
       "city": "פתח תקווה"
+    },
+    "345577": {
+      "city": "נוף הגליל"
     },
     "345594": {
       "city": "אלעד"
@@ -194,6 +274,9 @@
     },
     "345868": {
       "city": "חורפיש"
+    },
+    "345879": {
+      "city": "צמח"
     },
     "345902": {
       "city": "שפרעם"
@@ -231,6 +314,9 @@
     "345913": {
       "city": "שפרעם"
     },
+    "345956": {
+      "city": "טבריה"
+    },
     "345969": {
       "city": "רמת גן"
     },
@@ -258,8 +344,17 @@
     "346143": {
       "city": "אילון"
     },
+    "346155": {
+      "city": "באר שבע"
+    },
     "346168": {
       "city": "גוש עציון"
+    },
+    "346222": {
+      "city": "גבעת חן"
+    },
+    "346245": {
+      "city": "עפולה"
     },
     "346338": {
       "city": "ניצן"
@@ -282,8 +377,20 @@
     "346664": {
       "city": "ניצנה"
     },
+    "346665": {
+      "city": "כסרא סמיע"
+    },
+    "346666": {
+      "city": "סכנין"
+    },
     "346677": {
       "city": "תל מונד"
+    },
+    "346693": {
+      "city": "אום אל פחם"
+    },
+    "346694": {
+      "city": "נשר"
     },
     "346707": {
       "city": "תל מונד"
@@ -321,11 +428,17 @@
     "346821": {
       "city": "אלעד"
     },
+    "347124": {
+      "city": "דביר"
+    },
     "347289": {
       "city": "אום אל פחם"
     },
     "347297": {
       "city": "תל אביב"
+    },
+    "347324": {
+      "city": "עין בוקק"
     },
     "342705": {
       "exclude": true

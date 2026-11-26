@@ -77,6 +77,7 @@ test('a clean file of 1,000 points passes every check with no warnings', () => {
     assert.match(result.block('14a'), /: 0 to review/);
     assert.match(result.block('14b'), /: 0 points in 0 groups/);
     assert.match(result.block('14c'), /: 0 to review/);
+    assert.match(result.block('24'), /: 0 pairs to review/);
 });
 
 test('check 4 fails on נסגר and on כפל as a whole word, not inside another word', () => {
@@ -231,4 +232,29 @@ test('check 22 fails on a school campus named תיכונט or חמ"ד', () => {
     assert.strictEqual(result.status, 1, result.stdout);
     assert.match(result.block('22'), /^\[X\].*: 2 issues/);
     assert.doesNotMatch(result.block('22'), /id=103/);
+});
+
+test('check 23 fails on a city with a digit, a Latin letter, a bracket, a dot or a one-letter word', () => {
+    const inCity = (id, city) => point(id, 32.09 + id / 100000, 34.79, { city, address: 'א 1, ' + city });
+    const result = validate([...cleanPoints(),
+        inCity(101, 'גבעת ח ן'), inCity(102, 'עובדה (שיכון משפחות)'), inCity(103, 'צ.צלמון'),
+        inCity(104, 'מחלף M הדרך'), inCity(105, 'נתניה 2'),
+        // real names that must pass: a geresh, a gershayim, a hyphen with a one-letter part
+        inCity(106, "דגניה א'"), inCity(107, 'פעמי תש"ז'), inCity(108, "ג'סר א-זרקא"), inCity(109, 'באקה אל-גרבייה')]);
+    assertFails(result, 23, /5 issues/);
+    for (const id of [101, 102, 103, 104, 105]) assert.match(result.block(23), new RegExp('id=' + id));
+});
+
+test('24 warns (exit 0) when one city name is another plus a word, unless the pair is known to be two places', () => {
+    const inCity = (id, city) => point(id, 32.09 + id / 100000, 34.79, { city, address: 'א 1, ' + city });
+    const result = validate([...cleanPoints(),
+        inCity(101, 'סילבר'), inCity(102, 'כפר סילבר'),
+        inCity(103, 'משגב'), inCity(104, 'מועצה אזורית משגב'),
+        inCity(105, 'יבנה'), inCity(106, 'גן יבנה'),             // two towns: in the known list
+        inCity(107, 'רמת גן'), inCity(108, 'רמת השרון')]);       // share a word, neither contains the other
+    assert.strictEqual(result.status, 0, result.stdout);
+    assert.match(result.block('24'), /^\[!\].*: 2 pairs to review/);
+    assert.match(result.block('24'), /סילבר \(1\) \/ כפר סילבר \(1\)/);
+    assert.match(result.block('24'), /משגב \(1\) \/ מועצה אזורית משגב \(1\)/);
+    assert.doesNotMatch(result.block('24'), /יבנה/);
 });

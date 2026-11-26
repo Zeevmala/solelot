@@ -863,3 +863,34 @@ test('real records the school rule used to drop by mistake are kept', () => {
     }));
     assert.strictEqual(carPark.skip, 'school (not open to the public)');
 });
+
+test('normalizeCity: spellings and labels found in the "good to great" audit', () => {
+    const cases = {
+        'ביתר עלית': 'ביתר עילית',
+        'באקה אל גארבייה': 'באקה אל-גרבייה',
+        'כפר תמרה': 'טמרה',
+        'כפר טורעאן': 'טורעאן',
+        'כוכב יאיר': 'כוכב יאיר צור יגאל',
+        'מועצה אזורית משגב': 'משגב',
+        "גוש חלב ג'ש": 'גוש חלב',
+        'נוה מבטח': 'נווה מבטח',
+        'סילבר': 'כפר סילבר',
+        'פעמי תשז': 'פעמי תש"ז',
+        // a letter that is part of the name needs its geresh, or it reads as a typing slip
+        'קיבוץ דגניה א': "דגניה א'",
+        // one place under a short and a long name, pins 21 m and 364 m apart
+        'הילה': 'מצפה הילה',
+        'גרנות': 'גרנות הגליל',
+        // abbreviations and a Latin letter inside a Hebrew name
+        'צ.צלמון': 'צומת צלמון',
+        'א.ת.עמק חפר': 'עמק חפר',
+        'מחלף M הדרך': 'מחלף אם הדרך',
+        // a trailing bracket is a remark, not part of the name
+        'עובדה (שיכון משפחות)': 'עובדה',
+        'שדה תרומות (ביכורה)': 'שדי תרומות', // and the moshav is שדי, not שדה
+        'מועצה אזורית גולן': 'מועצה אזורית גולן' // other regional councils are left as they are
+    };
+    for (const [raw, expected] of Object.entries(cases)) {
+        assert.strictEqual(normalizeCity(raw), expected, raw);
+    }
+});

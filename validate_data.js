@@ -31,6 +31,16 @@ const KNOWN_DISTINCT_CITIES = [
     ['אורות', 'דורות'], ['גונן', 'גורן'], ['חגור', 'חצור'], ['חולית', 'חופית'], ['כרמיה', 'כרמים'], ['שפיים', 'שפירים']
 ];
 
+// Check 24: one city name is another plus a word, and the two really are different places.
+// A pair that is one place under two names must NOT be added here - fix it in scraper.js (CITY_ALIASES)
+// or, for a single record, in data_overrides.json.
+const KNOWN_DISTINCT_CITY_PAIRS = [
+    ['אורה', 'באר אורה'], ['גנות', 'גנות הדר'], ['גשר', 'גשר הזיו'], ['גת', 'קריית גת'], ["ג'וליס", "כפר ג'וליס"],
+    ['זוהר', 'נווה זוהר'], ['חצבה', 'עין חצבה'], ['חצור', 'חצור הגלילית'], ['חרות', 'בית חרות'],
+    ['יבנה', 'גן יבנה'], ['יבנה', 'קבוצת יבנה'], ['מגדל', 'מגדל העמק'], ['מודיעין', 'מודיעין עילית'],
+    ['ניצן', 'שדה ניצן'], ['פקיעין', 'פקיעין החדשה'], ['שחר', 'טל שחר'], ['שריד', 'עין שריד']
+];
+
 // True when two different strings are one edit apart (one letter added, removed or replaced)
 function oneEditApart(a, b) {
     if (a === b || Math.abs(a.length - b.length) > 1) return false;
@@ -310,6 +320,31 @@ function main() {
     check('22. No school points', locations
         .filter(l => isSchool(String(l.name || '')))
         .map(l => ({ id: l.id, reason: `"${l.name}"` })));
+
+    // 23. A city name is made of Hebrew words: no digit, Latin letter, bracket or dot, and no word of
+    // one bare letter ("גבעת ח ן"). A letter with a geresh ("דגניה א'") or after a hyphen ("א-זרקא") is fine.
+    // These are typing slips in the source; fix them in scraper.js (CITY_ALIASES) or data_overrides.json.
+    const malformedCity = city => /[0-9A-Za-z()[\].]/.test(city) || city.split(/\s+/).some(word => /^\p{L}$/u.test(word));
+    check('23. City names are well formed', Object.keys(byCity).filter(malformedCity).sort()
+        .map(city => ({ id: byCity[city][0].id, reason: `city="${city}" (${byCity[city].length})` })), true);
+
+    // 24. One city name is another plus a word in front or behind ("סילבר" / "כפר סילבר",
+    // "משגב" / "מועצה אזורית משגב"): often one place under two names, which splits it in the search box.
+    // A warning, because many such pairs are two real places; those go in KNOWN_DISTINCT_CITY_PAIRS.
+    // Junctions and roads used as a city ("צומת גבים" next to "גבים") are listed on purpose: they wait
+    // for the owner's decision.
+    // Cannot see: two names for one place that do not share whole words.
+    const isDistinctCityPair = (a, b) => KNOWN_DISTINCT_CITY_PAIRS.some(pair => pair.includes(a) && pair.includes(b));
+    const nested = [];
+    for (const a of cityNames) {
+        for (const b of cityNames) {
+            if (a !== b && (b.startsWith(a + ' ') || b.endsWith(' ' + a)) && !isDistinctCityPair(a, b)) {
+                nested.push(`${a} (${byCity[a].length}) / ${b} (${byCity[b].length})`);
+            }
+        }
+    }
+    console.log(`[!] 24. One city name inside another (warning): ${nested.length} pairs to review`);
+    nested.forEach(pair => console.log(`    ${pair}`));
 
     // Summary
     console.log(`\n--- ${totalFails === 0 ? 'ALL CHECKS PASSED' : totalFails + ' TOTAL ISSUES'} (${locations.length} locations) ---`);
