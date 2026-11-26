@@ -10,6 +10,7 @@ Interactive map for battery recycling locations in Israel
 HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Locations to Include
+- **Batteries only.** The map is strictly for recycling batteries (owner's decision, Nov 2026). Do not show what else a point accepts (MAI categories 14/15, electrical items), and do not add other recycling types
 - **Collection points**: whatever the MAI map lists under batteries. Mostly shops and chains, petrol stations, municipal points and street e-waste bins (~3,600 points, Nov 2026). **Schools are left out on purpose** (owner's decision, Nov 2026: a bin inside a school is not open to the public) — `isSchool()` in `scraper.js` skips them and validator check 22 fails if one appears. Colleges and universities stay. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
 - **Facilities**: none shown. Batte-Re and RE-CAR were added and then removed at the owner's request (Nov 2026). `facilities.json` is empty; the app still supports the type
 

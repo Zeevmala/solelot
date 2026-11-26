@@ -75,7 +75,7 @@ Three streams. Data builds in its own working copy at the same time as the appli
 
 ## Not in this design (owner decisions)
 
-- Show "also takes small / large electrical items" (MAI categories 14 and 15; 1,288 points).
+- ~~Show "also takes small / large electrical items"~~ Decided 2026-11-26: no. The map is strictly for batteries.
 - A point kind (fuel station / shop / municipal point) as a label or filter. Changes the data format.
 - Drop the unused `hours` and `chain` fields. Changes the data format.
 - A weekly scheduled refresh on GitHub. Needs a workflow file added by a person.
