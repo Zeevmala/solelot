@@ -625,76 +625,6 @@ function getConfirmUrl(location) {
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
-// Create popup content for a location
-function createPopupContent(location) {
-    const safeType = ['store', 'facility'].includes(location.type) ? location.type : 'store';
-    const typeIcon = popupBatterySvg[safeType];
-
-    const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
-
-    let content = `
-        <div class="popup-header">
-            <h3>
-                <span class="popup-icon">${typeIcon}</span>
-                ${escapeHtml(location.name)}
-            </h3>
-        </div>
-        ${hasAddress ? `<div class="popup-row">
-            <span>${escapeHtml(location.address)}</span>
-        </div>` : ''}
-    `;
-
-    if (location.hours && location.hours !== 'בדוק באתר') {
-        content += `
-        <div class="popup-row">
-            <span class="icon">🕐</span>
-            <span>${escapeHtml(location.hours)}</span>
-        </div>`;
-    }
-
-    if (location.description) {
-        content += `
-        <div class="popup-row">
-            <span class="icon">ℹ️</span>
-            <span>${escapeHtml(location.description)}</span>
-        </div>`;
-    }
-
-    if (userLocation) {
-        const distance = getDistance(
-            userLocation.lat, userLocation.lng,
-            location.lat, location.lng
-        );
-        content += `
-        <div class="popup-row distance">
-            <span class="icon">📏</span>
-            <span>${formatDistance(distance)} בקו אווירי</span>
-        </div>`;
-    }
-
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
-    const wazeUrl = `https://waze.com/ul?ll=${location.lat},${location.lng}&navigate=yes`;
-
-    const reportUrl = getReportUrl(location);
-
-    content += `
-        <div class="nav-links">
-            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn google">נווט ב-Google</a>
-            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">נווט ב-Waze</a>
-        </div>
-        <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
-                ${thumbsUpSvg}
-            </button>
-            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(reportUrl)}" aria-label="דווח על בעיה">
-                ${thumbsDownSvg}
-            </button>
-        </div>
-    `;
-
-    return content;
-}
-
 // Create sidebar content for a location
 function createSidebarContent(location) {
     const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
@@ -719,7 +649,7 @@ function createSidebarContent(location) {
     return `
         <div class="sidebar-header">
             <div class="sidebar-title">
-                <h2>${escapeHtml(location.name)}</h2>
+                <h2 tabindex="-1">${escapeHtml(location.name)}</h2>
                 ${location.type === 'facility' ? `<span class="type-badge">${typeNames.facility}</span>` : ''}
             </div>
         </div>
@@ -814,7 +744,6 @@ function showSidebar(location) {
     // Cancel a hide that is still animating, or it would hide the sidebar we are about to show
     clearTimeout(sidebarHideTimer);
 
-    map.closePopup();
     selectedLocationId = location.id;
     setSelectedLocation(location);
     cachedSidebarContent.innerHTML = createSidebarContent(location);
@@ -822,7 +751,14 @@ function showSidebar(location) {
     cachedSidebar.style.display = 'flex';
     cachedSidebar.classList.remove('hidden');
 
-    if (cachedSidebarClose) cachedSidebarClose.focus({ preventScroll: true });
+    // Focus goes into the details, so a screen reader says they opened. The phone
+    // sheet hides its close button (swipe down or Escape closes it): then the heading.
+    if (cachedSidebarClose && cachedSidebarClose.offsetParent !== null) {
+        cachedSidebarClose.focus({ preventScroll: true });
+    } else {
+        const heading = cachedSidebarContent.querySelector('h2');
+        if (heading) heading.focus({ preventScroll: true });
+    }
 }
 
 // Hide sidebar
@@ -1412,13 +1348,14 @@ function loadLocations() {
                     zIndexOffset: isFacility ? 1000 : 0 // facilities draw above other pins
                 });
 
-                // Popup HTML is built each time it opens (desktop only),
-                // so the distance line is always up to date with the GPS position
-                if (window.innerWidth > MOBILE_BREAKPOINT) {
-                    marker.bindPopup(() => createPopupContent(location), { maxWidth: 300 });
-                }
-
+                // A tap, a click and Enter on a focused pin all open the same details
+                // (sidebar, or the sheet on a phone). There is no pin popup.
                 marker.on('click', () => {
+                    showSidebar(location);
+                    keepPinAboveSheet(location);
+                });
+                marker.on('keypress', (e) => {
+                    if (e.originalEvent.key !== 'Enter') return;
                     showSidebar(location);
                     keepPinAboveSheet(location);
                 });

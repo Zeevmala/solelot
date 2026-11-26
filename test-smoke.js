@@ -413,6 +413,53 @@ check('picking a location inside a tight cluster shows it as the one selected pi
 check('the same on a slow phone (CPU 4x slower): pins are still being added when it is picked', () => pickFromSuggestions(PHONE, 4));
 check('the same on a very slow phone (CPU 6x slower)', () => pickFromSuggestions(PHONE, 6));
 
+// The details surfaces open right now: the sidebar/sheet and any Leaflet popup
+const surfaces = page => page.evaluate(() => {
+    const sheet = document.getElementById('sidebar');
+    return { popups: document.querySelectorAll('.leaflet-popup').length,
+        open: sheet.style.display !== 'none' && !sheet.classList.contains('hidden'),
+        title: (document.querySelector('#sidebar h2') || {}).textContent || '',
+        focus: document.activeElement === document.querySelector('#sidebar h2') ? 'heading'
+            : document.activeElement === document.getElementById('sidebar-close') ? 'close' : document.activeElement.tagName };
+});
+
+check('one details surface: click, Enter on a pin and a suggestion pick open the sidebar only; Escape closes it', async () => {
+    for (const viewport of [DESKTOP, PHONE]) {
+        const { context, page, problems } = await openApp({ viewport });
+        const where = `${viewport.width}px`;
+        // the close button is hidden on the phone sheet, so the focus goes to its heading
+        const focusWanted = viewport === PHONE ? 'heading' : 'close';
+        await page.evaluate(() => map.setView([32.0853, 34.7818], 17, { animate: false }));
+        await page.waitForTimeout(1000);
+        const closed = async step => { await page.keyboard.press('Escape'); await page.waitForTimeout(500);
+            const s = await surfaces(page); expect(!s.open && s.popups === 0, `${where}, ${step}, Escape: ${JSON.stringify(s)}`); };
+        // 1. click
+        const name = await tagDrawnPin(page);
+        expect(name, `${where}: no pin drawn on its own in Tel Aviv`);
+        await page.locator('[data-smoke-tap]').click({ force: true }); await page.waitForTimeout(600);
+        let s = await surfaces(page);
+        expect(s.open && s.title === name && s.popups === 0 && s.focus === focusWanted, `${where}, click: ${JSON.stringify(s)}`);
+        await closed('click');
+        // 2. keyboard: focus the pin, press Enter
+        await page.evaluate(() => { document.querySelectorAll('[data-smoke-tap]').forEach(el => el.removeAttribute('data-smoke-tap')); });
+        const name2 = await tagDrawnPin(page);
+        await page.locator('[data-smoke-tap]').focus(); await page.keyboard.press('Enter'); await page.waitForTimeout(600);
+        s = await surfaces(page);
+        expect(s.open && s.title === name2 && s.popups === 0 && s.focus === focusWanted, `${where}, Enter on a pin: ${JSON.stringify(s)}`);
+        await closed('Enter');
+        // 3. a location suggestion
+        await page.locator('#search-input').fill(name2);
+        await page.locator('.suggestion-item[data-type="location"]').first().click();
+        await mapSettled(page);
+        s = await surfaces(page);
+        expect(s.open && s.popups === 0 && s.focus === focusWanted, `${where}, suggestion pick: ${JSON.stringify(s)}`);
+        await closed('suggestion pick');
+        const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+        await context.close();
+        expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+    }
+});
+
 check('a search change while pins are still being added ends with the pins of the final text', async () => {
     // 1. On a slow phone the first typed letter starts adding thousands of pins;
     //    the rest of the word and Enter arrive before that has finished.
