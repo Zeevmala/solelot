@@ -277,10 +277,9 @@ async function fetchMarkers() {
  * Turn one MAI marker into our location format.
  * Returns { location } on success or { skip: 'reason' } so the caller can
  * count why markers were dropped (nothing is dropped silently).
- * cityByCoord: Map of coordKey -> city, used when MAI has no city field.
- * overrides:   manual corrections from data_overrides.json, keyed by marker id.
+ * overrides: manual corrections from data_overrides.json, keyed by marker id.
  */
-function transformMarker(marker, cityByCoord, overrides = {}) {
+function transformMarker(marker, overrides = {}) {
     if (!marker || typeof marker !== 'object') return { skip: 'not an object' };
     if (!/^\d+$/.test(String(marker.id))) return { skip: 'bad id' };
     if (String(marker.map_id) !== LIVE_MAP_ID) return { skip: 'old map' };
@@ -311,7 +310,7 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
     const titleCity = !hasFields && titleBits.length > 1 ? titleBits[titleBits.length - 1] : '';
     titleBits = titleBits.filter(bit => bit !== titleCity);
 
-    const rawCity = clean(override.city || fields.city || titleCity || cityByCoord.get(coordKey(lat, lng)) || '');
+    const rawCity = clean(override.city || fields.city || titleCity || '');
     const city = normalizeCity(rawCity);
     if (!city) return { skip: 'no city' };
 
@@ -570,23 +569,12 @@ function loadPrevious(file) {
     }
 }
 
-// Cities from the previous run, for the few markers MAI publishes without one
-function cityCache(previous) {
-    const cache = new Map();
-    for (const loc of previous || []) {
-        if (loc.city && loc.city !== 'Unknown' && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
-            cache.set(coordKey(loc.lat, loc.lng), loc.city);
-        }
-    }
-    return cache;
-}
-
 // Markers without a usable id go last; transformMarker skips them anyway
 function numericId(marker) {
     return marker && /^\d+$/.test(String(marker.id)) ? Number(marker.id) : Infinity;
 }
 
-function buildLocations(markers, cityByCoord, overrides = {}) {
+function buildLocations(markers, overrides = {}) {
     // MAI does not promise an order. Sorting first means the same markers always
     // give the same file, whichever order they arrive in.
     const sorted = [...markers].sort((a, b) => {
@@ -598,7 +586,7 @@ function buildLocations(markers, cityByCoord, overrides = {}) {
     const skipped = {};
     const entries = [];
     for (const marker of sorted) {
-        const result = transformMarker(marker, cityByCoord, overrides);
+        const result = transformMarker(marker, overrides);
         if (result.skip) {
             skipped[result.skip] = (skipped[result.skip] || 0) + 1;
         } else {
@@ -763,7 +751,7 @@ async function run(options = {}) {
 
     const previous = loadPrevious(files.output);
     const overrides = loadOverrides(files.overrides);
-    const built = buildLocations(markers, cityCache(previous), overrides);
+    const built = buildLocations(markers, overrides);
     const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched } = built;
     console.log('Skipped:', skipped);
     console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped) + ', names disambiguated: ' + stats.renamed);
