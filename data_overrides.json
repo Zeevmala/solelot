@@ -17,6 +17,8 @@
     "Added 2026-11-26 (spatial audit): 14 excludes where points of one street in one city are over 1.5 km apart and a Nominatim reverse or forward geocode puts the pin in another town or on another street than the address (342619, 343674, 343678, 343793, 344802, 344960, 345162, 345267, 345578, 345581, 345646, 345672, 345809, 346367; 1.9-10 km off). 3 second entries of one point under a wrong city, pins under 30 m apart, the entry that contradicts its pin is left out (343051 = 347269, 344893 = 344892, 346460 = 346186).",
     "Added 2026-11-26 (same address, pins over 1 km apart), each checked with Nominatim: 342645 and 344846 (קניון מלחה) sit on בית\"ר street in תלפיות, 3.6 km east of the mall and of its nine other pins; 345126 (ביג צ'ק פוסט) is at דרך בר יהודה 107 in נשר and 345129 at נווה שאנן, 2.0 and 1.3 km from the complex at בר יהודה 111; 345088 (קניון עזריאלי חיפה) is at ויצו 9, כרמליה, 1.2 km from its six other pins; 345922 (אבן עזרא 16, אשדוד) is 834 m from every part of the street in OpenStreetMap, at כיכר התרבות, while its twin 346101 is 57 m from it; 346589 (ויצמן 1, אשדוד) is on ויצמן street in קריית מלאכי, 12 km from אשדוד, the same slip as 346367. Kept: 344011 (הרצל 91, רמלה) is on the house-level geocode; 346743 and 346744 (דרך השלום 20, נשר) are both on the street (9 m and 45 m) and nothing says which is number 20; 347326 (קולומביה, address ביג רגבה, pin and city חוצות המפרץ, 19 km apart) cannot be told.",
     "Added 2026-11-26 (new validator warning 14d: same street in one city, nearest same-street point over 1.5 km away), each checked with Nominatim: 346486 (קואופ שופ, דב גור 27, אשדוד) is 2.25 km from every part of דב גור while 347344 (דב גור 15) is 39 m from it; 345778 (מחסני חשמל, שדרות המייסדים 15, מעלה אדומים) is on שדרות החברה הכלכלית, 2.8 km from the three points at numbers 15-17, which sit together at גבעת המייסדים.",
+    "Added 2026-11-26: 3 second entries of one shop (validator check 25: same chain, same address, under 100 m), 63-90 m apart, so further apart than the 50 m the scraper merges by itself; the higher id is left out, as the scraper does: 343429 = 343376 (רמי לוי, דבורה הנביאה 128, תל אביב), 346637 = 343522 (קרביץ, המלאכה 2, רעננה), 344569 = 344434 (רמי לוי, תדהר 1, פרדס חנה).",
+    "Added 2026-11-26: 344231 (קרביץ, \"מתחפ ביג פוריה\") is in טבריה: Nominatim puts the pin on המברג in אזור תעשייה טבריה עלית, where the other shops of the same BIG centre are listed under טבריה. It became the only point of \"פוריה\" when its second entry 346634 was merged into it (warning 14c).",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -148,6 +150,9 @@
     },
     "344228": {
       "city": "נהריה"
+    },
+    "344231": {
+      "city": "טבריה"
     },
     "344254": {
       "city": "פתח תקווה"
@@ -488,6 +493,9 @@
     "343383": {
       "exclude": true
     },
+    "343429": {
+      "exclude": true
+    },
     "343492": {
       "exclude": true
     },
@@ -555,6 +563,9 @@
       "exclude": true
     },
     "344531": {
+      "exclude": true
+    },
+    "344569": {
       "exclude": true
     },
     "344574": {
@@ -753,6 +764,9 @@
       "exclude": true
     },
     "346615": {
+      "exclude": true
+    },
+    "346637": {
       "exclude": true
     },
     "346687": {

@@ -14,7 +14,7 @@ const scraper = require('./scraper.js');
 const { transformMarker, buildLocations, determineChain, normalizeCity, municipalName } = scraper;
 const {
     clean, isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters,
-    streetKey, sameStreet, checkCount, parseArgs, run, changesSince
+    streetKey, sameStreet, checkCount, parseArgs, run, changesSince, shopChain
 } = scraper;
 
 // A marker shaped like the real MAI API response
@@ -576,6 +576,57 @@ test('parseArgs: --input needs a path', () => {
 });
 
 // --- the real fixture: 33 markers copied from the MAI API on 2026-11-25 ---
+
+test('one shop listed twice: same chain within 50 m, same street or one without a house number -> the lower id stays', () => {
+    const { locations, dropped, stats } = buildLocations([
+        // real: 345582 / 345669, the phone counter inside the same רמי לוי, 18 m apart
+        marker({ id: '345669', lat: '31.796689', lng: '35.146284' }, { business_name: 'רמי לוי', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
+        marker({ id: '345582', lat: '31.79683328091107', lng: '35.14636170421983' }, { business_name: 'רמי לוי - תקשורת', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
+        // real: 344152 / 345148 אייס צומת וולקן, 4 m apart; neither has a house number, the streets differ
+        marker({ id: '344152', lat: '32.811818', lng: '35.072960' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'צומת וולקן', house_number: undefined, neighborhood: 'צומת וולקן' }),
+        marker({ id: '345148', lat: '32.811844', lng: '35.072932' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'החרושת', house_number: undefined, neighborhood: 'צומת וולקן, מפרץ חיפה' })
+    ]);
+    assert.deepStrictEqual(locations.map(l => l.id), [344152, 345582]);
+    assert.deepStrictEqual(dropped.sameShop, [{ id: 345148, sameAs: 344152 }, { id: 345669, sameAs: 345582 }]);
+    assert.strictEqual(stats.sameShop, 2);
+});
+
+test('one shop listed twice: different house numbers are never merged (אבי סופר, אלנבי 113, 122 and 124)', () => {
+    // real: three shops within 23 m
+    const avi = (id, lat, lng, number) => marker({ id, lat, lng }, { business_name: 'אבי סופר', city: 'תל אביב', street: 'אלנבי', house_number: number });
+    const { locations, dropped } = buildLocations([
+        avi('343536', '32.062731', '34.773254', '113'),
+        avi('343540', '32.062690', '34.773227', '124'),
+        avi('343543', '32.062893', '34.773172', '122')
+    ]);
+    assert.deepStrictEqual(locations.map(l => l.id), [343536, 343540, 343543]);
+    assert.deepStrictEqual(dropped.sameShop, []);
+});
+
+test('one shop listed twice: not another chain, not another fuel brand, not over 50 m, not a municipal point', () => {
+    const at = (id, lat, fields) => marker({ id, lat, lng: '35.0' }, { street: 'הרצל', house_number: '10', ...fields });
+    const { locations, dropped } = buildLocations([
+        at('1', '32.80000', { business_name: 'באג' }),
+        at('2', '32.80010', { business_name: 'גלי' }),                              // 11 m, another chain
+        at('3', '32.81000', { business_name: 'תחנת דלק - פז YELLOW' }),
+        at('4', '32.81010', { business_name: 'תחנת דלק - דור אלון' }),              // 11 m, another brand
+        at('5', '32.82000', { business_name: 'מחסני חשמל' }),
+        at('6', '32.82055', { business_name: 'מחסני חשמל - סניף הרצל' }),            // 61 m
+        at('7', '32.83000', { business_name: 'רשות מקומית - מוקד איסוף', neighborhood: 'ספרייה' }),
+        at('8', '32.83010', { business_name: 'רשות מקומית - מוקד איסוף', neighborhood: 'מתנ"ס' }) // two buildings
+    ]);
+    assert.deepStrictEqual(locations.map(l => l.id), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.deepStrictEqual(dropped.sameShop, []);
+});
+
+test('shopChain: the first part of the name, with the brand for a fuel station; none for a municipal point', () => {
+    assert.strictEqual(shopChain('רמי לוי - תקשורת - קניון עטרות'), 'רמי לוי');
+    assert.strictEqual(shopChain('רמי לוי'), 'רמי לוי');
+    assert.strictEqual(shopChain('תחנת דלק - פז YELLOW - צומת סעד'), 'תחנת דלק - פז YELLOW');
+    assert.strictEqual(shopChain('סופר-פארם - דיזנגוף'), 'סופר-פארם');
+    assert.strictEqual(shopChain('מוקד איסוף - ספרייה'), '');
+    assert.strictEqual(shopChain('נקודת איסוף - הרצל 4'), '');
+});
 
 const FIXTURE = path.join(__dirname, 'test-fixtures', 'raw_sample.json');
 

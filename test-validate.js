@@ -316,3 +316,20 @@ test('24 warns (exit 0) when one city name is another plus a word, unless the pa
     assert.match(result.block('24'), /משגב \(1\) \/ מועצה אזורית משגב \(1\)/);
     assert.doesNotMatch(result.block('24'), /יבנה/);
 });
+
+test('check 25 fails on one shop listed twice: same chain, same address, under 100 m', () => {
+    const north = m => Number((32.09 + m / 1000 / KM_PER_DEGREE_LAT).toFixed(6));
+    const shop = (id, metres, name, address) => point(id, north(metres), 34.79, { name, address });
+    const result = validate([...cleanPoints(),
+        shop(101, 0, 'רמי לוי', 'תדהר 1, תל אביב'), shop(102, 90, 'רמי לוי - תקשורת', 'תדהר 1, תל אביב'),
+        // the same address written with a geresh: one address
+        shop(103, 1000, 'קרביץ', "ז'בוטינסקי 2, תל אביב"), shop(104, 1050, 'קרביץ - רננים', 'זבוטינסקי 2, תל אביב'),
+        // kept: 120 m apart; another chain; another house number; municipal points (two buildings)
+        shop(105, 2000, 'גלי', 'הרצל 3, תל אביב'), shop(106, 2120, 'גלי - מרכז', 'הרצל 3, תל אביב'),
+        shop(107, 3000, 'באג', 'ויצמן 5, תל אביב'), shop(108, 3010, 'מגה', 'ויצמן 5, תל אביב'),
+        shop(109, 4000, 'אבי סופר - אלנבי 113', 'אלנבי 113, תל אביב'), shop(110, 4005, 'אבי סופר - אלנבי 124', 'אלנבי 124, תל אביב'),
+        shop(111, 5000, 'מוקד איסוף - ספרייה', 'העלייה 1, תל אביב'), shop(112, 5010, 'מוקד איסוף - מתנ"ס', 'העלייה 1, תל אביב')]);
+    assertFails(result, 25, /2 issues/);
+    assert.match(result.block(25), /id=102: same shop as id=101, 90 m - "רמי לוי - תקשורת"/);
+    assert.match(result.block(25), /id=104: same shop as id=103/);
+});

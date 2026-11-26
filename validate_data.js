@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 // Shared with the scraper so the two cannot disagree on what "inactive" or "same street" means.
 // Requiring scraper.js runs nothing: it only calls its main() when executed directly.
-const { isMarkedInactive, isSchool, streetKey, sameStreet } = require('./scraper.js');
+const { isMarkedInactive, isSchool, streetKey, sameStreet, shopChain } = require('./scraper.js');
 
 const INPUT_FILE = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, 'locations.json');
 
@@ -434,6 +434,28 @@ function main() {
     }
     console.log(`[!] 24. One city name inside another (warning): ${nested.length} pairs to review`);
     nested.forEach(pair => console.log(`    ${pair}`));
+
+    // 25. One shop listed twice: the same chain (the scraper's shopChain, so "רמי לוי - תקשורת" is "רמי לוי")
+    // at the same address, under 100 m apart. The scraper merges such pairs up to 50 m (dropSameShop);
+    // a pair 50-100 m apart goes in data_overrides.json (exclude the higher id).
+    // The address is compared without spaces, punctuation and quotes, and with double yod/vav as one.
+    // Municipal points are not a chain and are not compared. Cannot see: one shop under two addresses.
+    const SAME_SHOP_KM = 0.1;
+    const plainAddress = address => String(address || '').replace(/[\s"'׳״.,\-]/g, '').replace(/יי/g, 'י').replace(/וו/g, 'ו');
+    const shopsByKey = {};
+    for (const loc of locations) {
+        const chain = shopChain(String(loc.name || ''));
+        if (chain) (shopsByKey[chain + '\0' + plainAddress(loc.address)] = shopsByKey[chain + '\0' + plainAddress(loc.address)] || []).push(loc);
+    }
+    const sameShop = [];
+    for (const group of Object.values(shopsByKey)) {
+        group.sort((a, b) => a.id - b.id);
+        group.forEach((loc, i) => {
+            const first = group.slice(0, i).find(other => distanceKm(loc, other) < SAME_SHOP_KM);
+            if (first) sameShop.push({ id: loc.id, reason: `same shop as id=${first.id}, ${Math.round(distanceKm(loc, first) * 1000)} m - "${loc.name}" - ${loc.address}` });
+        });
+    }
+    check('25. One shop listed once', sameShop, true);
 
     // Summary
     console.log(`\n--- ${totalFails === 0 ? 'ALL CHECKS PASSED' : totalFails + ' TOTAL ISSUES'} (${locations.length} locations) ---`);

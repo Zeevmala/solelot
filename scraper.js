@@ -54,6 +54,8 @@ const MIN_POINTS = 1000;
 const MIN_SHARE_OF_PREVIOUS = 0.9;
 // Two records with the same name, city and street closer than this are one point listed twice
 const SAME_PLACE_METERS = 100;
+// Two records of one chain closer than this, on one street, are one shop listed twice (see dropSameShop)
+const SAME_SHOP_METERS = 50;
 // A point whose pin is further than this from where it was in the previous file has "moved"
 const MOVED_METERS = 100;
 // Refuse to save when more than this share of the previous points was removed or moved
@@ -567,6 +569,53 @@ function dropStacked(entries) {
     return { entries: kept, groups };
 }
 
+// Names this scraper gives to points without a shop name of their own. They are not a chain:
+// two municipal points 50 m apart are usually two buildings (a library and a community centre).
+const GENERIC_NAMES = ['מוקד איסוף', 'נקודת איסוף'];
+
+// The chain of a shop: the first part of its name ("רמי לוי - תקשורת - קניון עטרות" -> "רמי לוי"),
+// and for a fuel station the brand too ("תחנת דלק - פז YELLOW"). '' for a generic name.
+function shopChain(name) {
+    const parts = name.split(HYPHEN_SEPARATOR).map(clean);
+    const chain = parts[0] === 'תחנת דלק' ? parts.slice(0, 2).join(' - ') : parts[0];
+    return GENERIC_NAMES.includes(chain) ? '' : chain;
+}
+
+// The house number in a street ("הרצל 10" -> "10"). A road number ("כביש 40") is not a house number.
+function houseNumber(street) {
+    return (street.replace(/כביש \d+/g, '').match(/\d+/g) || []).join(' ');
+}
+
+// MAI lists some shops twice: "רמי לוי" and "רמי לוי - תקשורת" (the phone counter inside it), or one
+// branch under two names. Two entries are one shop when they have the same shopChain, are at most
+// SAME_SHOP_METERS apart, and have the same street (streetKey) or one of them has no house number.
+// Two different house numbers are never one shop: אבי סופר at אלנבי 113, 122 and 124 are three shops
+// within 23 m. The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
+function dropSameShop(entries) {
+    const byChain = new Map(); // chain -> entries kept so far
+    const dropped = [];
+    const gone = new Set();
+    for (const entry of [...entries].sort((a, b) => a.location.id - b.location.id)) {
+        const chain = shopChain(entry.location.name);
+        if (!chain) continue;
+        if (!byChain.has(chain)) byChain.set(chain, []);
+        const number = houseNumber(entry.street);
+        const twin = byChain.get(chain).find(other => {
+            const otherNumber = houseNumber(other.street);
+            if (number && otherNumber && number !== otherNumber) return false;
+            if (number && otherNumber && streetKey(entry.street) !== streetKey(other.street)) return false;
+            return distanceMeters(entry.location, other.location) <= SAME_SHOP_METERS;
+        });
+        if (twin) {
+            dropped.push({ id: entry.location.id, sameAs: twin.location.id });
+            gone.add(entry);
+        } else {
+            byChain.get(chain).push(entry);
+        }
+    }
+    return { entries: entries.filter(entry => !gone.has(entry)), dropped };
+}
+
 function loadFacilities(file) {
     if (!fs.existsSync(file)) {
         console.warn('facilities.json not found - no facilities will be added');
@@ -636,7 +685,10 @@ function buildLocations(markers, overrides = {}) {
         return true;
     });
 
-    const { entries: named, renamed, dropped: sameName, farTwins } = disambiguate(unique);
+    // One shop under two names ("רמי לוי" and "רמי לוי - תקשורת"), before names are told apart
+    const { entries: shops, dropped: sameShop } = dropSameShop(unique);
+
+    const { entries: named, renamed, dropped: sameName, farTwins } = disambiguate(shops);
     const locations = named.map(entry => entry.location).sort((a, b) => a.id - b.id);
 
     // An override whose id is not in the MAI response does nothing any more
@@ -650,10 +702,11 @@ function buildLocations(markers, overrides = {}) {
             sameSpot: sameSpot.length,
             renamed,
             dropped: sameName.length,
+            sameShop: sameShop.length,
             stackedGroups: stacked.length,
             stackedPoints: stacked.reduce((sum, group) => sum + group.ids.length, 0)
         },
-        dropped: { sameSpot, sameName, stacked },
+        dropped: { sameSpot, sameName, sameShop, stacked },
         farTwins,
         overridesUnmatched
     };
@@ -778,9 +831,12 @@ async function run(options = {}) {
     const built = buildLocations(markers, overrides);
     const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched } = built;
     console.log('Skipped:', skipped);
-    console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped) + ', names disambiguated: ' + stats.renamed);
+    console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped + stats.sameShop) + ', names disambiguated: ' + stats.renamed);
     for (const d of [...dropped.sameSpot, ...dropped.sameName]) {
         console.log('  duplicate ' + d.id + ' dropped, same point as ' + d.sameAs);
+    }
+    for (const d of dropped.sameShop) {
+        console.log('  duplicate ' + d.id + ' dropped, same shop as ' + d.sameAs);
     }
     console.log('Stacked coordinates dropped: ' + stats.stackedPoints + ' points in ' + stats.stackedGroups +
         ' groups (one coordinate, different streets)');
@@ -834,7 +890,7 @@ async function run(options = {}) {
         raw_markers: markers.length,
         kept: stores.length,
         skipped: skipped,
-        duplicates_removed: stats.sameSpot + stats.dropped,
+        duplicates_removed: stats.sameSpot + stats.dropped + stats.sameShop,
         stacked_dropped: stats.stackedPoints,
         overrides_unmatched: overridesUnmatched.map(Number),
         changes: changes
@@ -863,5 +919,5 @@ if (require.main === module) {
 module.exports = {
     transformMarker, buildLocations, determineChain, normalizeCity, municipalName, clean,
     isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
-    disambiguate, checkCount, parseArgs, run, changesSince
+    disambiguate, checkCount, parseArgs, run, changesSince, shopChain, houseNumber
 };
