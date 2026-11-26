@@ -14,7 +14,7 @@ const scraper = require('./scraper.js');
 const { transformMarker, buildLocations, determineChain, normalizeCity, municipalName } = scraper;
 const {
     clean, isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters,
-    streetKey, sameStreet, checkCount, parseArgs, run
+    streetKey, sameStreet, checkCount, parseArgs, run, changesSince
 } = scraper;
 
 // A marker shaped like the real MAI API response
@@ -640,7 +640,11 @@ function tempDir(t) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scraper-test-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     fs.writeFileSync(path.join(dir, 'facilities.json'), JSON.stringify({ locations: [] }));
-    fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides: { 400001: { exclude: true }, 77: { city: 'x' } } }));
+    // 10 overrides, one of them (77) matching no marker. The other eight give markers the city they
+    // already have, so they change nothing. One unmatched in ten is allowed; more refuses to save.
+    const overrides = { 400001: { exclude: true }, 77: { city: 'x' } };
+    for (let id = 400002; id <= 400009; id++) overrides[id] = { city: 'חיפה' };
+    fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides }));
     return dir;
 }
 
@@ -670,14 +674,19 @@ test('run writes locations.json and data_meta.json, with no .tmp file left', asy
         skipped: { 'old map': 1, 'excluded by data_overrides.json': 1 },
         duplicates_removed: 0,
         stacked_dropped: 0,
-        overrides_unmatched: [77]
+        overrides_unmatched: [77],
+        changes: null // there was no previous file to compare with
     });
     assert.deepStrictEqual(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')), []);
 
-    // a second run on the same input gives the same bytes
+    // a second run on the same input gives the same bytes, and reports that nothing changed
     const first = fs.readFileSync(path.join(dir, 'locations.json'), 'utf8');
-    await run({ dir, input });
+    const again = await run({ dir, input });
     assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), first);
+    assert.deepStrictEqual(again.changes, {
+        counts: { added: 0, removed: 0, moved: 0, renamed: 0, cityChanged: 0 },
+        added: [], removed: [], moved: [], renamed: [], cityChanged: []
+    });
 });
 
 test('run refuses to save under 1,000 points and leaves the old files alone', async (t) => {
@@ -703,7 +712,77 @@ test('run refuses to save under 90 % of the previous count unless forced', async
     assert.strictEqual(meta.kept, 1699);
     assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8')).locations.length, 1699);
 
-    await run({ dir, input: writeRaw(dir, manyMarkers(1600)) });             // 1,599 of 1,699 = 94 % -> fine
+    await run({ dir, input: writeRaw(dir, manyMarkers(1650)) });             // 1,649 of 1,699 = 97 % -> fine
+});
+
+test('changesSince lists what was added, removed, moved over 100 m, renamed or given another city', () => {
+    const at = (id, lat, extra = {}) => ({ id, name: 'חנות ' + id, city: 'חיפה', lat, lng: 35.0, ...extra });
+    const previous = [at(1, 32.8), at(2, 32.8), at(3, 32.8), at(4, 32.8), at(5, 32.8), at(6, 32.8)];
+    const stores = [
+        at(1, 32.8),                        // unchanged
+        at(3, 32.8018),                     // 200 m north
+        at(4, 32.8005),                     // 56 m north: not a move
+        at(5, 32.8, { name: 'חנות חדשה' }),
+        at(6, 32.8, { city: 'נשר' }),
+        at(7, 32.8)                         // new; 2 is gone
+    ];
+    assert.deepStrictEqual(changesSince(previous, stores), {
+        added: [7], removed: [2], moved: [3], renamed: [5], cityChanged: [6]
+    });
+    const none = changesSince(previous, previous);
+    assert.deepStrictEqual(none, { added: [], removed: [], moved: [], renamed: [], cityChanged: [] });
+});
+
+// The markers of manyMarkers, with the first `count` moved 150 m north
+function withMoved(markers, count) {
+    return markers.map((m, i) => (i < count ? { ...m, lat: (Number(m.lat) + 0.00135).toFixed(5) } : m));
+}
+
+test('run refuses to save when over 5 % of the points moved or went, unless forced', async (t) => {
+    const dir = tempDir(t);
+    await run({ dir, input: writeRaw(dir, manyMarkers(1200)) });             // previous file: 1,199 points
+    const before = fs.readFileSync(path.join(dir, 'locations.json'), 'utf8');
+    const metaBefore = fs.readFileSync(path.join(dir, 'data_meta.json'), 'utf8');
+
+    const moved = writeRaw(dir, withMoved(manyMarkers(1200), 73));            // 72 kept points moved = 6 %
+    await assert.rejects(run({ dir, input: moved }), /72 of 1199 points were removed or moved.*--force.*NOT changed/);
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), before);
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'data_meta.json'), 'utf8'), metaBefore);
+
+    const meta = await run({ dir, input: moved, force: true });
+    assert.strictEqual(meta.changes.counts.moved, 72);
+    assert.strictEqual(meta.changes.moved.length, 72);
+    assert.deepStrictEqual(meta.changes.moved.slice(0, 2), [400000, 400002]); // 400001 is excluded
+});
+
+test('run saves a small change and writes it to data_meta.json', async (t) => {
+    const dir = tempDir(t);
+    await run({ dir, input: writeRaw(dir, manyMarkers(1200)) });
+    const next = withMoved(manyMarkers(1201), 3).slice(0, 1201).filter(m => m.id !== '400010');
+    const meta = await run({ dir, input: writeRaw(dir, next) });
+    assert.deepStrictEqual(meta.changes, {
+        counts: { added: 1, removed: 1, moved: 2, renamed: 0, cityChanged: 0 },
+        added: [401200], removed: [400010], moved: [400000, 400002], renamed: [], cityChanged: []
+    });
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'data_meta.json'), 'utf8')).changes, meta.changes);
+});
+
+test('run refuses to save when over 10 % of the overrides match no marker, unless forced', async (t) => {
+    const dir = tempDir(t);
+    fs.writeFileSync(path.join(dir, 'locations.json'), 'OLD');
+    const input = writeRaw(dir, manyMarkers(1200));
+    const overrides = JSON.parse(fs.readFileSync(path.join(dir, 'data_overrides.json'), 'utf8')).overrides;
+    delete overrides[400009];
+    overrides[78] = { exclude: true };                                       // now 2 of 10 match nothing
+    fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides }));
+    await assert.rejects(run({ dir, input }),
+        /2 of 10 overrides match no MAI marker - MAI may have renumbered its markers\..*NOT changed/);
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), 'OLD');
+    assert.ok(!fs.existsSync(path.join(dir, 'data_meta.json')));
+
+    fs.rmSync(path.join(dir, 'locations.json'));
+    const meta = await run({ dir, input, force: true });
+    assert.deepStrictEqual(meta.overrides_unmatched, [77, 78]);
 });
 
 test('command line: --input without a path is a usage error (exit 1)', () => {

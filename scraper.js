@@ -9,7 +9,8 @@
  * Usage:
  *   node scraper.js                     fetch live data from MAI
  *   node scraper.js --input raw.json    rebuild from a saved API response
- *   node scraper.js --force             save even if many points disappeared
+ *   node scraper.js --force             save even if many points disappeared or moved,
+ *                                       or many overrides match no marker
  *
  * It writes locations.json and data_meta.json (where the data came from, when,
  * and how many markers were kept, skipped and dropped).
@@ -53,6 +54,12 @@ const MIN_POINTS = 1000;
 const MIN_SHARE_OF_PREVIOUS = 0.9;
 // Two records with the same name, city and street closer than this are one point listed twice
 const SAME_PLACE_METERS = 100;
+// A point whose pin is further than this from where it was in the previous file has "moved"
+const MOVED_METERS = 100;
+// Refuse to save when more than this share of the previous points was removed or moved
+const MAX_SHARE_REMOVED_OR_MOVED = 0.05;
+// Refuse to save when more than this share of the overrides matches no marker
+const MAX_SHARE_OVERRIDES_UNMATCHED = 0.1;
 
 // Israel bounding box (same numbers as app.js and validate_data.js)
 const BOUNDS = { minLat: 29, maxLat: 34, minLng: 34, maxLng: 36 };
@@ -654,6 +661,52 @@ function checkCount(newCount, previousCount, force) {
     return null;
 }
 
+// What a refresh changed, as lists of ids: previous and stores are the collection
+// points of the old and the new locations.json. "moved" = the pin is more than
+// MOVED_METERS from where it was. A count that stays the same can hide all of these.
+function changesSince(previous, stores) {
+    const before = new Map(previous.map(loc => [loc.id, loc]));
+    const nowIds = new Set(stores.map(loc => loc.id));
+    const changes = { added: [], removed: [], moved: [], renamed: [], cityChanged: [] };
+    for (const loc of stores) {
+        const old = before.get(loc.id);
+        if (!old) {
+            changes.added.push(loc.id);
+            continue;
+        }
+        if (distanceMeters(old, loc) > MOVED_METERS) changes.moved.push(loc.id);
+        if (old.name !== loc.name) changes.renamed.push(loc.id);
+        if (old.city !== loc.city) changes.cityChanged.push(loc.id);
+    }
+    for (const loc of previous) {
+        if (!nowIds.has(loc.id)) changes.removed.push(loc.id);
+    }
+    for (const list of Object.values(changes)) list.sort((a, b) => a - b);
+    return changes;
+}
+
+// Returns the reason not to save, or null. A large change may be real (MAI
+// re-imported its map), but a person should look at it first.
+function checkChanges(changes, previousCount, force) {
+    const gone = changes.removed.length + changes.moved.length;
+    if (!force && gone > previousCount * MAX_SHARE_REMOVED_OR_MOVED) {
+        return gone + ' of ' + previousCount + ' points were removed or moved more than ' + MOVED_METERS +
+            ' m (over 5 %). Check the Changes lines above; if the change is real, run again with --force.';
+    }
+    return null;
+}
+
+// Returns the reason not to save, or null. Overrides are keyed by MAI marker id,
+// so when many stop matching, MAI has probably given its markers new ids and
+// every known-wrong pin would come back.
+function checkOverrides(unmatchedCount, overrideCount, force) {
+    if (!force && unmatchedCount > overrideCount * MAX_SHARE_OVERRIDES_UNMATCHED) {
+        return unmatchedCount + ' of ' + overrideCount + ' overrides match no MAI marker - ' +
+            'MAI may have renumbered its markers. If that is expected, run again with --force.';
+    }
+    return null;
+}
+
 // Reads the command line. Throws on a mistake so main() can print it and exit 1.
 function parseArgs(argv) {
     const options = { input: null, force: argv.includes('--force') };
@@ -680,7 +733,8 @@ function writeJsonAtomic(file, data) {
  * The whole refresh. options:
  *   dir    folder with facilities.json, data_overrides.json and the output (default: this folder)
  *   input  path of a saved API response; without it the live API is fetched
- *   force  save even when the count fell under 90 % of the previous file
+ *   force  save even when the count fell under 90 % of the previous file, over 5 % of
+ *          its points were removed or moved, or over 10 % of the overrides match nothing
  * Returns the object written to data_meta.json.
  */
 async function run(options = {}) {
@@ -708,7 +762,8 @@ async function run(options = {}) {
     console.log('Fetched ' + markers.length + ' markers');
 
     const previous = loadPrevious(files.output);
-    const built = buildLocations(markers, cityCache(previous), loadOverrides(files.overrides));
+    const overrides = loadOverrides(files.overrides);
+    const built = buildLocations(markers, cityCache(previous), overrides);
     const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched } = built;
     console.log('Skipped:', skipped);
     console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped) + ', names disambiguated: ' + stats.renamed);
@@ -738,8 +793,27 @@ async function run(options = {}) {
     const locations = [...facilities, ...stores];
 
     // Refuse to overwrite good data with a broken response (e.g. API schema change)
-    const previousStores = previous ? previous.filter(loc => loc.type === 'store').length : null;
-    const problem = checkCount(stores.length, previousStores, options.force);
+    const previousStores = previous ? previous.filter(loc => loc.type === 'store') : null;
+    let problem = checkCount(stores.length, previousStores && previousStores.length, options.force);
+    if (!problem) problem = checkOverrides(overridesUnmatched.length, Object.keys(overrides).length, options.force);
+
+    // What changed since the previous file (null when there is none to compare with)
+    let changes = null;
+    if (previousStores) {
+        const lists = changesSince(previousStores, stores);
+        const counts = {};
+        for (const [kind, ids] of Object.entries(lists)) counts[kind] = ids.length;
+        changes = { counts, ...lists };
+        console.log('Changes since the previous locations.json: ' +
+            Object.entries(counts).map(([kind, count]) => kind + ' ' + count).join(', '));
+        for (const [kind, ids] of Object.entries(lists)) {
+            if (ids.length > 0) {
+                console.log('  ' + kind + ': ' + ids.slice(0, 20).join(', ') +
+                    (ids.length > 20 ? ' ... and ' + (ids.length - 20) + ' more (all in data_meta.json)' : ''));
+            }
+        }
+        if (!problem) problem = checkChanges(lists, previousStores.length, options.force);
+    }
     if (problem) throw new Error(problem + ' locations.json was NOT changed.');
 
     const meta = {
@@ -750,7 +824,8 @@ async function run(options = {}) {
         skipped: skipped,
         duplicates_removed: stats.sameSpot + stats.dropped,
         stacked_dropped: stats.stackedPoints,
-        overrides_unmatched: overridesUnmatched.map(Number)
+        overrides_unmatched: overridesUnmatched.map(Number),
+        changes: changes
     };
     writeJsonAtomic(files.output, { locations });
     writeJsonAtomic(files.meta, meta);
@@ -776,5 +851,5 @@ if (require.main === module) {
 module.exports = {
     transformMarker, buildLocations, determineChain, normalizeCity, municipalName, clean,
     isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
-    disambiguate, checkCount, parseArgs, run
+    disambiguate, checkCount, parseArgs, run, changesSince
 };
