@@ -243,19 +243,107 @@ check('the map follows the text in the box (typing wait, clear, pick)', async ()
     expect(s.box === '' && s.count === s.total, `location picked inside the typing wait: box "${s.box}", ${s.count} of ${s.total} shown`);
 });
 
-check('?action=nearest waits for the data, then shows the nearest point', async () => {
-    const { context, page, problems } = await openPage({ geolocation: TEL_AVIV, permissions: ['geolocation'] });
+// After "nearest": the details of the nearest point are open, its pin is the one
+// selected pin and is above the sheet, a navigate link can be seen
+const nearestState = page => page.evaluate(() => {
+    const sheet = document.getElementById('sidebar');
+    const nav = document.querySelector('#sidebar a.sidebar-nav-btn.waze');
+    const navBox = nav ? nav.getBoundingClientRect() : null;
+    const pins = [...document.querySelectorAll('.battery-marker.selected')];
+    const pinBox = pins.length === 1 ? pins[0].getBoundingClientRect() : null;
+    const sheetTop = window.innerWidth <= 768 ? sheet.getBoundingClientRect().top : window.innerHeight;
+    const nearest = userLocation && findNearestLocation(userLocation.lat, userLocation.lng);
+    return {
+        open: sheet.style.display !== 'none' && !sheet.classList.contains('hidden'),
+        title: (document.querySelector('#sidebar h2') || {}).textContent,
+        nearest: nearest ? nearest.location.name : null,
+        distanceText: (document.querySelector('#sidebar .distance') || {}).textContent || '',
+        pins: pins.length,
+        pinAboveSheet: !!pinBox && pinBox.top >= 0 && pinBox.bottom <= sheetTop && pinBox.left >= 0 && pinBox.right <= window.innerWidth,
+        navVisible: !!navBox && navBox.width > 0 && navBox.top >= 0 && navBox.bottom <= window.innerHeight,
+        userDotInteractive: !!(userMarker && userMarker.options.interactive),
+        userDotPopup: !!(userMarker && userMarker.getPopup()),
+        active: document.querySelector('.locate-btn').classList.contains('active'),
+        zoom: map.getZoom(),
+        toast: document.getElementById('notification').style.display !== 'none' ? document.getElementById('notification').textContent : ''
+    };
+});
+const tapLocate = async page => { await page.click('.locate-btn'); await page.waitForTimeout(300); await mapSettled(page); await page.waitForTimeout(400); };
+
+check('?action=nearest waits for the data, then opens the nearest point', async () => {
+    const { context, page, problems } = await openPage({ viewport: PHONE, geolocation: TEL_AVIV, permissions: ['geolocation'] });
     // locations.json arrives 2 seconds late, as on a slow connection
     await page.route('**/locations.json', async route => {
         if (route.request().resourceType() === 'fetch') await new Promise(done => setTimeout(done, 2000));
         route.continue();
     });
     await page.goto(server.base + '?action=nearest');
-    const ok = await page.waitForFunction(() => document.getElementById('notification').textContent.startsWith('הנקודה הקרובה:'), null, { timeout: 15000 }).then(() => true, () => false);
-    const toast = await page.textContent('#notification');
-    const active = await page.evaluate(() => typeof gpsActive !== 'undefined' && gpsActive);
+    const ok = await page.waitForFunction(() => typeof allLocations !== 'undefined' && allLocations.length > 0 && document.getElementById('sidebar').style.display === 'flex', null, { timeout: 15000 }).then(() => true, () => false);
+    await mapSettled(page); await page.waitForTimeout(400);
+    const s = await nearestState(page);
     await context.close();
-    expect(ok && active, `toast was "${toast}", locate button active: ${active} ${problems.filter(p => p.startsWith('page')).join(' ; ')}`);
+    expect(ok && s.open && s.title === s.nearest && s.pins === 1 && s.pinAboveSheet && s.navVisible && s.active,
+        `?action=nearest: ${JSON.stringify(s)} ${problems.filter(p => p.startsWith('page')).join(' ; ')}`);
+});
+
+check('nearest: one tap opens the nearest point above the sheet; a second tap re-centres', async () => {
+    const places = { 'Tel Aviv': [32.08, 34.78], 'Jerusalem': [31.778, 35.225], 'Haifa': [32.794, 34.9896], 'Mitzpe Ramon': [30.6103, 34.8019] };
+    for (const viewport of [PHONE, DESKTOP]) {
+        for (const [where, [latitude, longitude]] of Object.entries(places)) {
+            const { context, page, problems } = await openApp({ viewport, geolocation: { latitude, longitude, accuracy: 20 }, permissions: ['geolocation'] });
+            await tapLocate(page);
+            const s = await nearestState(page);
+            const label = `${where} at ${viewport.width}px`;
+            expect(s.open && s.title === s.nearest, `${label}: details show "${s.title}", nearest is "${s.nearest}"`);
+            expect(s.pins === 1 && s.pinAboveSheet, `${label}: ${s.pins} selected pins, above the sheet: ${s.pinAboveSheet}`);
+            expect(s.navVisible, `${label}: no visible navigate link`);
+            expect(/ בקו אווירי$/.test(s.distanceText), `${label}: distance text "${s.distanceText}"`);
+            expect(!s.userDotInteractive && !s.userDotPopup && s.active, `${label}: user dot interactive ${s.userDotInteractive}, popup ${s.userDotPopup}, button active ${s.active}`);
+            expect(s.toast === '', `${label}: a toast "${s.toast}" next to the open sheet`);
+            if (where === 'Tel Aviv') {
+                // move away, close the details, tap again: back to the user and the nearest point
+                await page.evaluate(() => { hideSidebar(); map.setView([31.25, 34.79], 10, { animate: false }); });
+                await tapLocate(page);
+                const again = await nearestState(page);
+                const centreKm = await page.evaluate(() => getDistance(map.getCenter().lat, map.getCenter().lng, userLocation.lat, userLocation.lng));
+                expect(again.open && again.title === s.nearest && again.zoom >= 14 && centreKm < 1 && again.active && !!(await page.evaluate(() => userMarker)),
+                    `${label}, second tap: ${JSON.stringify(again)}, centre ${centreKm.toFixed(2)} km from the user`);
+            }
+            const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+            await context.close();
+            expect(errors.length === 0, `${label}: ${errors.join(' ; ')}`);
+        }
+    }
+});
+
+check('nearest fails well: denied and slow lead to the search box; nothing within 30 km flies nowhere', async () => {
+    // 1. denied: the message, and the focus in the search box
+    let { context, page } = await openApp({ viewport: PHONE });
+    await page.evaluate(() => { navigator.geolocation.getCurrentPosition = (ok, fail) => setTimeout(() => fail({ code: 1 }), 50); });
+    await page.click('.locate-btn'); await page.waitForTimeout(400);
+    let s = await page.evaluate(() => ({ toast: document.getElementById('notification').textContent, focus: document.activeElement.id }));
+    await context.close();
+    expect(s.toast === 'לא הצלחנו לאתר מיקום. חפשו עיר או רחוב' && s.focus === 'search-input', 'denied: ' + JSON.stringify(s));
+    // 2. a 9-second wait: "מאתר מיקום..." is shown the whole time, then the timeout gives the same message
+    ({ context, page } = await openApp({ viewport: PHONE }));
+    await page.evaluate(() => { navigator.geolocation.getCurrentPosition = (ok, fail) => setTimeout(() => fail({ code: 3 }), 9000); });
+    await page.click('.locate-btn');
+    const during = [];
+    for (let t = 0; t < 8; t++) { await page.waitForTimeout(1000); during.push(await page.evaluate(() => document.getElementById('notification').style.display !== 'none' ? document.getElementById('notification').textContent : '')); }
+    await page.waitForTimeout(1500);
+    s = await page.evaluate(() => ({ toast: document.getElementById('notification').textContent, focus: document.activeElement.id }));
+    await context.close();
+    expect(during.every(text => text === 'מאתר מיקום...'), 'while waiting: ' + JSON.stringify(during));
+    expect(s.toast === 'לא הצלחנו לאתר מיקום. חפשו עיר או רחוב' && s.focus === 'search-input', 'timeout: ' + JSON.stringify(s));
+    // 3. Amman: inside the map's padded box, but no point within 30 km
+    ({ context, page } = await openApp({ viewport: PHONE, geolocation: { latitude: 31.9539, longitude: 35.9106, accuracy: 20 }, permissions: ['geolocation'] }));
+    const before = await page.evaluate(() => [map.getCenter().lat.toFixed(5), map.getCenter().lng.toFixed(5), map.getZoom()].join());
+    await page.click('.locate-btn'); await page.waitForTimeout(1500);
+    s = await page.evaluate(() => ({ view: [map.getCenter().lat.toFixed(5), map.getCenter().lng.toFixed(5), map.getZoom()].join(),
+        toast: document.getElementById('notification').textContent, active: document.querySelector('.locate-btn').classList.contains('active'),
+        open: document.getElementById('sidebar').style.display === 'flex' }));
+    await context.close();
+    expect(s.view === before && s.toast === 'אין נקודות איסוף עד 30 ק"מ ממך' && !s.active && !s.open, `Amman: view ${before} -> ${s.view}, ${JSON.stringify(s)}`);
 });
 
 // A location with at least two others within about 30 metres: its pin stays inside

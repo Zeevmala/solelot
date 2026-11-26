@@ -260,7 +260,7 @@ function createPopupContent(location) {
         content += `
         <div class="popup-row distance">
             <span class="icon">📏</span>
-            <span>${formatDistance(distance)} ממיקומך</span>
+            <span>${formatDistance(distance)} בקו אווירי</span>
         </div>`;
     }
 
@@ -299,7 +299,7 @@ function createSidebarContent(location) {
         distanceHtml = `
             <div class="info-row">
                 <span class="info-icon">📏</span>
-                <span class="info-text distance">${formatDistance(distance)} ממיקומך</span>
+                <span class="info-text distance">${formatDistance(distance)} בקו אווירי</span>
             </div>
         `;
     }
@@ -598,12 +598,12 @@ function createSidebarContent(location) {
             // Without userLocation — no distance row
             userLocation = null;
             var popupNoDist = createPopupContent(testLoc);
-            assert(!popupNoDist.includes('\u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: no distance row without userLocation');
+            assert(!popupNoDist.includes('בקו אווירי'), 'GPS: no distance row without userLocation');
 
             // With userLocation — distance row present
             userLocation = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv center
             var popupWithDist = createPopupContent(testLoc);
-            assert(popupWithDist.includes('\u05DE\u05F3 \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: distance row present with userLocation, in metres under 1 km');
+            assert(popupWithDist.includes('\u05DE\u05F3 בקו אווירי'), 'GPS: distance row present with userLocation, in metres under 1 km, said to be straight-line');
             assert(!popupWithDist.includes('\u05E7"\u05DE'), 'GPS: no km for a point under 1 km away');
             assert(popupWithDist.includes('distance'), 'GPS: distance row has "distance" class');
 
@@ -612,14 +612,14 @@ function createSidebarContent(location) {
             assert(expectedDist < 1, 'GPS: distance to nearby point is < 1 km (got ' + expectedDist.toFixed(2) + ')');
             assert(popupWithDist.includes('<span>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 '), 'GPS: popup shows correct distance value');
             var sidebarWithDist = createSidebarContent(testLoc);
-            assert(sidebarWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA<'), 'GPS: sidebar shows the same distance in metres');
+            assert(sidebarWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 בקו אווירי<'), 'GPS: sidebar shows the same distance in metres, said to be straight-line');
 
             // Distance to Jerusalem
             var jlmLoc = { id: 10, name: 'Test', address: 'Test', city: 'Test', lat: 31.7683, lng: 35.2137, type: 'store' };
             var popupJlm = createPopupContent(jlmLoc);
             var jlmDist = getDistance(32.0853, 34.7818, 31.7683, 35.2137);
             assert(jlmDist > 50 && jlmDist < 70, 'GPS: TLV to Jerusalem distance ~60km (got ' + jlmDist.toFixed(1) + ')');
-            assert(popupJlm.includes(jlmDist.toFixed(1) + ' \u05E7"\u05DE \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: Jerusalem popup shows correct distance in km');
+            assert(popupJlm.includes(jlmDist.toFixed(1) + ' \u05E7"\u05DE בקו אווירי'), 'GPS: Jerusalem popup shows correct distance in km, said to be straight-line');
 
             // Reset userLocation
             userLocation = null;

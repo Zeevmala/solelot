@@ -23,6 +23,16 @@ function showNotification(message, duration = 2000) {
     }, duration);
 }
 
+// Take a message away before its time is up (the answer is shown somewhere else)
+function hideNotification() {
+    const notification = document.getElementById('notification');
+    if (!notification) return;
+    clearTimeout(notificationTimeout);
+    clearTimeout(notificationFadeTimeout);
+    notification.classList.remove('show');
+    notification.style.display = 'none';
+}
+
 // Report form URL
 const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
 
@@ -658,7 +668,7 @@ function createPopupContent(location) {
         content += `
         <div class="popup-row distance">
             <span class="icon">📏</span>
-            <span>${formatDistance(distance)} ממיקומך</span>
+            <span>${formatDistance(distance)} בקו אווירי</span>
         </div>`;
     }
 
@@ -698,7 +708,7 @@ function createSidebarContent(location) {
         distanceHtml = `
             <div class="info-row">
                 <span class="info-icon">📏</span>
-                <span class="info-text distance">${formatDistance(distance)} ממיקומך</span>
+                <span class="info-text distance">${formatDistance(distance)} בקו אווירי</span>
             </div>
         `;
     }
@@ -1148,16 +1158,10 @@ const locateIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="non
         <circle cx="12" cy="12" r="3"/>
         <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
     </svg>`;
-const extentIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>
-        <path d="M12 8v8M8 12h8"/>
-    </svg>`;
-
 let gpsActive = false;
 let userAccuracyCircle = null;
 
-// Beyond this distance "nearest" is not useful, so we just centre on the user
+// Beyond this distance "nearest" is not useful: the map stays where it is
 const NEAREST_MAX_KM = 30;
 
 // Closest collection point to a position (facilities are not public drop-off points)
@@ -1171,6 +1175,25 @@ function findNearestLocation(lat, lng) {
     return best;
 }
 
+// Open the details of the nearest point and frame it together with the user,
+// both above the sheet on a phone. Used by the first tap and by every later tap.
+function showNearest(nearest) {
+    const location = nearest.location;
+    showSidebar(location); // first: the framing below needs the height of the sheet
+    const view = L.latLngBounds([[userLocation.lat, userLocation.lng], [location.lat, location.lng]]);
+    // On a desktop the details panel covers the map's left side
+    const panel = sheetHeight() === 0 && cachedSidebar && window.innerWidth > MOBILE_BREAKPOINT ? cachedSidebar.offsetWidth : 0;
+    map.flyToBounds(view, {
+        paddingTopLeft: [40 + panel, 80], // room above for the pin, which is drawn above its point
+        paddingBottomRight: [40, sheetHeight() + 40],
+        maxZoom: 17,
+        duration: 0.8
+    });
+    map.once('moveend', () => {
+        if (selectedLocationId === location.id) keepPinAboveSheet(location);
+    });
+}
+
 const locateControl = L.control({ position: 'topright' });
 locateControl.onAdd = function() {
     const btn = L.DomUtil.create('button', 'locate-btn');
@@ -1181,28 +1204,13 @@ locateControl.onAdd = function() {
     L.DomEvent.disableClickPropagation(btn);
 
     btn.onclick = function() {
-        // Toggle: if GPS is active, zoom to full extent
-        if (gpsActive) {
-            gpsActive = false;
-            btn.classList.remove('active');
-            btn.innerHTML = locateIconSvg;
-            btn.title = 'מצא את מיקומי';
-            btn.setAttribute('aria-label', 'מצא את מיקומי');
-
-            // Remove user marker and its accuracy circle
-            if (userMarker) {
-                map.removeLayer(userMarker);
-                userMarker = null;
+        // Already located: go back to the user and the nearest point (like a map app's re-centre)
+        if (gpsActive && userLocation) {
+            const nearest = findNearestLocation(userLocation.lat, userLocation.lng);
+            if (nearest && nearest.distance <= NEAREST_MAX_KM) {
+                showNearest(nearest);
+                return;
             }
-            if (userAccuracyCircle) {
-                map.removeLayer(userAccuracyCircle);
-                userAccuracyCircle = null;
-            }
-            userLocation = null;
-
-            map.flyToBounds(ISRAEL_BOUNDS, { duration: 0.8 });
-            showNotification('תצוגה מלאה');
-            return;
         }
 
         // Find my location
@@ -1215,7 +1223,8 @@ locateControl.onAdd = function() {
         if (btn.classList.contains('loading')) return;
 
         btn.classList.add('loading');
-        showNotification('מאתר מיקום...');
+        // Shown for the whole wait (the browser gives up after 10 s); the answer replaces it
+        showNotification('מאתר מיקום...', 11000);
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -1231,13 +1240,13 @@ locateControl.onAdd = function() {
 
                 userLocation = { lat, lng };
 
-                // Place/update user marker
+                // Place/update user marker. It cannot be tapped: it often sits on top
+                // of the nearest pin and would take the tap meant for that pin.
                 if (userMarker) {
                     userMarker.setLatLng([lat, lng]);
                 } else {
-                    userMarker = L.marker([lat, lng], { icon: icons.user, zIndexOffset: 2000, keyboard: false })
-                        .addTo(map)
-                        .bindPopup('המיקום שלך');
+                    userMarker = L.marker([lat, lng], { icon: icons.user, zIndexOffset: 2000, keyboard: false, interactive: false })
+                        .addTo(map);
                 }
 
                 // Circle showing how precise the GPS fix is (radius in metres)
@@ -1254,31 +1263,26 @@ locateControl.onAdd = function() {
                     }).addTo(map);
                 }
 
-                // Frame the user together with the nearest collection point
+                // Open the nearest collection point. Its details say what was found,
+                // so no message is needed. Nothing near: the map stays where it is.
                 const nearest = findNearestLocation(lat, lng);
                 if (nearest && nearest.distance <= NEAREST_MAX_KM) {
-                    const view = L.latLngBounds([[lat, lng], [nearest.location.lat, nearest.location.lng]]);
-                    map.flyToBounds(view, { padding: [80, 80], maxZoom: 16, duration: 0.8 });
-                    showNotification(`הנקודה הקרובה: ${nearest.location.name} (${formatDistance(nearest.distance)})`, 4000);
+                    hideNotification();
+                    gpsActive = true;
+                    btn.classList.add('active');
+                    showNearest(nearest);
                 } else {
-                    map.flyTo([lat, lng], 14, { duration: 0.8 });
-                    showNotification('מיקום נמצא');
+                    gpsActive = false;
+                    btn.classList.remove('active');
+                    showNotification('אין נקודות איסוף עד 30 ק"מ ממך', 4000);
                 }
-
-                // Switch to "full extent" mode
-                gpsActive = true;
-                btn.classList.add('active');
-                btn.innerHTML = extentIconSvg;
-                btn.title = 'הצג מפה מלאה';
-                btn.setAttribute('aria-label', 'הצג מפה מלאה');
             },
-            (error) => {
+            () => {
+                // Denied, unavailable or too slow: searching is the other way to a point
                 btn.classList.remove('loading');
-                let msg = 'שגיאה באיתור מיקום';
-                if (error.code === 1) msg = 'גישה למיקום נדחתה';
-                else if (error.code === 2) msg = 'מיקום לא זמין';
-                else if (error.code === 3) msg = 'זמן איתור מיקום עבר';
-                showNotification(msg);
+                showNotification('לא הצלחנו לאתר מיקום. חפשו עיר או רחוב', 5000);
+                const searchInput = document.getElementById('search-input');
+                if (searchInput) searchInput.focus();
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
