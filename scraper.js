@@ -209,7 +209,7 @@ const HYPHEN_SEPARATOR = /\s+-\s*|\s*-\s+/;
 
 // "תל אביב - רשות מקומית - מרכז איסוף - תחנת תברואה" -> "מוקד איסוף - תחנת תברואה"
 // The boilerplate parts say nothing about the place, so only the rest is kept.
-const MUNICIPAL_BOILERPLATE = ['רשות מקומית', 'מוקד איסוף', 'מרכז איסוף', 'אחראי לפינוי פסולת'];
+const MUNICIPAL_BOILERPLATE = ['רשות מקומית', 'מוקד איסוף', 'מרכז איסוף', 'אחראי לפינוי פסולת', 'מוקד איסוף עירוני'];
 function municipalName(rawName, city, fallback) {
     const parts = [];
     for (const part of rawName.split(HYPHEN_SEPARATOR).map(clean)) {
@@ -231,22 +231,68 @@ function decodeEntities(text) {
     });
 }
 
-// Decode HTML entities, remove tags, collapse whitespace and drop stray separators at the ends
+// Decode HTML entities, remove tags, collapse whitespace and drop stray separators at the ends.
+// A hyphen at the end after a number is a floor below ground typed right to left ("קומה 1-" = floor -1):
+// it is written "(1-)", as MAI writes it elsewhere, so the text does not end in a separator.
 function clean(value) {
     return decodeEntities(String(value == null ? '' : value))
         .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
         .replace(/^[\s,.\-]+|[\s,.]+$/g, '')
+        .replace(/(\d+)-$/, '($1-)')
+        .replace(/[\s\-]+$/, '')
         .trim();
 }
+
+// The street names of שפרעם come with a cut-off Arabic copy ("זאהר עומר א - זידאני ظاهر العم") and a
+// land-registry parcel instead of a house number ("10262/31", "10301/10302/23/2"). The page is Hebrew
+// and a parcel number does not help anyone find the place, so both are removed.
+const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+/g;
+const PARCEL_NUMBER = /\d{4,}(\/\d+)+/g;
+function withoutForeignText(text) {
+    return clean(clean(text).replace(ARABIC_SCRIPT, ' '));
+}
+
+// "חשמלית - חשמלית - מקס שיין 9" -> "חשמלית - מקס שיין 9". A name without a repeat is returned unchanged.
+function withoutRepeatedParts(name) {
+    const parts = name.split(HYPHEN_SEPARATOR).map(clean);
+    const unique = parts.filter((part, index) => part && parts.indexOf(part) === index);
+    return unique.length < parts.length ? unique.join(' - ') : name;
+}
+
+// "מוקד איסוף - חשמלית" -> "חשמלית": municipal boilerplate in a place field says nothing about the place
+function withoutBoilerplate(text) {
+    const parts = text.split(HYPHEN_SEPARATOR).map(clean);
+    const kept = parts.filter(part => part && !MUNICIPAL_BOILERPLATE.includes(part));
+    return kept.length < parts.length ? kept.join(' - ') : text;
+}
+
+// "רחוב הטייסים" -> "הטייסים", at the start of a street, of a comma part or of a name part ("מגה - רחוב דרך הים 26")
+const STREET_PREFIX = /(^|,\s*|\s-\s)(רחוב|רח['׳.])\s+(?=\S)/g;
+function withoutStreetPrefix(text) {
+    return text.replace(STREET_PREFIX, '$1');
+}
+
+// Shop names do not need the company form: "שופרסל סטוק בע"מ" -> "שופרסל סטוק"
+const COMPANY_SUFFIX = /\s+בע["'״]{1,2}מ(?=$|[\s,])/g;
+
+// True when text ends with part as a whole part of it ("מוקד איסוף - מרכז הטייסים" ends with "מרכז הטייסים")
+function endsWithPart(text, part) {
+    if (!part || !text.endsWith(part)) return false;
+    return text === part || /[\s\-]$/.test(text.slice(0, -part.length));
+}
+
+// A name part that is a street with a house number ("סמטת רוזמרין 17"), used when the address has no street
+const STREET_WITH_NUMBER = /[א-ת"'׳״] \d{1,3}$/;
 
 // custom_field_data is [{ name, value }, ...] -> { city, street, ... }
 function customFields(marker) {
     const fields = {};
     const list = Array.isArray(marker.custom_field_data) ? marker.custom_field_data : [];
     for (const field of list) {
-        if (field && field.name) fields[field.name] = clean(field.value);
+        if (field && field.name) fields[field.name] = withoutForeignText(field.value);
     }
+    if (fields.house_number) fields.house_number = clean(fields.house_number.replace(PARCEL_NUMBER, ' '));
     return fields;
 }
 
@@ -324,7 +370,7 @@ function transformMarker(marker, overrides = {}) {
 
     const fields = customFields(marker);
     const titleParts = String(marker.title || '').split(/<br\s*\/?>/i);
-    const rawName = clean((fields.business_name || clean(titleParts[0])).replace(CHAIN_CODE_SUFFIX, ''));
+    const rawName = clean((fields.business_name || clean(titleParts[0])).replace(CHAIN_CODE_SUFFIX, '').replace(COMPANY_SUFFIX, ''));
     if (!rawName) return { skip: 'no name' };
     if (isMarkedInactive(rawName)) return { skip: 'marked inactive by MAI' };
 
@@ -338,14 +384,18 @@ function transformMarker(marker, overrides = {}) {
     const city = normalizeCity(rawCity);
     if (!city) return { skip: 'no city' };
 
-    let street = hasFields
+    let street = withoutStreetPrefix(hasFields
         ? joinStreet(fields.street || '', fields.house_number || '')
-        : titleBits.join(', ');
-    let place = fields.neighborhood || '';
-    // The city is added once at the end, so a street or place that is only
-    // the city again says nothing ("המלאכה 2, רעננה, רעננה")
-    if (street === city || street === rawCity) street = '';
-    if (place === city || place === rawCity) place = '';
+        : titleBits.join(', '));
+    let place = withoutStreetPrefix(withoutBoilerplate(fields.neighborhood || ''));
+    // The city is added once at the end, so a part of the street or place that is only the city again
+    // says nothing ("המלאכה 2, רעננה, רעננה", "מרכז ביג, כרמיאל", "מודיעין-עילית")
+    const isTheCity = text => text === city || text === rawCity || text.replace(/-/g, ' ') === city || CITY_ALIASES[text] === city;
+    const withoutCity = text => (text.split(',').some(part => isTheCity(clean(part)))
+        ? text.split(',').map(clean).filter(part => part && !isTheCity(part)).join(', ')
+        : text);
+    street = withoutCity(street);
+    place = withoutCity(place);
 
     let name;
     if (!hasFields) {
@@ -355,11 +405,20 @@ function transformMarker(marker, overrides = {}) {
     } else {
         name = rawName;
     }
+    name = withoutRepeatedParts(withoutStreetPrefix(name));
 
-    // Leave out address parts that only repeat the name
+    // Leave out address parts that only repeat the name, and the place when the name ends with it
+    // (unless the place is all the address has besides the city)
     const addressParts = [];
     if (street && street !== name) addressParts.push(street);
-    if (place && place !== name && !street.includes(place)) addressParts.push(place);
+    const placeInName = endsWithPart(name, place) && addressParts.length > 0;
+    if (place && place !== name && !street.includes(place) && !placeInName) addressParts.push(place);
+    // An address that is only the city, for a name that ends with a street and number
+    // ("חשמלית - סמטת רוזמרין 17" | "חולון"): the street goes in the address too
+    const nameParts = name.split(HYPHEN_SEPARATOR).map(clean);
+    if (addressParts.length === 0 && nameParts.length > 1 && STREET_WITH_NUMBER.test(nameParts[nameParts.length - 1])) {
+        addressParts.push(nameParts[nameParts.length - 1]);
+    }
     addressParts.push(city);
 
     // Some records have the address typed in as the business name
@@ -388,6 +447,7 @@ function transformMarker(marker, overrides = {}) {
         },
         // Kept only while building; removed before saving
         detail: place || street,
+        addressParts,
         street: addressParts.length > 1 ? addressParts[0].split(',')[0].trim() : '', // '' = the address is only the city
         // false when "street" above is really a place name (MAI's neighbourhood field)
         hasStreetField: Boolean(street) && addressParts[0] === street
@@ -426,6 +486,11 @@ function disambiguate(entries) {
             if (entry.detail && !loc.name.includes(entry.detail)) {
                 loc.name = (loc.name + ' - ' + entry.detail).substring(0, 200);
                 renamed++;
+                // the name now says the place, so the address need not say it again
+                const parts = entry.addressParts || [];
+                if (parts.length > 2 && parts.includes(entry.detail)) {
+                    loc.address = parts.filter(part => part !== entry.detail).join(', ').substring(0, 300);
+                }
             }
             if (!keptByName.has(loc.name)) keptByName.set(loc.name, []);
             const twins = keptByName.get(loc.name);
@@ -919,5 +984,6 @@ if (require.main === module) {
 module.exports = {
     transformMarker, buildLocations, determineChain, normalizeCity, municipalName, clean,
     isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
-    disambiguate, checkCount, parseArgs, run, changesSince, shopChain, houseNumber
+    disambiguate, checkCount, parseArgs, run, changesSince, shopChain, houseNumber,
+    withoutRepeatedParts, withoutBoilerplate, ARABIC_SCRIPT, PARCEL_NUMBER
 };

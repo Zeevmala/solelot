@@ -160,6 +160,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - The scraper also refuses to save when the new count is under 90% of the previous file, unless run with `--force`.
 - The scraper refuses to save if fewer than 1,000 points parse (protects against another API change wiping the data).
 - Runtime bounds check (29–34°N, 34–36°E) in `app.js` is a safety net, not a substitute for clean source data.
+- **Name and address clean-up** (`transformMarker`): a name part that repeats an earlier part is left out; municipal boilerplate is removed from the place field too; ` בע"מ` is cut from names; Arabic-script text and land-registry parcel numbers (`10262/31` in the house-number field) are removed; a trailing hyphen is dropped (after a number it is a floor below ground and becomes `(1-)`); a street or place part that is only the city is left out; a leading `רחוב`/`רח'` is cut; an address that is only the city takes the street from the end of the name (`חשמלית - הדס 8`); and the place is left out of the address when the name already ends with it (unless it is all the address has besides the city). Validator checks 26–30 fail on what these rules should have removed.
 - City names are normalised in `normalizeCity()` (e.g. קרית → קריית, תל אביב-יפו → תל אביב). Add new variants to `CITY_ALIASES`.
 
 ### Launch readiness (Nov 2026)

@@ -19,6 +19,7 @@
     "Added 2026-11-26 (new validator warning 14d: same street in one city, nearest same-street point over 1.5 km away), each checked with Nominatim: 346486 (קואופ שופ, דב גור 27, אשדוד) is 2.25 km from every part of דב גור while 347344 (דב גור 15) is 39 m from it; 345778 (מחסני חשמל, שדרות המייסדים 15, מעלה אדומים) is on שדרות החברה הכלכלית, 2.8 km from the three points at numbers 15-17, which sit together at גבעת המייסדים.",
     "Added 2026-11-26: 3 second entries of one shop (validator check 25: same chain, same address, under 100 m), 63-90 m apart, so further apart than the 50 m the scraper merges by itself; the higher id is left out, as the scraper does: 343429 = 343376 (רמי לוי, דבורה הנביאה 128, תל אביב), 346637 = 343522 (קרביץ, המלאכה 2, רעננה), 344569 = 344434 (רמי לוי, תדהר 1, פרדס חנה).",
     "Added 2026-11-26: 344231 (קרביץ, \"מתחפ ביג פוריה\") is in טבריה: Nominatim puts the pin on המברג in אזור תעשייה טבריה עלית, where the other shops of the same BIG centre are listed under טבריה. It became the only point of \"פוריה\" when its second entry 346634 was merged into it (warning 14c).",
+    "Added 2026-11-26: 346759 (קרביץ - קניון עופר השרון) is a second entry of 346641 (קרביץ - השרון- קניון עופר), same chain and address (הרצל 60, נתניה), 92 m apart; it showed in check 25 once the place stopped being repeated in the address. The higher id is left out.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -779,6 +780,9 @@
       "exclude": true
     },
     "346751": {
+      "exclude": true
+    },
+    "346759": {
       "exclude": true
     },
     "346766": {

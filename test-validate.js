@@ -333,3 +333,25 @@ test('check 25 fails on one shop listed twice: same chain, same address, under 1
     assert.match(result.block(25), /id=102: same shop as id=101, 90 m - "רמי לוי - תקשורת"/);
     assert.match(result.block(25), /id=104: same shop as id=103/);
 });
+
+test('checks 26-30 fail on a repeated name part, בע"מ, Arabic script or a parcel number, a name ending in "-", and boilerplate after the prefix', () => {
+    const named = (id, name, address = 'הרצל ' + id + ', תל אביב') => point(id, 32.09 + id / 100000, 34.79, { name, address });
+    const result = validate([...cleanPoints(),
+        named(101, 'חשמלית - חשמלית - מקס שיין 9'),                     // 26
+        named(102, 'שופרסל סטוק בע"מ - סניף חולון'),                     // 27
+        named(103, 'מוקד איסוף - זאהר עומר ظاهر العم'),                   // 28, Arabic in the name
+        named(104, 'מוקד איסוף - אל פוואר', 'אל פוואר 10271/7, תל אביב'), // 28, a parcel number in the address
+        named(105, 'מוקד איסוף - חדר אשפה קומה 1-'),                     // 29
+        named(106, 'מוקד איסוף - עיריית רמת גן - מוקד איסוף עירוני - ספרייה'), // 30
+        // fine: a repeated word inside a part, a hyphen inside a word, a floor written (1-), an ordinary 10/2
+        named(107, 'גלי - גלי מרכז'), named(108, 'סופר-פארם'), named(109, 'מוקד איסוף - קומת חנייה (1-) כניסה 1'),
+        named(110, 'באג', 'הרצל 10/2, תל אביב')]);
+    assert.strictEqual(result.status, 1, result.stdout);
+    assertFails(result, 26, /^\[X\].*: 1 issues\n    id=101/);
+    assertFails(result, 27, /^\[X\].*: 1 issues\n    id=102/);
+    assertFails(result, 28, /2 issues/);
+    assert.match(result.block(28), /id=103/);
+    assert.match(result.block(28), /id=104/);
+    assertFails(result, 29, /^\[X\].*: 1 issues\n    id=105/);
+    assertFails(result, 30, /^\[X\].*: 1 issues\n    id=106/);
+});

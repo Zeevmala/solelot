@@ -13,7 +13,10 @@ const fs = require('fs');
 const path = require('path');
 // Shared with the scraper so the two cannot disagree on what "inactive" or "same street" means.
 // Requiring scraper.js runs nothing: it only calls its main() when executed directly.
-const { isMarkedInactive, isSchool, streetKey, sameStreet, shopChain } = require('./scraper.js');
+const {
+    isMarkedInactive, isSchool, streetKey, sameStreet, shopChain,
+    withoutRepeatedParts, withoutBoilerplate, ARABIC_SCRIPT, PARCEL_NUMBER
+} = require('./scraper.js');
 
 const INPUT_FILE = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, 'locations.json');
 
@@ -456,6 +459,33 @@ function main() {
         });
     }
     check('25. One shop listed once', sameShop, true);
+
+    // 26-30. Leftovers in the text users read. Each uses the scraper's own clean-up function or pattern,
+    // so a failure means the scraper missed a case: fix the rule in scraper.js, not the data.
+    const nameOf = l => String(l.name || '');
+    // 26. No part of a name repeats an earlier part ("חשמלית - חשמלית - מקס שיין 9")
+    check('26. No repeated part in a name', locations
+        .filter(l => withoutRepeatedParts(nameOf(l)) !== nameOf(l))
+        .map(l => ({ id: l.id, reason: `"${l.name}"` })));
+    // 27. No company form in a name ("שופרסל סטוק בע"מ")
+    check('27. No בע"מ in names', locations
+        .filter(l => /בע["'״]{1,2}מ/.test(nameOf(l)))
+        .map(l => ({ id: l.id, reason: `"${l.name}"` })));
+    // 28. No Arabic script and no land-registry parcel number ("10262/31") in a name or address
+    const arabic = new RegExp(ARABIC_SCRIPT.source);
+    const parcel = new RegExp(PARCEL_NUMBER.source);
+    check('28. No Arabic script or parcel numbers', locations
+        .filter(l => [nameOf(l), String(l.address || '')].some(text => arabic.test(text) || parcel.test(text)))
+        .map(l => ({ id: l.id, reason: `"${l.name}" | "${l.address}"` })));
+    // 29. A name does not end in a hyphen (a separator with nothing after it)
+    check('29. No name ending in "-"', locations
+        .filter(l => /-\s*$/.test(nameOf(l)))
+        .map(l => ({ id: l.id, reason: `"${l.name}"` })));
+    // 30. No municipal boilerplate after the "מוקד איסוף - " prefix ("מוקד איסוף - עיריית רמת גן - מוקד איסוף עירוני - ...")
+    const PREFIX = 'מוקד איסוף - ';
+    check('30. No boilerplate after the מוקד איסוף prefix', locations
+        .filter(l => nameOf(l).startsWith(PREFIX) && withoutBoilerplate(nameOf(l).slice(PREFIX.length)) !== nameOf(l).slice(PREFIX.length))
+        .map(l => ({ id: l.id, reason: `"${l.name}"` })));
 
     // Summary
     console.log(`\n--- ${totalFails === 0 ? 'ALL CHECKS PASSED' : totalFails + ' TOTAL ISSUES'} (${locations.length} locations) ---`);

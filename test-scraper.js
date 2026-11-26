@@ -78,7 +78,8 @@ test('generic municipal names become "מוקד איסוף - <place>"', () => {
     }));
     assert.strictEqual(location.name, 'מוקד איסוף - מתנ"ס רעות');
     assert.strictEqual(location.chain, 'municipality');
-    assert.strictEqual(location.address, 'הרצל 10, מתנ"ס רעות, חיפה');
+    // the name already ends with the place, so the address does not repeat it ("good to great" audit)
+    assert.strictEqual(location.address, 'הרצל 10, חיפה');
 });
 
 test('municipalName strips boilerplate, the city and repeats', () => {
@@ -548,6 +549,109 @@ test('clean decodes HTML entities, then removes tags', () => {
     assert.strictEqual(clean('a&#0;b&#99999999;c'), 'a b c');
     const { location } = transformMarker(marker({}, { business_name: 'H&amp;M &lt;b&gt;קניון&lt;/b&gt;' }));
     assert.strictEqual(location.name, 'H&M קניון');
+});
+
+test('clean drops a trailing hyphen, and keeps a number with a hyphen as MAI writes a floor below ground', () => {
+    assert.strictEqual(clean('חנות הרצל -'), 'חנות הרצל');
+    // real: 343431 "קומה 1-" is floor -1 typed right to left; MAI writes it "(1-)" elsewhere (346291)
+    assert.strictEqual(clean('בניין העירייה - חדר אשפה קומה 1-'), 'בניין העירייה - חדר אשפה קומה (1-)');
+    assert.strictEqual(clean('קומת חנייה (1-) כניסה 1'), 'קומת חנייה (1-) כניסה 1');
+});
+
+// --- name and address clean-up (real records from the "good to great" audit) ---
+
+const municipal = { business_name: 'רשות מקומית - מוקד איסוף' };
+
+test('a part of the name that repeats an earlier part is left out', () => {
+    // real: 347201 "חשמלית - חשמלית - מקס שיין 9"; 347510 "חשמלית - חשמלית - הרי הגלבוע"
+    const bin = name => transformMarker(marker({}, { business_name: name, city: 'רחובות', street: '.', house_number: '.' })).location;
+    assert.strictEqual(bin('חשמלית - חשמלית - מקס שיין 9').name, 'חשמלית - מקס שיין 9');
+    assert.strictEqual(bin('חשמלית - חשמלית - הרי הגלבוע').name, 'חשמלית - הרי הגלבוע');
+    // a name with no repeat keeps its own spacing
+    assert.strictEqual(bin('קרביץ מלחה- קניון עזריאלי').name, 'קרביץ מלחה- קניון עזריאלי');
+});
+
+test('an address that is only the city takes the street from the end of the name', () => {
+    // real: 347223 "- חשמלית - סמטת רוזמרין 17" | "חולון"; 347201 (רחובות)
+    const bin = (name, city) => transformMarker(marker({}, { business_name: name, city, street: '.', house_number: '.' })).location;
+    assert.deepStrictEqual([bin('- חשמלית - סמטת רוזמרין 17', 'חולון').name, bin('- חשמלית - סמטת רוזמרין 17', 'חולון').address],
+        ['חשמלית - סמטת רוזמרין 17', 'סמטת רוזמרין 17, חולון']);
+    assert.strictEqual(bin('חשמלית - חשמלית - מקס שיין 9', 'רחובות').address, 'מקס שיין 9, רחובות');
+    // no house number at the end: not clearly a street, the address stays the city
+    assert.strictEqual(bin('חשמלית - חשמלית - הרי הגלבוע', 'רחובות').address, 'רחובות');
+    // one part only: the name is the shop, not a street
+    assert.strictEqual(bin('גלי 3', 'רחובות').address, 'רחובות');
+});
+
+test('municipal boilerplate is removed from the place field too', () => {
+    // real: 344186, 344286, 346635
+    const a = transformMarker(marker({}, { ...municipal, city: 'צורן', street: 'השקמה', house_number: '4', neighborhood: 'מוקד איסוף - חשמלית' })).location;
+    assert.deepStrictEqual([a.name, a.address], ['מוקד איסוף - חשמלית', 'השקמה 4, צורן']);
+    const b = transformMarker(marker({}, { ...municipal, city: 'הרצליה', street: 'שדרות נווה עובד', house_number: '6', neighborhood: 'עיריית הרצליה - מוקד איסוף - מתנ"ס נוף ים' })).location;
+    assert.deepStrictEqual([b.name, b.address], ['מוקד איסוף - עיריית הרצליה - מתנ"ס נוף ים', 'שדרות נווה עובד 6, הרצליה']);
+    const c = transformMarker(marker({}, { business_name: 'עיריית רמת גן - מוקד איסוף עירוני - מכללת שנקר - האגף החדש', city: 'רמת גן', street: 'אנה פרנק', house_number: '12' })).location;
+    assert.strictEqual(c.name, 'מוקד איסוף - עיריית רמת גן - מכללת שנקר - האגף החדש');
+});
+
+test('בע"מ is removed from a shop name', () => {
+    // real: 343665, 344167, 346599
+    const name = business => transformMarker(marker({}, { business_name: business })).location;
+    assert.strictEqual(name('שופרסל סטוק בע"מ').name, 'שופרסל סטוק');
+    assert.strictEqual(name('שופרסל סטוק בע"מ').chain, 'shufersal');
+    assert.strictEqual(name('שופרסל סטוק בע"מ - סניף חולון').name, 'שופרסל סטוק - סניף חולון');
+    assert.strictEqual(name('קבוצת גולף א.ק. בע"מ - מודיעין מרכז מגה אור').name, 'קבוצת גולף א.ק. - מודיעין מרכז מגה אור');
+});
+
+test('Arabic-script text and parcel numbers are removed (שפרעם street names)', () => {
+    // real: 345905 and 345907; the Arabic copy is cut off and the "house number" is a parcel (גוש/חלקה)
+    const a = transformMarker(marker({}, { ...municipal, city: 'שפרעם', street: 'זאהר עומר א - זידאני ظاهر العم', house_number: '10262/31' })).location;
+    assert.deepStrictEqual([a.name, a.address], ['מוקד איסוף - זאהר עומר א - זידאני', 'זאהר עומר א - זידאני, שפרעם']);
+    const b = transformMarker(marker({}, { ...municipal, city: 'שפרעם', street: "ג'בור יוסף ג'בור جبور يوسف جبو", house_number: '10301/10302/23/2' })).location;
+    assert.strictEqual(b.address, "ג'בור יוסף ג'בור, שפרעם");
+    // an ordinary house number stays
+    assert.strictEqual(transformMarker(marker({}, { street: 'הרצל', house_number: '10/2' })).location.address, 'הרצל 10/2, חיפה');
+});
+
+test('the city is not written twice in the address', () => {
+    // real: 345560 (place "מרכז ביג, כרמיאל"), 346666 (street "סכנין, כביש ראשי"), 342668 (place "מודיעין-עילית")
+    const a = transformMarker(marker({}, { business_name: 'קרביץ', city: 'כרמיאל', street: 'מעלה כמון', house_number: '2', neighborhood: 'מרכז ביג, כרמיאל' })).location;
+    assert.strictEqual(a.address, 'מעלה כמון 2, מרכז ביג, כרמיאל');
+    const b = transformMarker(marker({}, { business_name: 'ביג אלקטריק - סניף סכנין', city: 'סכנין', street: 'סכנין, כביש ראשי', house_number: '0' })).location;
+    assert.strictEqual(b.address, 'כביש ראשי, סכנין');
+    const c = transformMarker(marker({}, { business_name: 'זול בשפע', city: 'מודיעין עילית', street: "שד' יחזקאל 2", house_number: '2', neighborhood: 'מודיעין-עילית' })).location;
+    assert.strictEqual(c.address, "שד' יחזקאל 2, מודיעין עילית");
+});
+
+test('a street does not start with "רחוב" or "רח\'"', () => {
+    // real: 342578, 344140, 344931, 342662
+    const a = transformMarker(marker({}, { business_name: 'רשות מקומית - מרכז איסוף', city: 'נס ציונה', street: 'רחוב הטייסים', house_number: '34', neighborhood: 'מרכז הטייסים' })).location;
+    assert.deepStrictEqual([a.name, a.address], ['מוקד איסוף - מרכז הטייסים', 'הטייסים 34, נס ציונה']);
+    const b = transformMarker(marker({}, { business_name: 'קרביץ', city: 'חדרה', street: "רח' גיבורים קניון לב", house_number: undefined, neighborhood: 'חדרה' })).location;
+    assert.strictEqual(b.address, 'גיבורים קניון לב, חדרה');
+    const c = transformMarker(marker({}, { business_name: 'תחנת דלק - פז YELLOW', city: 'חיפה', street: 'עין דיר', house_number: '16', neighborhood: 'רחוב הבנקים' })).location;
+    assert.strictEqual(c.address, 'עין דיר 16, הבנקים, חיפה');
+    assert.strictEqual(transformMarker(marker({}, { business_name: 'מגה - רחוב דרך הים 26' })).location.name, 'מגה - דרך הים 26');
+    // the city רחובות is not a street word
+    assert.strictEqual(transformMarker(marker({}, { city: 'רחובות', street: 'הרצל', house_number: '1' })).location.address, 'הרצל 1, רחובות');
+});
+
+test('the place is left out of the address when the name already ends with it', () => {
+    // real: 342583 "רמי לוי" | "בית הדפוס 13, גבעת שאול, ירושלים" and a second רמי לוי in ירושלים:
+    // telling them apart adds the place to the name, so the address no longer repeats it
+    const { locations } = buildLocations([
+        marker({ id: '1', lat: '31.79' }, { business_name: 'רמי לוי', city: 'ירושלים', street: 'בית הדפוס', house_number: '13', neighborhood: 'גבעת שאול' }),
+        marker({ id: '2', lat: '31.75' }, { business_name: 'רמי לוי', city: 'ירושלים', street: 'פייר קניג', house_number: '30', neighborhood: 'תלפיות' })
+    ]);
+    assert.deepStrictEqual(locations.map(l => [l.name, l.address]), [
+        ['רמי לוי - גבעת שאול', 'בית הדפוס 13, ירושלים'],
+        ['רמי לוי - תלפיות', 'פייר קניג 30, ירושלים']
+    ]);
+    // real: 342576 "מוקד איסוף - מול מרכז מחזור החושן" | "החושן, מול מרכז מחזור החושן, נס ציונה"
+    const one = transformMarker(marker({}, { ...municipal, city: 'נס ציונה', street: 'החושן', house_number: undefined, neighborhood: 'מול מרכז מחזור החושן' })).location;
+    assert.deepStrictEqual([one.name, one.address], ['מוקד איסוף - מול מרכז מחזור החושן', 'החושן, נס ציונה']);
+    // a name that does not end with the place keeps the place in the address
+    const shop = transformMarker(marker({}, { business_name: 'באג', neighborhood: 'קניון חיפה' })).location;
+    assert.strictEqual(shop.address, 'הרצל 10, קניון חיפה, חיפה');
 });
 
 test('overrides whose id is not in the MAI response are reported', () => {
