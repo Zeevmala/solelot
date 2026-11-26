@@ -463,8 +463,11 @@ check('a record with markup in its id (or text coordinates) is not loaded and in
     await type(page, 'טובה'); await settle(page, 400);
     await page.locator('.suggestion-item[data-type="location"]').first().click(); await settle(page, 2000);
     const after = await page.evaluate(() => ({ injected: window.injected, images: document.querySelectorAll('img[src="x"]').length, likeIds: [...document.querySelectorAll('[data-like-id]')].map(e => e.dataset.likeId) }));
+    const opened = await page.evaluate(() => { window.open = function (url) { window.openedUrl = url; return null; }; document.querySelector('[data-confirm-url]').click(); return { url: window.openedUrl || '', liked: document.querySelectorAll('.like-btn.liked').length }; });
     await context.close();
     expect(JSON.stringify(bad.loaded) === '[5002]' && bad.suggestions === 0, 'loaded ids: ' + JSON.stringify(bad));
+    const sent = opened.url ? new URL(opened.url).searchParams.get('entry.1466478113') : '';
+    expect(opened.url.indexOf('https://docs.google.com/forms/') === 0 && sent === '✔ הנקודה קיימת: טובה' && opened.liked > 0, 'thumbs-up opens the form marked "the point exists": ' + JSON.stringify(opened) + ' name field: ' + sent);
     expect(after.injected === undefined && after.images === 0 && after.likeIds.join() === '5002', 'after opening the good record: ' + JSON.stringify(after));
 });
 

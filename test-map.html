@@ -208,6 +208,16 @@ function getReportUrl(location) {
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
+function getConfirmUrl(location) {
+    const params = new URLSearchParams({
+        'entry.1466478113': '✔ הנקודה קיימת: ' + location.name,
+        'entry.1234054889': location.address,
+        'entry.1388870063': location.city,
+        'hl': 'he'
+    });
+    return `${REPORT_FORM_URL}?${params.toString()}`;
+}
+
 function createPopupContent(location) {
     const safeType = ['store', 'facility'].includes(location.type) ? location.type : 'store';
     const typeIcon = popupBatterySvg[safeType];
@@ -265,7 +275,7 @@ function createPopupContent(location) {
             <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">נווט ב-Waze</a>
         </div>
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
                 ${thumbsUpSvg}
             </button>
             <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(reportUrl)}" aria-label="דווח על בעיה">
@@ -334,7 +344,7 @@ function createSidebarContent(location) {
         </div>
 
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
                 ${thumbsUpSvg}
             </button>
             <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דווח על בעיה">
@@ -446,6 +456,14 @@ function createSidebarContent(location) {
             assert(popup.includes('dislike-btn'), 'Popup: dislike button present');
             assert(popup.includes('data-like-id'), 'Popup: like button uses data-like-id (no inline onclick)');
             assert(popup.includes('data-report-url'), 'Popup: dislike button uses data-report-url (no inline onclick)');
+            assert(popup.includes('data-confirm-url'), 'Popup: like button carries the confirm-form link');
+            var confirmUrl = getConfirmUrl(testLoc);
+            var confirmParams = new URL(confirmUrl).searchParams;
+            assert(confirmUrl.indexOf(REPORT_FORM_URL + '?') === 0, 'Confirm link opens the report form');
+            assert(confirmParams.get('entry.1466478113') === '\u2714 \u05D4\u05E0\u05E7\u05D5\u05D3\u05D4 \u05E7\u05D9\u05D9\u05DE\u05EA: ' + testLoc.name, 'Confirm link marks the name field as "the point exists"');
+            assert(confirmParams.get('entry.1234054889') === testLoc.address && confirmParams.get('entry.1388870063') === testLoc.city, 'Confirm link carries address and city');
+            assert(new URL(getReportUrl(testLoc)).searchParams.get('entry.1466478113') === testLoc.name, 'Problem report link keeps the plain name');
+            assert(createSidebarContent(testLoc).includes('data-confirm-url'), 'Sidebar: like button carries the confirm-form link');
             assert(!popup.includes('onclick'), 'Popup: no inline onclick handlers');
             assert(popup.includes('08:00-22:00'), 'Popup: real hours shown');
 

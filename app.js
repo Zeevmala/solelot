@@ -105,8 +105,9 @@ function playLikeSound() {
     }
 }
 
-// Handle like button click
-function handleLike(locationId) {
+// Handle like button click — mark the button, then open the report form
+// already filled in and marked "the point exists", so the map owner gets the confirmation
+function handleLike(locationId, confirmUrl) {
     playLikeSound();
     const btns = document.querySelectorAll('.like-btn[data-like-id="' + locationId + '"]');
     btns.forEach(function(btn) {
@@ -114,7 +115,7 @@ function handleLike(locationId) {
         btn.classList.add('pop');
         setTimeout(function() { btn.classList.remove('pop'); }, 400);
     });
-    showNotification('תודה על המשוב! 👍');
+    window.open(confirmUrl, '_blank', 'noopener,noreferrer');
 }
 
 // Handle dislike button click — open report form
@@ -596,6 +597,18 @@ function getReportUrl(location) {
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
+// Same form, for the thumbs-up button: the name field starts with "✔ הנקודה קיימת:"
+// so a confirmation is easy to tell from a problem report in the form's answers
+function getConfirmUrl(location) {
+    const params = new URLSearchParams({
+        'entry.1466478113': '✔ הנקודה קיימת: ' + location.name,
+        'entry.1234054889': location.address,
+        'entry.1388870063': location.city,
+        'hl': 'he'
+    });
+    return `${REPORT_FORM_URL}?${params.toString()}`;
+}
+
 // Create popup content for a location
 function createPopupContent(location) {
     const safeType = ['store', 'facility'].includes(location.type) ? location.type : 'store';
@@ -654,7 +667,7 @@ function createPopupContent(location) {
             <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">נווט ב-Waze</a>
         </div>
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
                 ${thumbsUpSvg}
             </button>
             <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(reportUrl)}" aria-label="דווח על בעיה">
@@ -724,7 +737,7 @@ function createSidebarContent(location) {
         </div>
 
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
+            <button class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
                 ${thumbsUpSvg}
             </button>
             <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דווח על בעיה">
@@ -1620,7 +1633,7 @@ document.addEventListener('keydown', (e) => {
 // Delegated click handler for feedback buttons (avoids inline onclick)
 document.addEventListener('click', (e) => {
     const likeBtn = e.target.closest('[data-like-id]');
-    if (likeBtn) { handleLike(Number(likeBtn.dataset.likeId)); return; }
+    if (likeBtn) { handleLike(Number(likeBtn.dataset.likeId), likeBtn.dataset.confirmUrl); return; }
     const dislikeBtn = e.target.closest('[data-report-url]');
     if (dislikeBtn) { handleDislike(dislikeBtn.dataset.reportUrl); return; }
 });

@@ -24,6 +24,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Navigation links (Google Maps / Waze) in popups and sidebar
 - Location detail sidebar
 - "Report a problem" link in popups/sidebar (Google Form)
+- Thumbs-up in popups/sidebar opens the same Google Form marked "✔ הנקודה קיימת:" in the name field, so the owner receives a confirmation that the point exists
 - Empty state with clear/retry when search has no results
 - PWA support (installable, offline via service worker)
 - Multiple basemap options (light, streets)

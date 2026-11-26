@@ -81,3 +81,4 @@ Open after this design: the owner decisions listed above; 19 + 11 + 21 position 
 - Leaflet is served from the repository (`vendor/`). Built: page, CSP and service worker point at local files; unpkg is gone from the page.
 - MAI terms and possibly closed chains: skipped by the owner, unchanged.
 - The like button: the owner's answer needs one clarification before it is built (see the session notes); unchanged for now.
+- 2026-11-26: the like button is built. A press opens the Google Form filled in with the point and marked "✔ הנקודה קיימת:" in the name field (`getConfirmUrl` in `app.js`).
