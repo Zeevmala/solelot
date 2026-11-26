@@ -424,19 +424,22 @@ async function pickFromSuggestions(viewport, cpuSlowdown) {
     expect(cpuSlowdown > 1 || afterTap.title === afterTap.name, `${where}: tapped "${afterTap.name}", details show "${afterTap.title}"`);
 }
 // Marks one ordinary pin that is drawn on its own in the open part of the screen
-// (data-smoke-tap) and returns its location name, or null
-const tagDrawnPin = page => page.evaluate(async () => {
+// (data-smoke-tap) and returns its location name, or null. "skip": a name not to pick.
+const tagDrawnPin = (page, skip = null) => page.evaluate(async skip => {
+    document.querySelectorAll('[data-smoke-tap]').forEach(el => el.removeAttribute('data-smoke-tap'));
+    const nameOf = el => el.getAttribute('aria-label').slice(0, el.getAttribute('aria-label').lastIndexOf(' - '));
     const find = () => [...document.querySelectorAll('.battery-marker:not(.selected)[aria-label]')].find(el => {
         const box = el.getBoundingClientRect();
-        return box.top > 80 && box.bottom < window.innerHeight - 80 && box.left > 20 && box.right < window.innerWidth - 20;
+        if (nameOf(el) === skip || box.top <= 80 || box.bottom >= window.innerHeight - 80 || box.left <= 20 || box.right >= window.innerWidth - 20) return false;
+        const hit = document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2); // not under the sidebar
+        return !!hit && el.contains(hit);
     });
     let el = find();
     if (!el) { map.setZoom(18, { animate: false }); await new Promise(done => setTimeout(done, 800)); el = find(); }
     if (!el) return null;
     el.dataset.smokeTap = '1';
-    const label = el.getAttribute('aria-label');
-    return label.slice(0, label.lastIndexOf(' - '));
-});
+    return nameOf(el);
+}, skip);
 check('picking a location inside a tight cluster shows it as the one selected pin (desktop)', () => pickFromSuggestions(DESKTOP, 1));
 check('picking a location inside a tight cluster shows it as the one selected pin (phone)', () => pickFromSuggestions(PHONE, 1));
 check('the same on a slow phone (CPU 4x slower): pins are still being added when it is picked', () => pickFromSuggestions(PHONE, 4));
@@ -470,8 +473,7 @@ check('one details surface: click, Enter on a pin and a suggestion pick open the
         expect(s.open && s.title === name && s.popups === 0 && s.focus === focusWanted, `${where}, click: ${JSON.stringify(s)}`);
         await closed('click');
         // 2. keyboard: focus the pin, press Enter
-        await page.evaluate(() => { document.querySelectorAll('[data-smoke-tap]').forEach(el => el.removeAttribute('data-smoke-tap')); });
-        const name2 = await tagDrawnPin(page);
+        const name2 = await tagDrawnPin(page, name);
         await page.locator('[data-smoke-tap]').focus(); await page.keyboard.press('Enter'); await page.waitForTimeout(600);
         s = await surfaces(page);
         expect(s.open && s.title === name2 && s.popups === 0 && s.focus === focusWanted, `${where}, Enter on a pin: ${JSON.stringify(s)}`);
@@ -486,6 +488,98 @@ check('one details surface: click, Enter on a pin and a suggestion pick open the
         const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
         await context.close();
         expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+    }
+});
+
+// How many listeners of one type are on window (asked from the browser, not the app)
+const windowListeners = async (context, page, type) => {
+    const cdp = await context.newCDPSession(page);
+    const { result } = await cdp.send('Runtime.evaluate', { expression: 'window' });
+    const { listeners } = await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId });
+    return listeners.filter(l => l.type === type).length;
+};
+const pageState = page => page.evaluate(() => ({
+    search: window.location.search, path: window.location.pathname, length: history.length,
+    open: document.getElementById('sidebar').style.display === 'flex' && !document.getElementById('sidebar').classList.contains('hidden'),
+    title: (document.querySelector('#sidebar h2') || {}).textContent || '',
+    box: document.getElementById('search-input').value, injected: window.injected
+}));
+
+check('a point and a city have a URL; Back closes the details and stays; reload keeps the place', async () => {
+    const LINKED = 343455; // "AM.PM - אבן גבירול 91" in תל אביב
+    // 1. ?id= opens that point; Back closes it and stays on the page; one popstate listener
+    let { context, page, problems } = await openApp({ viewport: PHONE }, '?id=' + LINKED);
+    const name = await page.evaluate(id => (allLocations.find(l => l.id === id) || {}).name, LINKED);
+    expect(name, `data changed: no location ${LINKED}; pick another LINKED`);
+    await mapSettled(page);
+    let s = await pageState(page);
+    const pins = await visibleSelectedPins(page);
+    expect(s.open && s.title === name && s.search === '?id=' + LINKED && pins === 1, `?id=${LINKED}: ${JSON.stringify(s)}, ${pins} visible selected pins`);
+    await page.reload(); await dataLoaded(page); await mapSettled(page);
+    s = await pageState(page);
+    expect(s.open && s.title === name && s.search === '?id=' + LINKED, 'reload with the point open: ' + JSON.stringify(s));
+    await page.goBack(); await page.waitForTimeout(600);
+    s = await pageState(page);
+    expect(!s.open && s.search === '' && s.path === '/', 'Back after opening a link: ' + JSON.stringify(s));
+    expect(await windowListeners(context, page, 'popstate') === 1, 'popstate listeners on window: ' + await windowListeners(context, page, 'popstate'));
+    await context.close();
+
+    // 2. opening points: one history step, replaced by the next point; Back closes, stays
+    ({ context, page, problems } = await openApp());
+    await page.evaluate(() => map.setView([32.0853, 34.7818], 17, { animate: false })); await page.waitForTimeout(1000);
+    const before = (await pageState(page)).length;
+    const first = await tagDrawnPin(page);
+    await page.locator('[data-smoke-tap]').click({ force: true }); await page.waitForTimeout(500);
+    const afterFirst = await pageState(page);
+    const second = await tagDrawnPin(page, first);
+    await page.locator('[data-smoke-tap]').click({ force: true }); await page.waitForTimeout(500);
+    const afterSecond = await pageState(page);
+    expect(afterFirst.open && /^\?id=\d+$/.test(afterFirst.search) && afterFirst.length === before + 1, `first point: ${JSON.stringify(afterFirst)} (history was ${before})`);
+    expect(afterSecond.title === second && /^\?id=\d+$/.test(afterSecond.search) && afterSecond.search !== afterFirst.search && afterSecond.length === before + 1,
+        `second point "${second}" (first "${first}", history was ${before}): ${JSON.stringify(afterSecond)}, first: ${JSON.stringify(afterFirst)}`);
+    await page.goBack(); await page.waitForTimeout(600);
+    s = await pageState(page);
+    expect(!s.open && s.search === '' && page.url().startsWith(server.base), 'Back with a point open: ' + JSON.stringify(s));
+    // closing with the button takes the step back too: Back afterwards leaves nothing open behind
+    await page.locator('[data-smoke-tap]').click({ force: true }); await page.waitForTimeout(500);
+    await page.click('#sidebar-close'); await page.waitForTimeout(600);
+    s = await pageState(page);
+    expect(!s.open && s.search === '' && s.length === afterSecond.length, 'closed with the button: ' + JSON.stringify(s));
+    // close and open again at once: the address ends on the new point
+    await page.evaluate(() => { const a = allLocations[0], b = allLocations[1]; showSidebar(a); hideSidebar(); showSidebar(b); });
+    await page.waitForTimeout(800);
+    s = await pageState(page);
+    const bId = await page.evaluate(() => allLocations[1].id);
+    expect(s.open && s.search === '?id=' + bId, 'close and open at once: ' + JSON.stringify(s));
+    const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+    await context.close();
+    expect(errors.length === 0, errors.join(' ; '));
+
+    // 3. ?city= picks that city; reload keeps it; clearing the box clears the address
+    ({ context, page, problems } = await openApp({ viewport: PHONE }, '?city=' + encodeURIComponent(CITY)));
+    const own = await inCity(page, CITY);
+    await mapSettled(page);
+    let shownNow = await shown(page);
+    expect(shownNow.count === own && shownNow.cities.join() === CITY && shownNow.box === CITY, `?city=${CITY}: ${JSON.stringify(shownNow)}`);
+    await page.reload(); await dataLoaded(page); await mapSettled(page);
+    shownNow = await shown(page);
+    expect(shownNow.count === own && shownNow.box === CITY && (await pageState(page)).search === '?city=' + encodeURIComponent(CITY), 'reload with a city: ' + JSON.stringify(shownNow));
+    await clearSearch(page);
+    expect((await pageState(page)).search === '', 'after clearing the box: ' + (await pageState(page)).search);
+    await type(page, CITY); await press(page, 'Enter'); await settle(page);
+    expect((await pageState(page)).search === '?city=' + encodeURIComponent(CITY), 'Enter on a city: ' + (await pageState(page)).search);
+    await context.close();
+
+    // 4. unknown or malformed values open the plain map, inject nothing, log nothing
+    for (const query of ['?id=%3Cscript%3Ewindow.injected%3D1%3C%2Fscript%3E', '?id=99999999', '?id=1.5', '?id=-3', '?id=343455abc',
+        '?city=%3Cimg%20src%3Dx%20onerror%3D%22window.injected%3D1%22%3E', '?city=' + encodeURIComponent('עיר שאינה קיימת'), '?city=']) {
+        ({ context, page, problems } = await openApp({}, query));
+        await page.waitForTimeout(500);
+        s = await pageState(page);
+        const all = await shown(page);
+        await context.close();
+        expect(!s.open && s.injected === undefined && s.box === '' && all.count === all.total && s.search === '' && problems.length === 0,
+            `${query}: ${JSON.stringify(s)}, ${all.count} of ${all.total} shown, ${problems.join(' ; ')}`);
     }
 });
 

@@ -789,16 +789,45 @@ function keepPinAboveSheet(location) {
     });
 }
 
-// Show sidebar with location details
+// === THE ADDRESS BAR ===
+// The open point (?id=) or the picked city (?city=) is kept in the address, so a link
+// can be shared and a reload keeps the place. Opening a point is one step in the
+// browser history (the next point replaces it); Back closes it and stays on the page.
+function placeUrl() {
+    if (selectedLocationId !== null) return '?id=' + selectedLocationId;
+    if (currentCity) return '?city=' + encodeURIComponent(currentCity);
+    return window.location.pathname;
+}
+// Closing a point goes one step back in the history. Until the browser has done that
+// (the "popstate" event), the address is left alone; the event handler writes it.
+let historyBackPending = false;
+function rememberPlace(newStep) {
+    if (historyBackPending) return;
+    const state = selectedLocationId !== null ? { id: selectedLocationId } : null;
+    const url = placeUrl();
+    if (newStep) {
+        history.pushState(state, '', url);
+        return;
+    }
+    // Every search change comes here; Safari refuses more than 100 writes in 30 s
+    const unchanged = (window.location.search || window.location.pathname) === url &&
+        (history.state && history.state.id) === (state && state.id);
+    if (!unchanged) history.replaceState(state, '', url);
+}
+
+// Show sidebar with location details.
+// fromHistory: the browser's Back/Forward asked for it, so the history is already right.
 let sidebarHideTimer = null;
-function showSidebar(location) {
+function showSidebar(location, fromHistory = false) {
     if (!cachedSidebar || !cachedSidebarContent) return;
 
     // Cancel a hide that is still animating, or it would hide the sidebar we are about to show
     clearTimeout(sidebarHideTimer);
 
+    const pointInHistory = !!(history.state && history.state.id);
     selectedLocationId = location.id;
     setSelectedLocation(location);
+    if (!fromHistory) rememberPlace(!pointInHistory); // a new step only if no point was open
     cachedSidebarContent.innerHTML = createSidebarContent(location);
     cachedSidebar.style.transform = ''; // clear leftover swipe position
     cachedSidebar.style.display = 'flex';
@@ -815,7 +844,8 @@ function showSidebar(location) {
 }
 
 // Hide sidebar
-function hideSidebar() {
+function hideSidebar(fromHistory = false) {
+    const wasOpen = selectedLocationId !== null;
     if (cachedSidebar && cachedSidebar.style.display !== 'none') {
         cachedSidebar.classList.add('hidden');
         clearTimeout(sidebarHideTimer);
@@ -826,7 +856,30 @@ function hideSidebar() {
     }
     selectedLocationId = null;
     setSelectedLocation(null);
+    if (fromHistory || !wasOpen) return;
+    if (history.state && history.state.id && !historyBackPending) {
+        historyBackPending = true;
+        history.back(); // the step that opened the point
+    } else {
+        rememberPlace(false);
+    }
 }
+
+// Back / Forward: open or close the details to match the step the browser went to.
+// Added once, here at the top level of the file.
+window.addEventListener('popstate', (e) => {
+    if (historyBackPending) {
+        // The step back asked for by hideSidebar(). A point opened in the meantime
+        // gets its own step again.
+        historyBackPending = false;
+        rememberPlace(selectedLocationId !== null);
+        return;
+    }
+    const id = e.state && e.state.id;
+    if (id && allLocations.some(l => l.id === id)) focusOnLocation(id, true);
+    else hideSidebar(true);
+    rememberPlace(false); // the city may have changed since this step was made
+});
 
 // Adding thousands of pins to the cluster layer takes several batches, with pauses
 // in between so a slow phone does not freeze.
@@ -851,6 +904,7 @@ function setSearch(text, city) {
     clearTimeout(searchTimeout);
     currentSearch = text;
     currentCity = city;
+    rememberPlace(false);
     return updateMarkers();
 }
 
@@ -1086,9 +1140,7 @@ function setupAutocomplete() {
 
     // Show exactly one city on the map
     function pickCity(city) {
-        searchInput.value = city;
-        const visibleMarkers = setSearch(city, city);
-        zoomToVisibleMarkers(visibleMarkers);
+        showCity(city);
         emptySuggestions();
     }
 
@@ -1120,13 +1172,23 @@ function setupAutocomplete() {
     });
 }
 
+// Show exactly one city on the map, with its name in the search box
+function showCity(city) {
+    const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('search-clear');
+    if (searchInput) searchInput.value = city;
+    if (clearBtn) clearBtn.style.display = 'flex';
+    const visibleMarkers = setSearch(city, city);
+    zoomToVisibleMarkers(visibleMarkers);
+}
+
 // Focus on a location: open its details and fly the map to it
-function focusOnLocation(locationId) {
+function focusOnLocation(locationId, fromHistory = false) {
     const location = allLocations.find(l => l.id === locationId);
     if (!location) return;
 
     // Details first: the flight below needs to know how high the sheet is
-    showSidebar(location);
+    showSidebar(location, fromHistory);
 
     // On a phone the sheet covers the bottom of the map, so aim for the middle of
     // the part that stays visible: the map centre goes half a sheet below the point.
@@ -1339,7 +1401,7 @@ function updateLegendCounts() {
 }
 
 // Clicking the map background closes the details panel
-map.on('click', hideSidebar);
+map.on('click', () => hideSidebar());
 
 // Loading functions
 function showLoading(text) {
@@ -1437,6 +1499,21 @@ function loadLocations() {
             setEmptyStateText('לא נמצאו תוצאות', 'נסה לשנות את הסינון או לחפש מונח אחר', 'נקה סינון');
             updateMarkers();
 
+            // A shared link: ?id=<point> opens that point, ?city=<name> picks that city.
+            // Both are checked against the data; anything else opens the plain map.
+            const params = new URLSearchParams(window.location.search);
+            const linkedId = /^[1-9][0-9]{0,9}$/.test(params.get('id') || '') ? Number(params.get('id')) : null;
+            const linkedCity = params.get('city');
+            if (linkedId !== null && allLocations.some(l => l.id === linkedId)) {
+                // The plain page becomes the step before the point, so Back closes it and stays here
+                history.replaceState(null, '', window.location.pathname);
+                focusOnLocation(linkedId);
+            } else if (linkedCity && cityCounts.has(linkedCity)) {
+                showCity(linkedCity);
+            } else if (params.has('id') || params.has('city')) {
+                history.replaceState(null, '', window.location.pathname);
+            }
+
             // PWA shortcut ?action=nearest: only now is there data to find the nearest point in
             if (pendingNearest) {
                 pendingNearest = false;
@@ -1469,7 +1546,7 @@ loadLocations();
 // Sidebar Close
 const sidebarClose = document.getElementById('sidebar-close');
 if (sidebarClose) {
-    sidebarClose.addEventListener('click', hideSidebar);
+    sidebarClose.addEventListener('click', () => hideSidebar());
 }
 
 // Sidebar swipe-to-close on mobile
