@@ -388,6 +388,19 @@ check('nearest: one tap opens the nearest point above the sheet; a second tap re
             expect(/ בקו אווירי$/.test(s.distanceText), `${label}: distance text "${s.distanceText}"`);
             expect(!s.userDotInteractive && !s.userDotPopup && s.active, `${label}: user dot interactive ${s.userDotInteractive}, popup ${s.userDotPopup}, button active ${s.active}`);
             expect(s.toast === '', `${label}: a toast "${s.toast}" next to the open sheet`);
+            if (viewport === PHONE) {
+                // the open sheet must not cover the locate button: a tap there would land on "הנקודה קיימת"
+                const hit = await page.evaluate(() => { const b = document.querySelector('.locate-btn').getBoundingClientRect(); const el = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2); return el ? (el.closest('.locate-btn') ? 'locate' : el.className || el.tagName) : 'nothing'; });
+                expect(hit === 'locate', `${label}: with the sheet open, the locate button is covered by ${hit}`);
+            }
+            if (where === 'Tel Aviv' && viewport === PHONE) {
+                // a second tap with the sheet still open re-centres and sends no confirmation
+                await page.evaluate(() => { window.smokeOpened = []; window.open = url => { window.smokeOpened.push(url); return null; }; map.setView([31.25, 34.79], 10, { animate: false }); });
+                await tapLocate(page);
+                const kept = await nearestState(page);
+                const opened = await page.evaluate(() => window.smokeOpened.length + document.querySelectorAll('.like-btn.liked').length);
+                expect(kept.open && kept.title === s.nearest && kept.zoom >= 14 && opened === 0, `${label}, second tap with the sheet open: ${JSON.stringify(kept)}, forms opened or likes: ${opened}`);
+            }
             if (where === 'Tel Aviv') {
                 // move away, close the details, tap again: back to the user and the nearest point
                 await page.evaluate(() => { hideSidebar(); map.setView([31.25, 34.79], 10, { animate: false }); });

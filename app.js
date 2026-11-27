@@ -384,9 +384,11 @@ function setEmptyStateText(title, text, buttonText) {
     const h3 = emptyState.querySelector('h3');
     const p = emptyState.querySelector('p');
     const btn = emptyState.querySelector('.clear-filters-btn');
-    if (h3) h3.textContent = title;
-    if (p) p.textContent = text;
-    if (btn) btn.textContent = buttonText;
+    // Only when the text changes: the panel is an alert, and a screen reader may read it
+    // again on every change (the search updates it on every keystroke)
+    if (h3 && h3.textContent !== title) h3.textContent = title;
+    if (p && p.textContent !== text) p.textContent = text;
+    if (btn && btn.textContent !== buttonText) btn.textContent = buttonText;
 }
 
 // The map library is a separate file (vendor/leaflet). If it did not arrive, nothing
@@ -696,6 +698,10 @@ function formatUpdatedDate(isoText) {
     if (typeof isoText !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(isoText)) return '';
     const date = new Date(isoText);
     if (isNaN(date.getTime())) return '';
+    // JavaScript rolls 30 February over to 2 March instead of refusing it: refuse it here
+    const [y, m, d] = isoText.slice(0, 10).split('-').map(Number);
+    const asWritten = new Date(Date.UTC(y, m - 1, d));
+    if (asWritten.getUTCMonth() !== m - 1 || asWritten.getUTCDate() !== d) return '';
     const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
     const part = type => Number(parts.find(p => p.type === type).value); // en-GB writes 05, people write 5
     return `${part('day')}.${part('month')}.${part('year')}`;
@@ -827,6 +833,13 @@ function sheetHeight() {
     return cachedSidebar.offsetHeight;
 }
 
+// The map's bottom-right corner (the locate button and the credits) rises above the
+// open sheet, so the sheet never covers it: a tap meant for the locate button would
+// otherwise land on a button in the sheet. --sheet-h is used in style.css.
+function liftCornerAboveSheet() {
+    document.documentElement.style.setProperty('--sheet-h', sheetHeight() + 'px');
+}
+
 // Move the map just enough for the pin to stay visible above the sheet.
 function keepPinAboveSheet(location) {
     const covered = sheetHeight();
@@ -880,6 +893,7 @@ function showSidebar(location, fromHistory = false) {
     cachedSidebar.style.transform = ''; // clear leftover swipe position
     cachedSidebar.style.display = 'flex';
     cachedSidebar.classList.remove('hidden');
+    liftCornerAboveSheet();
 
     // Focus goes into the details, so a screen reader says they opened. The phone
     // sheet hides its close button (swipe down or Escape closes it): then the heading.
@@ -904,6 +918,7 @@ function hideSidebar(fromHistory = false) {
     }
     selectedLocationId = null;
     setSelectedLocation(null);
+    document.documentElement.style.setProperty('--sheet-h', '0px');
     if (fromHistory || !wasOpen) return;
     if (history.state && history.state.id && !historyBackPending) {
         historyBackPending = true;

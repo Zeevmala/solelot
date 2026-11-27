@@ -1057,6 +1057,12 @@ body {
 }
 
 @media (max-width: 768px) {
+    /* The locate button and the credits stay above the open sheet (--sheet-h is set in app.js) */
+    .leaflet-bottom.leaflet-right {
+        bottom: var(--sheet-h, 0px);
+        transition: bottom 0.3s ease;
+    }
+
     .app-header {
         height: 48px;
         padding: 0 12px;
