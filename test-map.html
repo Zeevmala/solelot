@@ -538,7 +538,7 @@ function createSidebarContent(location) {
             // Words in any order, doubled letters, aliases (great-map A3), on the real data.
             // The page builds the search text once per location when the data loads; so does this test.
             locations.forEach(function(loc) { loc.searchText = locationSearchText(loc); });
-            var sample = locations.filter(function(loc, i) { return i % 9 === 0; }).slice(0, 400);
+            var sample = locations.filter(function(loc, i) { return i % 8 === 0; }).slice(0, 400);
             var missed = sample.filter(function(loc) {
                 var street = loc.address.split(',')[0].replace(/[0-9]+/g, ' ').trim();
                 return searchLocations(locations, street + ' ' + loc.city, null).indexOf(loc) === -1;

@@ -406,6 +406,8 @@ async function pickFromSuggestions(viewport, cpuSlowdown) {
     // may still be counted inside a cluster: it was drawn on its own layer)
     let afterTap = { pins: 1, title: '', name: '' };
     if (cpuSlowdown === 1) {
+        // on a phone the sheet had moved the map up; look for a pin around the picked point, not the screen centre
+        await page.evaluate(id => { const l = allLocations.find(x => x.id === id); map.setView([l.lat, l.lng], map.getZoom(), { animate: false }); }, target.id);
         afterTap.name = await tagDrawnPin(page);
         expect(afterTap.name, `${viewport.width}px: no pin drawn on its own near "${target.name}" to tap`);
         await page.locator('[data-smoke-tap]').click({ force: true });
@@ -435,7 +437,11 @@ const tagDrawnPin = (page, skip = null) => page.evaluate(async skip => {
         return !!hit && el.contains(hit);
     });
     let el = find();
-    if (!el) { map.setZoom(18, { animate: false }); await new Promise(done => setTimeout(done, 800)); el = find(); }
+    // around an isolated mall every neighbour may still be in a cluster at 16-18 on a narrow phone; zoom 15 shows the streets around it
+    for (const zoom of [16, 15, 18]) {
+        if (el) break;
+        map.setZoom(zoom, { animate: false }); await new Promise(done => setTimeout(done, 800)); el = find();
+    }
     if (!el) return null;
     el.dataset.smokeTap = '1';
     return nameOf(el);
