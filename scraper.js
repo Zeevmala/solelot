@@ -635,10 +635,13 @@ const GENERIC_NAMES = ['מוקד איסוף', 'נקודת איסוף'];
 
 // The chain of a shop: the first part of its name ("רמי לוי - תקשורת - קניון עטרות" -> "רמי לוי"),
 // and for a fuel station the brand too ("תחנת דלק - פז YELLOW"). '' for a generic name.
+const chainByName = new Map(); // shopChain depends on the name only, and runs once per override
 function shopChain(name) {
+    if (chainByName.has(name)) return chainByName.get(name);
     const parts = name.split(HYPHEN_SEPARATOR).map(clean);
     const chain = parts[0] === 'תחנת דלק' ? parts.slice(0, 2).join(' - ') : parts[0];
-    return GENERIC_NAMES.includes(chain) ? '' : chain;
+    chainByName.set(name, GENERIC_NAMES.includes(chain) ? '' : chain);
+    return chainByName.get(name);
 }
 
 // The house number in a street ("הרצל 10" -> "10"). A road number ("כביש 40") is not a house number.
@@ -656,27 +659,35 @@ function houseNumber(street) {
 // of its chain with two or more different numbers could be any of them: it is merged with none.
 // The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
 function dropSameShop(entries) {
-    const sameChainNear = (a, b) => a !== b && a.location.city === b.location.city &&
-        shopChain(a.location.name) === shopChain(b.location.name) &&
-        distanceMeters(a.location, b.location) <= SAME_SHOP_METERS;
-    // the house numbers around each record without one
+    // each chain is worked out once: the report of overrides without effect runs this step once per override
+    const chainOf = new Map(entries.map(entry => [entry, shopChain(entry.location.name)]));
+    const byChainCity = new Map(); // chain + city -> entries
+    for (const entry of entries) {
+        const key = chainOf.get(entry) + '\0' + entry.location.city;
+        if (!byChainCity.has(key)) byChainCity.set(key, []);
+        byChainCity.get(key).push(entry);
+    }
+    // the house numbers around each record without one (same chain, same city, within SAME_SHOP_METERS)
     const numbersAround = new Map();
     for (const entry of entries) {
-        if (houseNumber(entry.street) || !shopChain(entry.location.name)) continue;
-        numbersAround.set(entry, new Set(entries.filter(other => sameChainNear(entry, other))
+        if (houseNumber(entry.street) || !chainOf.get(entry)) continue;
+        const sameChainCity = byChainCity.get(chainOf.get(entry) + '\0' + entry.location.city);
+        numbersAround.set(entry, new Set(sameChainCity
+            .filter(other => other !== entry && distanceMeters(entry.location, other.location) <= SAME_SHOP_METERS)
             .map(other => houseNumber(other.street)).filter(Boolean)));
     }
     const between = entry => numbersAround.has(entry) && numbersAround.get(entry).size > 1;
 
-    const byChain = new Map(); // chain -> entries kept so far
+    const byChain = new Map(); // chain + city -> entries kept so far
     const dropped = [];
     const gone = new Set();
     for (const entry of [...entries].sort((a, b) => a.location.id - b.location.id)) {
-        const chain = shopChain(entry.location.name);
+        const chain = chainOf.get(entry);
         if (!chain) continue;
-        if (!byChain.has(chain)) byChain.set(chain, []);
+        const key = chain + '\0' + entry.location.city;
+        if (!byChain.has(key)) byChain.set(key, []);
         const number = houseNumber(entry.street);
-        const twin = byChain.get(chain).find(other => {
+        const twin = byChain.get(key).find(other => {
             if (other.location.city !== entry.location.city) return false;
             const otherNumber = houseNumber(other.street);
             if (number && otherNumber && number !== otherNumber) return false;
@@ -688,7 +699,7 @@ function dropSameShop(entries) {
             dropped.push({ id: entry.location.id, sameAs: twin.location.id });
             gone.add(entry);
         } else {
-            byChain.get(chain).push(entry);
+            byChain.get(key).push(entry);
         }
     }
     return { entries: entries.filter(entry => !gone.has(entry)), dropped };
@@ -727,33 +738,9 @@ function numericId(marker) {
     return marker && /^\d+$/.test(String(marker.id)) ? Number(marker.id) : Infinity;
 }
 
-function buildLocations(markers, overrides = {}) {
-    // MAI does not promise an order. Sorting first means the same markers always
-    // give the same file, whichever order they arrive in.
-    const sorted = [...markers].sort((a, b) => {
-        const idA = numericId(a);
-        const idB = numericId(b);
-        return idA === idB ? 0 : (idA < idB ? -1 : 1);
-    });
-
-    const skipped = {};
-    const entries = [];
-    const withoutEffect = new Map(); // override id -> why it changes nothing on the map
-    for (const marker of sorted) {
-        const result = transformMarker(marker, overrides);
-        if (result.skip) {
-            skipped[result.skip] = (skipped[result.skip] || 0) + 1;
-            const id = String(marker && marker.id);
-            if (Object.prototype.hasOwnProperty.call(overrides, id)) {
-                // an exclude on a record that is skipped for another reason anyway (a school) is not needed
-                const reason = overrides[id].exclude ? transformMarker(marker).skip : result.skip;
-                if (reason) withoutEffect.set(id, 'skipped: ' + reason);
-            }
-        } else {
-            entries.push(result);
-        }
-    }
-
+// The steps after transformMarker: stacked groups, repeats, one shop listed twice, then names told
+// apart. Takes the entries in id order; changes their location objects (disambiguate renames them).
+function placeEntries(entries) {
     // Stacked groups go first: "same name, same coordinate" is only a repeat
     // when the addresses agree, and after this step they do.
     const { entries: placed, groups: stacked } = dropStacked(entries);
@@ -778,23 +765,75 @@ function buildLocations(markers, overrides = {}) {
     const { entries: named, renamed, dropped: sameName, farTwins } = disambiguate(shops);
     const locations = named.map(entry => entry.location).sort((a, b) => a.id - b.id);
 
-    // An override whose id is not in the MAI response does nothing any more
-    const markerIds = new Set(markers.filter(m => m && typeof m === 'object').map(m => String(m.id)));
-    const overridesUnmatched = Object.keys(overrides).filter(id => !markerIds.has(id)).sort((a, b) => a - b);
-
-    // Nor does one on a record that is in the response but never reaches the map
-    const mergedAway = [
+    // why each record that is not on the map went (id -> reason)
+    const mergedAway = new Map([
         ...sameSpot.map(d => [d.id, 'same point as ' + d.sameAs]),
         ...sameShop.map(d => [d.id, 'same shop as ' + d.sameAs]),
         ...sameName.map(d => [d.id, 'same name and place as ' + d.sameAs]),
         ...stacked.flatMap(group => group.ids.map(id => [id, 'stacked on one coordinate with other streets']))
-    ];
-    for (const [id, reason] of mergedAway) {
-        if (Object.prototype.hasOwnProperty.call(overrides, String(id))) withoutEffect.set(String(id), reason);
+    ]);
+    return { locations, stacked, sameSpot, sameShop, sameName, renamed, farTwins, mergedAway };
+}
+
+// A copy that placeEntries may change without touching the original
+function copyEntry(entry) {
+    return { ...entry, location: { ...entry.location } };
+}
+
+function buildLocations(markers, overrides = {}) {
+    // MAI does not promise an order. Sorting first means the same markers always
+    // give the same file, whichever order they arrive in.
+    const sorted = [...markers].sort((a, b) => {
+        const idA = numericId(a);
+        const idB = numericId(b);
+        return idA === idB ? 0 : (idA < idB ? -1 : 1);
+    });
+
+    const skipped = {};
+    const results = sorted.map(marker => transformMarker(marker, overrides));
+    for (const result of results) {
+        if (result.skip) skipped[result.skip] = (skipped[result.skip] || 0) + 1;
     }
-    const overridesWithoutEffect = [...withoutEffect]
-        .map(([id, reason]) => ({ id: Number(id), reason }))
-        .sort((a, b) => a.id - b.id);
+    const place = list => placeEntries(list.filter(result => !result.skip).map(copyEntry));
+    const built = place(results);
+    const { locations, stacked, sameSpot, sameShop, sameName, renamed, farTwins } = built;
+
+    // An override whose id is not in the MAI response does nothing any more
+    const markerIds = new Set(markers.filter(m => m && typeof m === 'object').map(m => String(m.id)));
+    const overridesUnmatched = Object.keys(overrides).filter(id => !markerIds.has(id)).sort((a, b) => a - b);
+
+    // Nor does one that leaves the map the same as without it. transformMarker reads only its own
+    // marker's override, so "without it" is that marker transformed with none, everything else the same.
+    // When that gives the same record (or a skip again), the rest of the build cannot change; otherwise
+    // the build after transformMarker is run again and the locations are compared.
+    const fate = (build, result, id) => result.skip ? 'skipped: ' + result.skip
+        : (build.mergedAway.get(Number(id)) || 'the record is the same without it');
+    const sameLocations = list => list.length === locations.length &&
+        list.every((loc, i) => JSON.stringify(loc) === JSON.stringify(locations[i]));
+    const overridesWithoutEffect = [];
+    const indexesOf = new Map(); // marker id -> its places in sorted
+    sorted.forEach((marker, i) => {
+        if (!marker || typeof marker !== 'object') return;
+        const id = String(marker.id);
+        if (!indexesOf.has(id)) indexesOf.set(id, []);
+        indexesOf.get(id).push(i);
+    });
+    for (const id of Object.keys(overrides).filter(id => markerIds.has(id)).sort((a, b) => a - b)) {
+        const indexes = indexesOf.get(id);
+        const without = results.slice();
+        for (const i of indexes) without[i] = transformMarker(sorted[i], {});
+        const same = indexes.every(i => (results[i].skip && without[i].skip) ||
+            (!results[i].skip && !without[i].skip && JSON.stringify(results[i]) === JSON.stringify(without[i])));
+        const last = without[indexes[indexes.length - 1]];
+        if (same) {
+            overridesWithoutEffect.push({ id: Number(id), reason: fate(built, last, id) });
+            continue;
+        }
+        const rebuilt = place(without);
+        if (sameLocations(rebuilt.locations)) {
+            overridesWithoutEffect.push({ id: Number(id), reason: fate(rebuilt, last, id) });
+        }
+    }
 
     return {
         locations,
@@ -956,7 +995,7 @@ async function run(options = {}) {
         console.warn('Overrides not matched by any MAI marker: [' + overridesUnmatched.join(', ') + ']');
     }
     if (overridesWithoutEffect.length > 0) {
-        console.warn('Overrides without effect (the record is skipped or merged away; delete them when the reason is settled):');
+        console.warn('Overrides without effect (the map is the same without them; delete them when the reason is settled):');
         for (const o of overridesWithoutEffect) console.warn('  ' + o.id + ': ' + o.reason);
     }
 

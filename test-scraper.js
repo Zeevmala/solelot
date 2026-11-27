@@ -748,6 +748,33 @@ test('overrides on records that are skipped or merged away are reported as witho
     assert.deepStrictEqual(overridesUnmatched, ['99']);
 });
 
+test('an override is without effect exactly when the map is the same without it', () => {
+    // 345148's city override is what merges it into 344152 (same shop, same city): without it a
+    // second אייס stays under "חוצות". So it has an effect and must not be reported.
+    const ace = ACE_VULCAN.slice(1);
+    const aceOverrides = { 344152: { city: 'חיפה' }, 345148: { city: 'חיפה' } };
+    const withBoth = buildLocations(ace, aceOverrides);
+    assert.deepStrictEqual(withBoth.locations.map(l => [l.id, l.city]), [[344152, 'חיפה']]);
+    assert.deepStrictEqual(buildLocations(ace, { 344152: { city: 'חיפה' } }).locations.map(l => [l.id, l.city]),
+        [[344152, 'חיפה'], [345148, 'חוצות']]);
+    assert.deepStrictEqual(withBoth.overridesWithoutEffect, []);
+
+    // 22 is excluded, but it sits on one coordinate with two other streets: the stacked rule drops it
+    // anyway (real: 344803 in 343446/344803/346433), so the map is the same without the exclude.
+    const stack = [
+        marker({ id: '21' }, { business_name: 'חנות א', street: 'הרצל', house_number: '10' }),
+        marker({ id: '22' }, { business_name: 'חנות ב', street: 'ויצמן', house_number: '3' }),
+        marker({ id: '23' }, { business_name: 'חנות ג', street: 'הנביאים', house_number: '5' }),
+        marker({ id: '24', lat: '32.9' }, { business_name: 'חנות ד' })
+    ];
+    const excluded = buildLocations(stack, { 22: { exclude: true }, 24: { city: 'נשר' } });
+    assert.deepStrictEqual(excluded.locations.map(l => l.id), [24]);
+    assert.deepStrictEqual(excluded.overridesWithoutEffect, [{ id: 22, reason: 'stacked on one coordinate with other streets' }]);
+    // a city override that gives the city the record already has changes nothing either
+    assert.deepStrictEqual(buildLocations([marker({ id: '31' })], { 31: { city: 'חיפה' } }).overridesWithoutEffect,
+        [{ id: 31, reason: 'the record is the same without it' }]);
+});
+
 test('checkCount: under 1,000 never saves; under 90 % of the previous file needs --force', () => {
     assert.match(checkCount(999, null, false), /Only 999/);
     assert.match(checkCount(999, 900, true), /Only 999/);          // --force does not switch this guard off
@@ -961,7 +988,9 @@ test('run writes locations.json and data_meta.json, with no .tmp file left', asy
         duplicates_removed: 0,
         stacked_dropped: 0,
         overrides_unmatched: [77],
-        overrides_without_effect: [],
+        // the eight overrides that give a record the city it already has change nothing on the map
+        overrides_without_effect: [400002, 400003, 400004, 400005, 400006, 400007, 400008, 400009]
+            .map(id => ({ id, reason: 'the record is the same without it' })),
         changes: null // there was no previous file to compare with
     });
     assert.deepStrictEqual(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')), []);
