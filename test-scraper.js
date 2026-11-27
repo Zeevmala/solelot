@@ -763,6 +763,18 @@ test('one shop listed twice: different house numbers are never merged (אבי ס
     assert.deepStrictEqual(dropped.sameShop, []);
 });
 
+test('one shop listed twice: a record without a house number between two numbered shops joins neither', () => {
+    // the reviewer's case: 100 has no number, 101 (אלנבי 113) is 22 m north and 102 (אלנבי 124) 22 m south.
+    // 100 could be either shop, so nothing is merged and both numbered shops keep their own pin.
+    const avi = (id, lat, number) => marker({ id, lat, lng: '34.78' }, { business_name: 'אבי סופר', city: 'תל אביב', street: 'אלנבי', house_number: number });
+    const { locations, dropped } = buildLocations([avi('100', '32.06000', undefined), avi('101', '32.06020', '113'), avi('102', '32.05980', '124')]);
+    assert.deepStrictEqual(locations.map(l => l.id), [100, 101, 102]);
+    assert.deepStrictEqual(dropped.sameShop, []);
+    // with only one numbered shop next to it, the record without a number is still the same shop
+    const pair = buildLocations([avi('100', '32.06000', undefined), avi('101', '32.06020', '113')]);
+    assert.deepStrictEqual(pair.dropped.sameShop, [{ id: 101, sameAs: 100 }]);
+});
+
 test('one shop listed twice: not another chain, not another fuel brand, not over 50 m, not a municipal point', () => {
     const at = (id, lat, fields) => marker({ id, lat, lng: '35.0' }, { street: 'הרצל', house_number: '10', ...fields });
     const { locations, dropped } = buildLocations([

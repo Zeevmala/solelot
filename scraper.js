@@ -650,8 +650,22 @@ function houseNumber(street) {
 // number. Two cities are never one shop: one shop listed under two cities needs an override that says
 // which label fits the pin (אייס 343950 "קריית אתא" and 344152 "חיפה", 36 m apart).
 // Two different house numbers are never one shop: אבי סופר at אלנבי 113, 122 and 124 are three shops
-// within 23 m. The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
+// within 23 m. So a record without a house number that sits within SAME_SHOP_METERS of numbered shops
+// of its chain with two or more different numbers could be any of them: it is merged with none.
+// The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
 function dropSameShop(entries) {
+    const sameChainNear = (a, b) => a !== b && a.location.city === b.location.city &&
+        shopChain(a.location.name) === shopChain(b.location.name) &&
+        distanceMeters(a.location, b.location) <= SAME_SHOP_METERS;
+    // the house numbers around each record without one
+    const numbersAround = new Map();
+    for (const entry of entries) {
+        if (houseNumber(entry.street) || !shopChain(entry.location.name)) continue;
+        numbersAround.set(entry, new Set(entries.filter(other => sameChainNear(entry, other))
+            .map(other => houseNumber(other.street)).filter(Boolean)));
+    }
+    const between = entry => numbersAround.has(entry) && numbersAround.get(entry).size > 1;
+
     const byChain = new Map(); // chain -> entries kept so far
     const dropped = [];
     const gone = new Set();
@@ -665,6 +679,7 @@ function dropSameShop(entries) {
             const otherNumber = houseNumber(other.street);
             if (number && otherNumber && number !== otherNumber) return false;
             if (number && otherNumber && streetKey(entry.street) !== streetKey(other.street)) return false;
+            if ((number && between(other)) || (otherNumber && between(entry))) return false;
             return distanceMeters(entry.location, other.location) <= SAME_SHOP_METERS;
         });
         if (twin) {
