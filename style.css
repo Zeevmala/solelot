@@ -1307,9 +1307,11 @@ body {
     }
 }
 
-/* Light basemap: OSM tiles desaturated (keyless replacement for CARTO Positron) */
+/* Light basemap: OSM tiles with most of their colour taken out (keyless replacement for
+   CARTO Positron). A hint of colour is kept, so the sea reads as sea and parks as green;
+   the pins and clusters stay the strongest colour on the map. */
 .basemap-light {
-    filter: grayscale(1) brightness(1.1) contrast(0.8);
+    filter: saturate(0.3) brightness(1.06) contrast(0.88);
 }
 
 /* Give the map canvas the same light grey as the tiles while they load */

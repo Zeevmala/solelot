@@ -183,6 +183,27 @@ check('plain load: no console errors, tiles load with crossorigin, MAI credit sh
     expect(attribution.width <= 390 - 24, 'the credit line is wider than the phone: ' + JSON.stringify(attribution));
 });
 
+check('light basemap keeps a hint of colour: the sea reads as sea', async () => {
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 } });
+    await page.evaluate(() => map.setView([32.0, 34.4], 8, { animate: false }));
+    await page.waitForFunction(() => { const t = [...document.querySelectorAll('img.leaflet-tile')]; return t.length > 0 && t.every(i => i.complete && i.naturalWidth > 0); }, null, { timeout: 20000 });
+    // a sea pixel, drawn through the same CSS filter the light basemap uses
+    const sea = await page.evaluate(() => {
+        const at = map.latLngToContainerPoint([32.4, 34.2]); const box = map.getContainer().getBoundingClientRect();
+        const tile = [...document.querySelectorAll('.basemap-light img.leaflet-tile')].find(img => { const b = img.getBoundingClientRect();
+            return box.left + at.x >= b.left && box.left + at.x < b.right && box.top + at.y >= b.top && box.top + at.y < b.bottom; });
+        if (!tile) return null;
+        const b = tile.getBoundingClientRect();
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
+        const ctx = canvas.getContext('2d'); ctx.filter = getComputedStyle(tile.parentElement.parentElement).filter; ctx.drawImage(tile, 0, 0);
+        const [r, g, bl] = ctx.getImageData(Math.floor((box.left + at.x - b.left) * 256 / b.width), Math.floor((box.top + at.y - b.top) * 256 / b.height), 1, 1).data;
+        return { r, g, b: bl, filter: ctx.filter };
+    });
+    await context.close();
+    expect(sea && sea.b - sea.r >= 10, 'sea pixel at zoom 8: ' + JSON.stringify(sea));
+    expect(problems.length === 0, problems.join(' ; '));
+});
+
 check('picking a city suggestion shows only that city', async () => {
     const { context, page } = await openApp();
     const own = await inCity(page, CITY), byText = await containing(page, CITY);

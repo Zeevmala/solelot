@@ -15,7 +15,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - **Facilities**: none shown. Batte-Re and RE-CAR were added and then removed at the owner's request (Nov 2026). `facilities.json` is empty; the app still supports the type
 
 ## Current Features
-- Interactive Leaflet map centered on Israel (OSM tiles; light = CSS-desaturated default — CARTO now requires an API key)
+- Interactive Leaflet map centered on Israel (OSM tiles; light = the default, OSM through `filter: saturate(0.3) brightness(1.06) contrast(0.88)` so the sea stays faintly blue while pins and clusters remain the strongest colour — CARTO now requires an API key)
 - Custom SVG pin markers: green battery pin = collection point, orange factory pin = recycling facility (different shape AND colour)
 - Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered. Cluster radius 70 / 55 / 48 / 20 px at zoom ≤ 9 / ≤ 13 / ≤ 15 / 16+, so a pick or "nearest" (zoom 16+) shows single pins; points on one exact coordinate still spread out when tapped (spiderfy). Pins and small clusters have invisible `::after` hit areas larger than the drawing; the selected pin is drawn 1.4×
 - Legend (bottom right) that also works as an on/off filter per type — shown only when the data has both types, so it is hidden while there are no facilities
