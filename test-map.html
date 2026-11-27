@@ -88,15 +88,13 @@ function fuzzyMatch(text, query, maxDist = 2) {
     return false;
 }
 
-function normalizeText(text) {
-    return String(text || '')
+function normalizeText(text, keepDoubled = false) {
+    let result = String(text || '')
         .toLowerCase()
         .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
-        .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/י+/g, 'י')
-        .replace(/ו+/g, 'ו')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .replace(/[-\u05BE\u2013]/g, ' ');
+    if (!keepDoubled) result = result.replace(/י+/g, 'י').replace(/ו+/g, 'ו');
+    return result.replace(/\s+/g, ' ').trim();
 }
 
 const QUERY_ALIASES = {
@@ -119,16 +117,83 @@ const QUERY_ALIASES = {
     'שוהם': 'שהם',
     'יהוד מונוסון': 'יהוד',
     'מודיעין מכבים רעות': 'מודיעין',
-    'פרדס חנה כרכור': 'פרדס חנה'
+    'פרדס חנה כרכור': 'פרדס חנה',
+    'כ"ס': 'כפר סבא',
+    // English names of the large cities
+    'jerusalem': 'ירושלים',
+    'haifa': 'חיפה',
+    'beer sheva': 'באר שבע',
+    'petah tikva': 'פתח תקווה',
+    'rishon lezion': 'ראשון לציון',
+    'netanya': 'נתניה',
+    'ashdod': 'אשדוד',
+    'holon': 'חולון',
+    'ramat gan': 'רמת גן',
+    'bnei brak': 'בני ברק',
+    'eilat': 'אילת',
+    // Chains, as people type them
+    'bug': 'באג',
+    'ikea': 'איקאה',
+    'ace': 'אייס',
+    'אם פם': 'am.pm',
+    'ampm': 'am.pm',
+    'am:pm': 'am.pm'
 };
 
-function normalizeQuery(text) {
+function normalizeQuery(text, keepDoubled = false) {
     const query = normalizeText(text);
     const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
     const alias = Object.keys(QUERY_ALIASES).find(name =>
         normalizeText(name) === query && (typedQuote || !name.includes('"')));
-    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
+    return normalizeText(alias ? QUERY_ALIASES[alias] : text, keepDoubled);
 }
+
+function locationSearchText(location) {
+    const text = [location.name, location.address, location.city].join(' ').replace(/,/g, ' ');
+    return { folded: normalizeText(text), asTyped: normalizeText(text, true) };
+}
+
+
+function findContaining(locations, query) {
+    const texts = locations.map(location => location.searchText || locationSearchText(location));
+    const withAll = (words, kind) => locations.filter((location, i) => words.every(word => texts[i][kind].includes(word)));
+    const typed = String(query || '').replace(/,/g, ' '); // an address pasted as written
+    const asTyped = normalizeQuery(typed, true);
+    const folded = normalizeQuery(typed);
+    if (asTyped !== folded) {
+        const found = withAll(asTyped.split(' '), 'asTyped');
+        if (found.length > 0) return found;
+    }
+    return withAll(folded.split(' '), 'folded');
+}
+
+
+function matchCities(cityCounts, text, exactLocationCount = 0) {
+    const query = normalizeQuery(text);
+    const maxDist = fuzzyTolerance(query.length);
+    const matches = [];
+    if (query === '') return matches;
+    cityCounts.forEach((count, name) => {
+        const city = normalizeText(name);
+        if (city.includes(query)) matches.push({ type: 'city', name, count, exact: true, same: city === query });
+    });
+    if (matches.length === 0 && exactLocationCount === 0 && maxDist > 0) {
+        cityCounts.forEach((count, name) => {
+            if (fuzzyMatch(normalizeText(name), query, maxDist)) {
+                matches.push({ type: 'city', name, count, exact: false, same: false });
+            }
+        });
+    }
+    // The city that is the typed text first, then cities containing it, then near
+    // matches; inside each group the city with more locations first
+    matches.sort((a, b) => {
+        if (a.same !== b.same) return a.same ? -1 : 1;
+        if (a.exact !== b.exact) return a.exact ? -1 : 1;
+        return b.count - a.count;
+    });
+    return matches;
+}
+
 
 function fuzzyTolerance(queryLength) {
     if (queryLength < 5) return 0;
@@ -142,35 +207,22 @@ function searchLocations(locations, query, cityFilter) {
     const q = normalizeQuery(query);
     if (q === '') return locations.slice();
 
+    const exact = findContaining(locations, query);
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
     const fields = locations.map(location => [
         normalizeText(location.name),
         normalizeText(location.address),
         normalizeText(location.city)
     ]);
-    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
-    if (exact.length > 0) return exact;
-
-    const maxDist = fuzzyTolerance(q.length);
-    if (maxDist === 0) return [];
     return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
 }
 
 const typeNames = {
     store: 'נקודת איסוף',
     facility: 'מתקן מיחזור'
-};
-
-const popupBatterySvg = {
-    store: `<svg class="type-icon-store" viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-        <rect x="7" y="1" width="6" height="2.5" rx="1" fill="currentColor"/>
-        <rect x="3" y="3.5" width="14" height="14" rx="2.5" fill="currentColor"/>
-        <path class="pin-casing" d="M11.2 5.5l-2.6 5h2.1l-1 4 3.7-5.4h-2.2z"/>
-    </svg>`,
-    facility: `<svg class="type-icon-facility" viewBox="0 0 20 20" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 18V7.5l5.5 3.4V7.5l5.5 3.4V2h5v16z" fill="currentColor"/>
-        <rect class="pin-casing" x="4.8" y="13" width="2.6" height="2.6"/>
-        <rect class="pin-casing" x="9.8" y="13" width="2.6" height="2.6"/>
-    </svg>`
 };
 
 const thumbsUpSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3m7-2V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>';
@@ -218,75 +270,6 @@ function getConfirmUrl(location) {
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
-function createPopupContent(location) {
-    const safeType = ['store', 'facility'].includes(location.type) ? location.type : 'store';
-    const typeIcon = popupBatterySvg[safeType];
-
-    const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
-
-    let content = `
-        <div class="popup-header">
-            <h3>
-                <span class="popup-icon">${typeIcon}</span>
-                ${escapeHtml(location.name)}
-            </h3>
-        </div>
-        ${hasAddress ? `<div class="popup-row">
-            <span>${escapeHtml(location.address)}</span>
-        </div>` : ''}
-    `;
-
-    if (location.hours && location.hours !== 'בדוק באתר') {
-        content += `
-        <div class="popup-row">
-            <span class="icon">🕐</span>
-            <span>${escapeHtml(location.hours)}</span>
-        </div>`;
-    }
-
-    if (location.description) {
-        content += `
-        <div class="popup-row">
-            <span class="icon">ℹ️</span>
-            <span>${escapeHtml(location.description)}</span>
-        </div>`;
-    }
-
-    if (userLocation) {
-        const distance = getDistance(
-            userLocation.lat, userLocation.lng,
-            location.lat, location.lng
-        );
-        content += `
-        <div class="popup-row distance">
-            <span class="icon">📏</span>
-            <span>${formatDistance(distance)} ממיקומך</span>
-        </div>`;
-    }
-
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
-    const wazeUrl = `https://waze.com/ul?ll=${location.lat},${location.lng}&navigate=yes`;
-
-    const reportUrl = getReportUrl(location);
-
-    content += `
-        <div class="nav-links">
-            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn google">נווט ב-Google</a>
-            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">נווט ב-Waze</a>
-        </div>
-        <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
-                ${thumbsUpSvg}
-            </button>
-            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(reportUrl)}" aria-label="דווח על בעיה">
-                ${thumbsDownSvg}
-            </button>
-        </div>
-    `;
-
-    return content;
-}
-
 function createSidebarContent(location) {
     const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
 
@@ -299,7 +282,7 @@ function createSidebarContent(location) {
         distanceHtml = `
             <div class="info-row">
                 <span class="info-icon">📏</span>
-                <span class="info-text distance">${formatDistance(distance)} ממיקומך</span>
+                <span class="info-text distance">${formatDistance(distance)} בקו אווירי</span>
             </div>
         `;
     }
@@ -310,7 +293,7 @@ function createSidebarContent(location) {
     return `
         <div class="sidebar-header">
             <div class="sidebar-title">
-                <h2>${escapeHtml(location.name)}</h2>
+                <h2 tabindex="-1">${escapeHtml(location.name)}</h2>
                 ${location.type === 'facility' ? `<span class="type-badge">${typeNames.facility}</span>` : ''}
             </div>
         </div>
@@ -441,22 +424,22 @@ function createSidebarContent(location) {
             assert(!cityNames.has('\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1-\u05D9\u05E4\u05D5'), 'Tel Aviv has one spelling (no "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1-\u05D9\u05E4\u05D5" variant)');
             assert(![...cityNames].some(function(c) { return c.indexOf('\u05E7\u05E8\u05D9\u05EA ') === 0; }), 'Kiryat-* cities use one spelling (\u05E7\u05E8\u05D9\u05D9\u05EA)');
 
-            // --- Popup template tests ---
-            section('Popup Template');
+            // --- Details template tests (the pin details is gone: every check runs on the sidebar/sheet) ---
+            section('Details Template');
             var testLoc = { id: 1, name: '\u05E1\u05D5\u05E4\u05E8 \u05E4\u05D0\u05E8\u05DD', address: '\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E8\u05E6\u05DC 10', city: '\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1', lat: 32.08, lng: 34.78, type: 'store', hours: '08:00-22:00' };
-            var popup = createPopupContent(testLoc);
+            var details = createSidebarContent(testLoc);
 
-            assert(!popup.includes('\uD83D\uDCCD'), 'Popup: no pin emoji in address row');
-            assert(popup.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Google'), 'Popup: Google nav button text in Hebrew');
-            assert(popup.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Waze'), 'Popup: Waze nav button text in Hebrew');
-            assert(popup.includes('nav-btn google'), 'Popup: Google button has correct class');
-            assert(popup.includes('nav-btn waze'), 'Popup: Waze button has correct class');
-            assert(popup.includes('feedback-row'), 'Popup: feedback buttons row present');
-            assert(popup.includes('like-btn'), 'Popup: like button present');
-            assert(popup.includes('dislike-btn'), 'Popup: dislike button present');
-            assert(popup.includes('data-like-id'), 'Popup: like button uses data-like-id (no inline onclick)');
-            assert(popup.includes('data-report-url'), 'Popup: dislike button uses data-report-url (no inline onclick)');
-            assert(popup.includes('data-confirm-url'), 'Popup: like button carries the confirm-form link');
+            assert(!details.includes('\uD83D\uDCCD'), 'Details: no pin emoji in address row');
+            assert(details.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Google'), 'Details: Google nav button text in Hebrew');
+            assert(details.includes('\u05E0\u05D5\u05D5\u05D8 \u05D1-Waze'), 'Details: Waze nav button text in Hebrew');
+            assert(details.includes('nav-btn google'), 'Details: Google button has correct class');
+            assert(details.includes('nav-btn waze'), 'Details: Waze button has correct class');
+            assert(details.includes('feedback-row'), 'Details: feedback buttons row present');
+            assert(details.includes('like-btn'), 'Details: like button present');
+            assert(details.includes('dislike-btn'), 'Details: dislike button present');
+            assert(details.includes('data-like-id'), 'Details: like button uses data-like-id (no inline onclick)');
+            assert(details.includes('data-report-url'), 'Details: dislike button uses data-report-url (no inline onclick)');
+            assert(details.includes('data-confirm-url'), 'Details: like button carries the confirm-form link');
             var confirmUrl = getConfirmUrl(testLoc);
             var confirmParams = new URL(confirmUrl).searchParams;
             assert(confirmUrl.indexOf(REPORT_FORM_URL + '?') === 0, 'Confirm link opens the report form');
@@ -464,16 +447,16 @@ function createSidebarContent(location) {
             assert(confirmParams.get('entry.1234054889') === testLoc.address && confirmParams.get('entry.1388870063') === testLoc.city, 'Confirm link carries address and city');
             assert(new URL(getReportUrl(testLoc)).searchParams.get('entry.1466478113') === testLoc.name, 'Problem report link keeps the plain name');
             assert(createSidebarContent(testLoc).includes('data-confirm-url'), 'Sidebar: like button carries the confirm-form link');
-            assert(!popup.includes('onclick'), 'Popup: no inline onclick handlers');
-            assert(popup.includes('08:00-22:00'), 'Popup: real hours shown');
+            assert(!details.includes('onclick'), 'Details: no inline onclick handlers');
+            assert(details.includes('08:00-22:00'), 'Details: real hours shown');
 
             var testLocBadHours = { id: 2, name: '\u05EA\u05D7\u05E0\u05D4', address: '\u05DB\u05EA\u05D5\u05D1\u05EA', city: '\u05E2\u05D9\u05E8', lat: 32.0, lng: 34.8, type: 'store', hours: '\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8' };
-            var popupBad = createPopupContent(testLocBadHours);
-            assert(!popupBad.includes('\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8'), 'Popup: "\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8" filtered out');
+            var detailsBad = createSidebarContent(testLocBadHours);
+            assert(!detailsBad.includes('\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8'), 'Details: "\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8" filtered out');
 
             var testLocNoHours = { id: 3, name: '\u05D7\u05E0\u05D5\u05EA', address: '\u05DB\u05EA\u05D5\u05D1\u05EA', city: '\u05E2\u05D9\u05E8', lat: 32.0, lng: 34.8, type: 'store' };
-            var popupNoHours = createPopupContent(testLocNoHours);
-            assert(!popupNoHours.includes('\uD83D\uDD50'), 'Popup: no clock icon when no hours');
+            var detailsNoHours = createSidebarContent(testLocNoHours);
+            assert(!detailsNoHours.includes('\uD83D\uDD50'), 'Details: no clock icon when no hours');
 
             // --- Sidebar template tests ---
             section('Sidebar Template');
@@ -485,6 +468,7 @@ function createSidebarContent(location) {
             assert(sidebar.includes('sidebar-nav-btn google'), 'Sidebar: Google button has correct class');
             assert(sidebar.includes('sidebar-nav-btn waze'), 'Sidebar: Waze button has correct class');
             assert(!sidebar.includes('\uD83D\uDCCD'), 'Sidebar: no pin emoji in address');
+            assert(sidebar.includes('<h2 tabindex="-1">'), 'Sidebar: the heading can take the focus (the phone sheet has no close button)');
 
             var sidebarBad = createSidebarContent(testLocBadHours);
             assert(!sidebarBad.includes('\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8'), 'Sidebar: "\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05EA\u05E8" filtered out');
@@ -492,17 +476,17 @@ function createSidebarContent(location) {
             // --- XSS protection ---
             section('XSS Protection');
             var xssLoc = { id: 99, name: '<scr' + 'ipt>alert(1)<\/scr' + 'ipt>', address: '"><img onerror=alert(1)>', city: 'test', lat: 32.0, lng: 34.8, type: 'store' };
-            var xssPopup = createPopupContent(xssLoc);
-            assert(!xssPopup.includes('<scr' + 'ipt>'), 'XSS: script tag escaped in popup');
-            assert(!xssPopup.includes('<img'), 'XSS: img tag escaped in popup');
+            var xssDetails = createSidebarContent(xssLoc);
+            assert(!xssDetails.includes('<scr' + 'ipt>'), 'XSS: script tag escaped in details');
+            assert(!xssDetails.includes('<img'), 'XSS: img tag escaped in details');
             var xssSidebar = createSidebarContent(xssLoc);
             assert(!xssSidebar.includes('<scr' + 'ipt>'), 'XSS: script tag escaped in sidebar');
 
             // --- Navigation URLs ---
             section('Navigation URLs');
-            assert(popup.includes('google.com/maps/dir'), 'Nav: Google Maps URL present');
-            assert(popup.includes('waze.com/ul'), 'Nav: Waze URL present');
-            assert(popup.includes('destination=32.08,34.78'), 'Nav: correct coordinates in URL');
+            assert(details.includes('google.com/maps/dir'), 'Nav: Google Maps URL present');
+            assert(details.includes('waze.com/ul'), 'Nav: Waze URL present');
+            assert(details.includes('destination=32.08,34.78'), 'Nav: correct coordinates in URL');
 
             // ======================================
             // NEW INTEGRATION TESTS
@@ -551,6 +535,34 @@ function createSidebarContent(location) {
             assert(searchLocations(locations, tlv + ' \u05D9\u05E4\u05D5', null).length === searchLocations(locations, tlv, null).length,
                 'Search: "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1 \u05D9\u05E4\u05D5" gives the same points as "\u05EA\u05DC \u05D0\u05D1\u05D9\u05D1"');
 
+            // Words in any order, doubled letters, aliases (great-map A3), on the real data.
+            // The page builds the search text once per location when the data loads; so does this test.
+            locations.forEach(function(loc) { loc.searchText = locationSearchText(loc); });
+            var sample = locations.filter(function(loc, i) { return i % 9 === 0; }).slice(0, 400);
+            var missed = sample.filter(function(loc) {
+                var street = loc.address.split(',')[0].replace(/[0-9]+/g, ' ').trim();
+                return searchLocations(locations, street + ' ' + loc.city, null).indexOf(loc) === -1;
+            });
+            assert(sample.length === 400 && missed.length < 20, 'Search: "street city" finds its own point for at least 95% of 400 addresses (' + missed.length + ' missed' + (missed[0] ? ', e.g. ' + missed[0].address : '') + ')');
+            var gvirol = searchLocations(locations, 'אבן גבירול תל אביב', null);
+            assert(gvirol.length > 0 && gvirol.every(function(loc) { return loc.city === tlv && (loc.name + loc.address).indexOf('אבן גבירול') !== -1; }),
+                'Search: "אבן גבירול תל אביב" shows only אבן גבירול in תל אביב (' + gvirol.length + ')');
+            var ace = searchLocations(locations, 'אייס', null);
+            var aceRaw = locations.filter(function(loc) { return (loc.name + '|' + loc.address + '|' + loc.city).indexOf('אייס') !== -1; }).length;
+            assert(ace.length > 0 && ace.length === aceRaw, 'Search: "אייס" shows only the ' + aceRaw + ' records containing it (got ' + ace.length + ')');
+            var ptk = searchLocations(locations, 'פתח תקוה', null).filter(function(loc) { return loc.city === 'פתח תקווה'; }).length;
+            var ptkOwn = locations.filter(function(loc) { return loc.city === 'פתח תקווה'; }).length;
+            assert(ptkOwn > 0 && ptk === ptkOwn, 'Search: "פתח תקוה" finds all ' + ptkOwn + ' points of פתח תקווה (got ' + ptk + ')');
+            var kiryat = searchLocations(locations, 'קרית אתא', null);
+            assert(kiryat.length > 0 && kiryat.every(function(loc) { return (loc.name + loc.address + loc.city).indexOf('קריית אתא') !== -1 || (loc.name + loc.address + loc.city).indexOf('קרית אתא') !== -1; }), 'Search: "קרית אתא" finds קריית אתא (' + kiryat.length + ')');
+            ['jerusalem', 'haifa', 'beer sheva', 'petah tikva', 'rishon lezion', 'netanya', 'ashdod', 'holon', 'ramat gan', 'bnei brak', 'eilat', 'כ"ס', 'bug', 'ikea', 'ace', 'אם פם', 'ampm', 'am:pm'].forEach(function(typed) {
+                assert(searchLocations(locations, typed, null).length > 0, 'Search: alias "' + typed + '" finds points on the map');
+            });
+            var cityCountsReal = new Map();
+            locations.forEach(function(loc) { cityCountsReal.set(loc.city, (cityCountsReal.get(loc.city) || 0) + 1); });
+            assert(matchCities(cityCountsReal, 'ספריה', findContaining(locations, 'ספריה').length).length === 0, 'Suggestions: "ספריה" offers no city row (it is found in locations)');
+            assert(matchCities(cityCountsReal, 'קרית אתא', findContaining(locations, 'קרית אתא').length).map(function(c) { return c.name; }).join() === 'קריית אתא', 'Suggestions: "קרית אתא" offers exactly one city');
+
             // --- Sidebar State Machine ---
             section('Sidebar State Machine');
             var mockSidebar = document.createElement('aside');
@@ -597,29 +609,29 @@ function createSidebarContent(location) {
 
             // Without userLocation — no distance row
             userLocation = null;
-            var popupNoDist = createPopupContent(testLoc);
-            assert(!popupNoDist.includes('\u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: no distance row without userLocation');
+            var detailsNoDist = createSidebarContent(testLoc);
+            assert(!detailsNoDist.includes('בקו אווירי'), 'GPS: no distance row without userLocation');
 
             // With userLocation — distance row present
             userLocation = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv center
-            var popupWithDist = createPopupContent(testLoc);
-            assert(popupWithDist.includes('\u05DE\u05F3 \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: distance row present with userLocation, in metres under 1 km');
-            assert(!popupWithDist.includes('\u05E7"\u05DE'), 'GPS: no km for a point under 1 km away');
-            assert(popupWithDist.includes('distance'), 'GPS: distance row has "distance" class');
+            var detailsWithDist = createSidebarContent(testLoc);
+            assert(detailsWithDist.includes('\u05DE\u05F3 בקו אווירי'), 'GPS: distance row present with userLocation, in metres under 1 km, said to be straight-line');
+            assert(!detailsWithDist.includes('\u05E7"\u05DE'), 'GPS: no km for a point under 1 km away');
+            assert(detailsWithDist.includes('distance'), 'GPS: distance row has "distance" class');
 
             // Distance value is reasonable
             var expectedDist = getDistance(32.0853, 34.7818, 32.08, 34.78);
             assert(expectedDist < 1, 'GPS: distance to nearby point is < 1 km (got ' + expectedDist.toFixed(2) + ')');
-            assert(popupWithDist.includes('<span>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 '), 'GPS: popup shows correct distance value');
+            assert(detailsWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 '), 'GPS: details show correct distance value');
             var sidebarWithDist = createSidebarContent(testLoc);
-            assert(sidebarWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA<'), 'GPS: sidebar shows the same distance in metres');
+            assert(sidebarWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 בקו אווירי<'), 'GPS: sidebar shows the same distance in metres, said to be straight-line');
 
             // Distance to Jerusalem
             var jlmLoc = { id: 10, name: 'Test', address: 'Test', city: 'Test', lat: 31.7683, lng: 35.2137, type: 'store' };
-            var popupJlm = createPopupContent(jlmLoc);
+            var detailsJlm = createSidebarContent(jlmLoc);
             var jlmDist = getDistance(32.0853, 34.7818, 31.7683, 35.2137);
             assert(jlmDist > 50 && jlmDist < 70, 'GPS: TLV to Jerusalem distance ~60km (got ' + jlmDist.toFixed(1) + ')');
-            assert(popupJlm.includes(jlmDist.toFixed(1) + ' \u05E7"\u05DE \u05DE\u05DE\u05D9\u05E7\u05D5\u05DE\u05DA'), 'GPS: Jerusalem popup shows correct distance in km');
+            assert(detailsJlm.includes(jlmDist.toFixed(1) + ' \u05E7"\u05DE בקו אווירי'), 'GPS: Jerusalem details show correct distance in km, said to be straight-line');
 
             // Reset userLocation
             userLocation = null;
