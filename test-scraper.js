@@ -1049,3 +1049,12 @@ test('normalizeCity: spellings and labels found in the "good to great" audit', (
         assert.strictEqual(normalizeCity(raw), expected, raw);
     }
 });
+
+test('points inside places the public cannot freely enter are excluded by data_overrides.json (owner, 2026-11-27)', () => {
+    const { overrides } = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_overrides.json'), 'utf8'));
+    // 343333 מחנה רמון (air force base), 344808 inside the national police headquarters, 345833 a pre-army academy
+    for (const id of ['343333', '344808', '345833']) {
+        assert.deepStrictEqual(overrides[id], { exclude: true }, id + ' should be excluded');
+        assert.strictEqual(transformMarker(marker({ id }), overrides).skip, 'excluded by data_overrides.json');
+    }
+});

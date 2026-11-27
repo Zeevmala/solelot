@@ -53,9 +53,8 @@ const REVIEWED_OK = {
         // 2026-11-26 spatial audit: fuel stations at a junction or on a road, filed under the nearest town
         345243: 'צומת סעד', 345548: 'כפר כנא, on the road', 345750: 'כפר כנא, on the road',
         345565: 'כפר מורן entrance', 344036: 'רמלה, on the road', 344557: 'עין יהב, on the road',
-        344053: 'דרך כפר חסידים', 343966: 'יד נתן entrance', 345445: 'צומת כברי',
-        // 2026-11-26: not a wrong pin, an open question for the owner (an air force base, like a school?)
-        343333: 'מחנה רמון'
+        344053: 'דרך כפר חסידים', 343966: 'יד נתן entrance', 345445: 'צומת כברי'
+        // 343333 מחנה רמון was here; the owner left it out (2026-11-27, data_overrides.json)
     },
     '14b': {
         // 2026-11-26 spatial audit: places with no street in one small village, kept by the scraper on purpose

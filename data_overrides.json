@@ -20,6 +20,7 @@
     "Added 2026-11-26: 3 second entries of one shop (validator check 25: same chain, same address, under 100 m), 63-90 m apart, so further apart than the 50 m the scraper merges by itself; the higher id is left out, as the scraper does: 343429 = 343376 (רמי לוי, דבורה הנביאה 128, תל אביב), 346637 = 343522 (קרביץ, המלאכה 2, רעננה), 344569 = 344434 (רמי לוי, תדהר 1, פרדס חנה).",
     "Added 2026-11-26: 344231 (קרביץ, \"מתחפ ביג פוריה\") is in טבריה: Nominatim puts the pin on המברג in אזור תעשייה טבריה עלית, where the other shops of the same BIG centre are listed under טבריה. It became the only point of \"פוריה\" when its second entry 346634 was merged into it (warning 14c).",
     "Added 2026-11-26: 346759 (קרביץ - קניון עופר השרון) is a second entry of 346641 (קרביץ - השרון- קניון עופר), same chain and address (הרצל 60, נתניה), 92 m apart; it showed in check 25 once the place stopped being repeated in the address. The higher id is left out.",
+    "Added 2026-11-27 (owner decision): points inside places the public cannot freely enter are left out, like schools. 343333 (\"מוקד איסוף - מחנה רמון\", שדה בוקר) is an air force base; 344808 (MAI name \"משטרת ישראל, מבנה מרכזי\", חיים בר לב 1, ירושלים) is inside the national police headquarters; 345833 (\"מכינה קדם צבאית\", ההדרים 21, כפר יונה) is a pre-army academy.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -491,6 +492,9 @@
     "343316": {
       "exclude": true
     },
+    "343333": {
+      "exclude": true
+    },
     "343383": {
       "exclude": true
     },
@@ -582,6 +586,9 @@
       "exclude": true
     },
     "344803": {
+      "exclude": true
+    },
+    "344808": {
       "exclude": true
     },
     "344846": {
@@ -699,6 +706,9 @@
       "exclude": true
     },
     "345809": {
+      "exclude": true
+    },
+    "345833": {
       "exclude": true
     },
     "345838": {
