@@ -678,23 +678,29 @@ function getConfirmUrl(location) {
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
-// Create sidebar content for a location
+// What kind of place a point is, as one short line in its details; '' when the
+// record has no "kind" (an optional field written by scraper.js) or one not listed here
+function pointKindText(location) {
+    const names = { fuel: 'תחנת דלק', shop: 'חנות', municipal: 'נקודת איסוף עירונית' };
+    const kind = location ? location.kind : undefined;
+    return typeof kind === 'string' && Object.prototype.hasOwnProperty.call(names, kind) ? names[kind] : '';
+}
+
+// Create sidebar content for a location: the name, one line with the distance (when
+// located) and the address, the kind of place, the two navigate buttons, then feedback
 function createSidebarContent(location) {
     const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
 
-    let distanceHtml = '';
+    const meta = [];
     if (userLocation) {
         const distance = getDistance(
             userLocation.lat, userLocation.lng,
             location.lat, location.lng
         );
-        distanceHtml = `
-            <div class="info-row">
-                <span class="info-icon">📏</span>
-                <span class="info-text distance">${formatDistance(distance)} בקו אווירי</span>
-            </div>
-        `;
+        meta.push(`<span class="distance">${formatDistance(distance)} בקו אווירי</span>`);
     }
+    if (hasAddress) meta.push(`<span class="sidebar-address">${escapeHtml(location.address)}</span>`);
+    const kind = pointKindText(location);
 
     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
     const wazeUrl = `https://waze.com/ul?ll=${location.lat},${location.lng}&navigate=yes`;
@@ -708,39 +714,23 @@ function createSidebarContent(location) {
         </div>
 
         <div class="sidebar-info">
-            ${hasAddress ? `<div class="info-row">
-                <span class="info-text">${escapeHtml(location.address)}</span>
-            </div>` : ''}
-            ${location.hours && location.hours !== 'בדוק באתר' ? `
-            <div class="info-row">
-                <span class="info-icon">🕐</span>
-                <span class="info-text">${escapeHtml(location.hours)}</span>
-            </div>
-            ` : ''}
-            ${location.description ? `
-            <div class="info-row">
-                <span class="info-icon">ℹ️</span>
-                <span class="info-text">${escapeHtml(location.description)}</span>
-            </div>
-            ` : ''}
-            ${distanceHtml}
+            ${meta.length > 0 ? `<p class="sidebar-meta">${meta.join('<span class="meta-sep" aria-hidden="true"> · </span>')}</p>` : ''}
+            ${kind ? `<p class="sidebar-kind">${kind}</p>` : ''}
+            ${location.hours && location.hours !== 'בדוק באתר' ? `<p class="info-text">${escapeHtml(location.hours)}</p>` : ''}
+            ${location.description ? `<p class="info-text">${escapeHtml(location.description)}</p>` : ''}
         </div>
 
         <div class="sidebar-nav">
-            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn google">
-                נווט ב-Google
-            </a>
-            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn waze">
-                נווט ב-Waze
-            </a>
+            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn waze">ניווט ב-Waze</a>
+            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn google">ניווט ב-Google Maps</a>
         </div>
 
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
-                ${thumbsUpSvg}
+            <button type="button" class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
+                ${thumbsUpSvg}<span>הנקודה קיימת</span>
             </button>
-            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דווח על בעיה">
-                ${thumbsDownSvg}
+            <button type="button" class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דיווח על בעיה">
+                ${thumbsDownSvg}<span>דיווח על בעיה</span>
             </button>
         </div>
     `;

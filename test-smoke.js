@@ -384,6 +384,49 @@ check('the locate button is a labelled pill in the bottom right; +/- hidden on t
     }
 });
 
+// The open sheet, measured: order of its parts, the filled navigate buttons, labelled feedback
+const sheetLayout = page => page.evaluate(() => {
+    const top = selector => { const el = document.querySelector('#sidebar ' + selector); return el ? el.getBoundingClientRect() : null; };
+    const probe = document.createElement('div'); probe.style.color = 'var(--cw-accent)'; document.body.appendChild(probe);
+    const accent = getComputedStyle(probe).color; probe.remove();
+    const parts = ['h2', '.sidebar-meta', '.sidebar-nav', '.feedback-row'].map(top);
+    const navs = [...document.querySelectorAll('#sidebar .sidebar-nav-btn')];
+    const feedback = [...document.querySelectorAll('#sidebar .feedback-btn')];
+    const sheet = document.getElementById('sidebar').getBoundingClientRect();
+    return {
+        inOrder: parts.every((box, i) => box && (i === 0 || box.top >= parts[i - 1].bottom - 1)),
+        distanceGap: top('.distance') && parts[0] ? Math.round(top('.distance').top - parts[0].bottom) : null,
+        navTexts: navs.map(a => a.textContent.trim()),
+        navFilled: navs.length === 2 && navs.every(a => getComputedStyle(a).backgroundColor === accent),
+        navSameSize: navs.length === 2 && Math.abs(navs[0].offsetWidth - navs[1].offsetWidth) <= 1 && navs[0].offsetHeight === navs[1].offsetHeight && navs[0].offsetHeight >= 48,
+        feedbackTexts: feedback.map(b => b.textContent.trim()),
+        feedbackNames: feedback.map(b => b.getAttribute('aria-label')),
+        feedbackHeight: Math.min(...feedback.map(b => b.offsetHeight)),
+        navInView: navs.every(a => { const b = a.getBoundingClientRect(); return b.top >= sheet.top && b.bottom <= Math.min(sheet.bottom, window.innerHeight); }),
+        sheetHeight: Math.round(sheet.height), titleLines: parts[0] ? Math.round(parts[0].height / parseFloat(getComputedStyle(document.querySelector('#sidebar h2')).lineHeight)) : 0
+    };
+});
+
+check('the sheet: name, distance and address, filled navigate buttons, labelled feedback', async () => {
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, geolocation: { latitude: 32.08, longitude: 34.78, accuracy: 20 }, permissions: ['geolocation'] });
+    await tapLocate(page);
+    const s = await sheetLayout(page);
+    // the longest name in the data still shows the navigate row without scrolling
+    const longest = await page.evaluate(() => allLocations.reduce((a, b) => (b.name.length > a.name.length ? b : a)));
+    await page.evaluate(id => focusOnLocation(id), longest.id); await mapSettled(page); await page.waitForTimeout(400);
+    const long = await sheetLayout(page);
+    const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+    await context.close();
+    expect(s.inOrder, 'parts out of order: ' + JSON.stringify(s));
+    expect(s.distanceGap !== null && s.distanceGap >= 0 && s.distanceGap <= 16, 'gap from the name to the distance: ' + s.distanceGap);
+    expect(s.navTexts.join('|') === 'ניווט ב-Waze|ניווט ב-Google Maps' && s.navFilled && s.navSameSize, 'navigate buttons: ' + JSON.stringify(s));
+    expect(s.feedbackTexts.join('|') === 'הנקודה קיימת|דיווח על בעיה' && s.feedbackNames[0].startsWith('הנקודה קיימת') && s.feedbackNames[1] === 'דיווח על בעיה' && s.feedbackHeight >= 44,
+        'feedback buttons: ' + JSON.stringify(s));
+    expect(s.titleLines !== 1 || s.sheetHeight <= 300, `the sheet is ${s.sheetHeight}px high for a one-line name`);
+    expect(long.navInView, `"${longest.name}" (${longest.name.length} letters): navigate row not in view, ${JSON.stringify(long)}`);
+    expect(errors.length === 0, errors.join(' ; '));
+});
+
 check('nearest fails well: denied and slow lead to the search box; nothing within 30 km flies nowhere', async () => {
     // 1. denied: the message, and the focus in the search box
     let { context, page } = await openApp({ viewport: PHONE });

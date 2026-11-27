@@ -22,10 +22,9 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Map opens framed on Israel (`fitBounds`) and cannot be panned far outside it (`maxBounds`)
 - Search with autocomplete suggestions (city + location)
 - GPS geolocation: a filled pill "הנקודה הקרובה אליי" in the bottom right (thumb zone, 48px; a round re-centre button after the first fix). One tap opens the nearest collection point with its distance. The +/− zoom buttons are hidden on touch phones (`pointer: coarse`), kept on desktop
-- Navigation links (Google Maps / Waze) in popups and sidebar
-- Location detail sidebar
-- "Report a problem" link in popups/sidebar (Google Form)
-- Thumbs-up in popups/sidebar opens the same Google Form marked "✔ הנקודה קיימת:" in the name field, so the owner receives a confirmation that the point exists
+- Location details (sidebar on desktop, bottom sheet on phones), in this order: the name; one line with the distance ("… בקו אווירי", when located) and the address; the kind of place when the record has `kind` (`pointKindText()`: fuel → תחנת דלק, shop → חנות, municipal → נקודת איסוף עירונית); two filled navigate buttons of equal size, "ניווט ב-Waze" and "ניווט ב-Google Maps"; two labelled feedback buttons
+- "דיווח על בעיה" opens the Google Form filled in with the point
+- "הנקודה קיימת" opens the same Google Form marked "✔ הנקודה קיימת:" in the name field, so the owner receives a confirmation that the point exists
 - Empty state with clear/retry when search has no results
 - PWA support (installable, offline via service worker)
 - Multiple basemap options (light, streets)
@@ -87,7 +86,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ### Architecture — Do NOT Change
 - No build tools. Plain HTML/CSS/JS. No npm, no bundler, no TypeScript. Keep it that way.
-- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, chain, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `description` is optional and shown in popup/sidebar.
+- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, chain, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `description` is optional and shown in the details. `kind` is optional (`"fuel"`, `"shop"` or `"municipal"`, written by the scraper) and shown as one line in the details; `chain` is not read by the app.
 - `type` must be exactly `"store"` or `"facility"`. Adding a third value requires updating `typeNames` in `app.js` AND adding a test.
 - All UI strings are Hebrew. Layout is RTL. Do not add English UI text.
 - `test.html` and `test-map.html` run in the browser (open the file) and in the gate (headless Chrome). Pure functions are copied verbatim from `app.js`; the gate fails if a copy differs from `app.js`. A green test page still does NOT prove the app works: also load the real page and check the browser console.

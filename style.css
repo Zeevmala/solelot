@@ -680,13 +680,13 @@ body {
     flex: 1;
 }
 
+/* The name and the facts under it are one block: no rule between them, so the
+   distance is read right after the name (design great-map A8) */
 .sidebar-header {
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 24px;
-    padding-bottom: 20px;
-    border-bottom: 2px solid var(--cw-border);
+    margin-bottom: 8px;
 }
 
 
@@ -698,12 +698,18 @@ body {
     font-size: 20px;
     font-weight: 600;
     color: var(--cw-text);
-    margin-bottom: 6px;
     line-height: 1.3;
+}
+
+/* The heading takes the focus only so a screen reader announces the details; it is not
+   a control, so no focus ring */
+.sidebar-title h2:focus {
+    outline: none;
 }
 
 .sidebar-title .type-badge {
     display: inline-block;
+    margin-top: 6px;
     font-size: 13px;
     font-weight: 500;
     padding: 4px 12px;
@@ -715,103 +721,82 @@ body {
 .sidebar-info {
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    margin-bottom: 28px;
+    gap: 8px;
+    margin-bottom: 16px;
 }
 
-.info-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-}
-
-.info-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-    width: 28px;
-    text-align: center;
-}
-
+/* Distance first, then the address, on one line (it wraps under a long address) */
+.sidebar-meta,
 .info-text {
-    flex: 1;
     color: var(--cw-text-muted);
     font-size: 15px;
     line-height: 1.6;
 }
 
-.info-text.distance {
-    color: var(--cw-accent-text);
-    font-weight: 600;
+.sidebar-meta .distance {
     font-size: 16px;
 }
 
+.sidebar-kind {
+    color: var(--cw-text-muted);
+    font-size: 14px;
+}
+
+/* Waze and Google Maps: the same size and weight, both filled */
 .sidebar-nav {
     display: flex;
     gap: 12px;
-    margin-top: 24px;
 }
 
 .sidebar-nav-btn {
-    flex: 1;
-    padding: 16px 20px;
+    flex: 1 1 0;
+    min-height: 48px;
+    padding: 12px;
     text-align: center;
     text-decoration: none;
     border-radius: var(--cw-radius-lg);
     font-size: 15px;
     font-weight: 600;
-    transition: transform 0.2s, box-shadow 0.2s, background 0.2s, color 0.2s;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid var(--cw-accent);
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
+}
+
+
+/* Feedback: two quiet buttons with their words, side by side */
+.feedback-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.feedback-btn {
+    flex: 1 1 0;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    cursor: pointer;
-    border: 2px solid var(--cw-accent);
-    background: transparent;
-    color: var(--cw-accent-text);
-}
-
-.sidebar-nav-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--cw-shadow-2);
-    background: var(--cw-accent);
-    color: var(--cw-text-on-accent);
-}
-
-.sidebar-nav-btn.google:hover,
-.sidebar-nav-btn.waze:hover {
-    background: var(--cw-accent);
-    color: var(--cw-text-on-accent);
-}
-
-/* Feedback Like/Dislike Buttons */
-.feedback-row {
-    display: flex;
-    justify-content: center;
-    gap: 24px;
-    margin-top: 16px;
-    padding-top: 8px;
-}
-
-.feedback-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border: 1px solid var(--cw-border-strong);
-    border-radius: 50%;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid var(--cw-border);
+    border-radius: var(--cw-radius-md);
     background: var(--cw-surface-1);
     color: var(--cw-text-muted);
+    font-family: inherit;
+    font-size: 14px;
     cursor: pointer;
-    transition: all 0.2s ease;
-    padding: 0;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
 }
 
-.feedback-btn:hover {
-    border-color: var(--cw-accent);
-    color: var(--cw-accent);
-    box-shadow: var(--cw-shadow-1);
+.feedback-btn svg {
+    flex-shrink: 0;
 }
+
 
 .feedback-btn:focus-visible {
     outline: 2px solid var(--cw-focus);
@@ -819,20 +804,33 @@ body {
 }
 
 .like-btn.liked {
-    color: var(--cw-accent);
+    color: var(--cw-accent-text);
     border-color: var(--cw-accent);
     background: var(--cw-accent-subtle);
 }
 
-.dislike-btn:hover {
-    border-color: var(--cw-danger);
-    color: var(--cw-danger);
+/* Hover colours only where there is a mouse: on a phone a tap leaves the button "hovered" */
+@media (hover: hover) {
+    .sidebar-nav-btn:hover {
+        background: var(--cw-accent-hover);
+        border-color: var(--cw-accent-hover);
+    }
+
+    .feedback-btn:hover {
+        border-color: var(--cw-accent);
+        color: var(--cw-accent-text);
+    }
+
+    .dislike-btn:hover {
+        border-color: var(--cw-danger);
+        color: var(--cw-danger);
+    }
 }
 
 @keyframes pop {
     0% { transform: scale(1); }
-    40% { transform: scale(1.35); }
-    70% { transform: scale(0.9); }
+    40% { transform: scale(1.06); }
+    70% { transform: scale(0.98); }
     100% { transform: scale(1); }
 }
 
