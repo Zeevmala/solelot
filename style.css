@@ -1202,6 +1202,7 @@ body {
         border-radius: 0;
         width: 50%;
         left: 0;
+        right: auto; /* the <=768px sheet rule sets right: 0, which put the panel over the map buttons */
         bottom: 0;
         top: 48px;
         height: calc(100% - 48px);

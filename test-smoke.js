@@ -423,6 +423,50 @@ check('nearest: one tap opens the nearest point above the sheet; a second tap re
     }
 });
 
+// With a point open: what is at the centre of each map control and of the selected pin.
+// Returns the ones covered by something else, with what covers them.
+const coveredControls = page => page.evaluate(() => {
+    const nameOf = t => (t ? (t.id || (typeof t.className === 'string' ? t.className : t.className.baseVal) || t.tagName) : 'nothing');
+    const out = [];
+    const probe = (label, el) => {
+        if (!el) { out.push(label + ': missing'); return; }
+        const b = el.getBoundingClientRect();
+        if (b.width === 0) { out.push(label + ': not drawn'); return; }
+        const x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2;
+        const t = document.elementFromPoint(x, y);
+        if (!t || !(t === el || el.contains(t))) out.push(`${label} at ${Math.round(x)},${Math.round(y)}: covered by ${nameOf(t)}`);
+    };
+    probe('locate button', document.querySelector('.locate-btn'));
+    probe('basemap button', document.querySelector('.basemap-toggle-btn'));
+    probe('credit link', document.querySelector('.leaflet-control-attribution a'));
+    probe('selected pin', selectedPin.getElement());
+    return out;
+});
+
+check('with a point open, the details never cover the map buttons, the credits or the selected pin (phones, both ways round)', async () => {
+    const phones = [[568, 320], [667, 375], [740, 360], [320, 568], [360, 740], [390, 844], [768, 1024]];
+    for (const [width, height] of phones) {
+        const where = `${width}x${height}`;
+        const { context, page, problems } = await openApp({ viewport: { width, height }, hasTouch: true, isMobile: true,
+            geolocation: { latitude: TEL_AVIV.latitude, longitude: TEL_AVIV.longitude, accuracy: 30 }, permissions: ['geolocation'] });
+        // 1. a point picked (as from a suggestion)
+        const id = await page.evaluate(c => allLocations.find(l => l.city === c).id, CITY);
+        await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page); await page.waitForTimeout(400);
+        try {
+            const picked = await coveredControls(page);
+            expect(picked.length === 0, `${where}, a picked point: ${picked.join(' ; ')}`);
+            // 2. the nearest point, asked for with a real tap on the locate button
+            await tapLocate(page);
+            const nearest = await coveredControls(page);
+            expect(nearest.length === 0, `${where}, the nearest point: ${nearest.join(' ; ')}`);
+            const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+            expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+        } finally {
+            await context.close();
+        }
+    }
+});
+
 // The locate button: where it is, how big, what it says (a touch phone and a desktop)
 const locateButtonState = page => page.evaluate(() => {
     const btn = document.querySelector('.locate-btn');

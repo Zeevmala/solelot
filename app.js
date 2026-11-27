@@ -853,12 +853,22 @@ function liftCornerAboveSheet() {
     document.documentElement.style.setProperty('--sheet-h', sheetHeight() + 'px');
 }
 
-// Move the map just enough for the pin to stay visible above the sheet.
+// On a desktop, and on a phone held sideways, the details are a panel over the map's
+// left side instead. sidePanelWidth() is how much of the map's width it covers (0 for the sheet).
+function sidePanelWidth() {
+    if (!cachedSidebar || cachedSidebar.style.display === 'none') return 0;
+    const width = cachedSidebar.offsetWidth;
+    return width < map.getSize().x ? width : 0;
+}
+
+// Move the map just enough for the pin to stay visible above the sheet,
+// or to the right of the side panel.
 function keepPinAboveSheet(location) {
     const covered = sheetHeight();
-    if (covered === 0) return;
+    const side = sidePanelWidth();
+    if (covered === 0 && side === 0) return;
     map.panInside([location.lat, location.lng], {
-        paddingTopLeft: [20, 60], // room for the pin itself, which is drawn above its point
+        paddingTopLeft: [20 + side, 60], // room for the pin itself, which is drawn above its point
         paddingBottomRight: [20, covered + 20]
     });
 }
@@ -1267,10 +1277,11 @@ function focusOnLocation(locationId, fromHistory = false) {
     // Details first: the flight below needs to know how high the sheet is
     showSidebar(location, fromHistory);
 
-    // On a phone the sheet covers the bottom of the map, so aim for the middle of
-    // the part that stays visible: the map centre goes half a sheet below the point.
+    // The details cover part of the map, so aim for the middle of the part that stays
+    // visible: on a phone the map centre goes half a sheet below the point; with the
+    // side panel (desktop, or a phone held sideways) half a panel to its left.
     const zoom = Math.max(map.getZoom(), 16);
-    const centre = map.unproject(map.project([location.lat, location.lng], zoom).add([0, sheetHeight() / 2]), zoom);
+    const centre = map.unproject(map.project([location.lat, location.lng], zoom).add([-sidePanelWidth() / 2, sheetHeight() / 2]), zoom);
 
     // flyTo ends a flight or pan that is still running, and ending a pan fires
     // "moveend" at once. So the listener is added after flyTo: the next "moveend"
@@ -1310,8 +1321,8 @@ function showNearest(nearest) {
     const location = nearest.location;
     showSidebar(location); // first: the framing below needs the height of the sheet
     const view = L.latLngBounds([[userLocation.lat, userLocation.lng], [location.lat, location.lng]]);
-    // On a desktop the details panel covers the map's left side
-    const panel = sheetHeight() === 0 && cachedSidebar && window.innerWidth > MOBILE_BREAKPOINT ? cachedSidebar.offsetWidth : 0;
+    // On a desktop, and on a phone held sideways, the details panel covers the map's left side
+    const panel = sidePanelWidth();
     map.flyToBounds(view, {
         paddingTopLeft: [40 + panel, 80], // room above for the pin, which is drawn above its point
         paddingBottomRight: [40, sheetHeight() + 40],
