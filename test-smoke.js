@@ -1035,6 +1035,41 @@ check('if Leaflet does not arrive, an error panel with a reload button replaces 
     await context.close();
 });
 
+// PNG facts read from the file itself: size, colour type (2 = RGB, 3 = palette,
+// 4 and 6 have alpha) and whether a tRNS chunk adds transparency
+function pngInfo(file) {
+    const b = fs.readFileSync(path.join(ROOT, file));
+    const info = { bytes: b.length, width: b.readUInt32BE(16), height: b.readUInt32BE(20), colourType: b[25], tRNS: false };
+    for (let at = 8; at < b.length; at += 12 + b.readUInt32BE(at)) if (b.toString('latin1', at + 4, at + 8) === 'tRNS') info.tRNS = true;
+    info.opaque = (info.colourType === 2 || info.colourType === 3) && !info.tRNS;
+    return info;
+}
+const headMeta = page => page.evaluate(() => {
+    const out = { title: document.title };
+    for (const m of document.querySelectorAll('meta[property], meta[name]')) out[m.getAttribute('property') || m.getAttribute('name')] = m.getAttribute('content');
+    return out;
+});
+
+check('share preview: a 1200x630 opaque image under 300 KB, a title that says what the page is, neutral Hebrew', async () => {
+    const { context, page, problems } = await openApp();
+    const meta = await headMeta(page);
+    await context.close();
+    const image = 'https://zeevmala.github.io/solelot/icons/og-image.png';
+    expect(meta.title === 'מפת מיחזור סוללות - נקודות איסוף סוללות בישראל', 'title: ' + meta.title);
+    expect(meta['og:title'] === meta.title && meta['twitter:title'] === meta.title, `og/twitter title: ${meta['og:title']} / ${meta['twitter:title']}`);
+    expect(meta['og:image'] === image && meta['twitter:image'] === image, `share image: ${meta['og:image']} / ${meta['twitter:image']}`);
+    expect(meta['og:image:width'] === '1200' && meta['og:image:height'] === '630', `og:image size ${meta['og:image:width']}x${meta['og:image:height']}`);
+    expect(meta['og:image:alt'] && meta['og:site_name'], `og:image:alt "${meta['og:image:alt']}", og:site_name "${meta['og:site_name']}"`);
+    expect(meta['twitter:card'] === 'summary_large_image', 'twitter:card: ' + meta['twitter:card']);
+    for (const key of ['description', 'og:description', 'twitter:description']) {
+        expect(meta[key] && !/(^|\s)מצא(\s|$)/.test(meta[key]), `${key} is missing or uses the masculine imperative: ${meta[key]}`);
+    }
+    const png = pngInfo('icons/og-image.png');
+    expect(png.width === 1200 && png.height === 630 && png.opaque && png.bytes < 300 * 1024, 'icons/og-image.png: ' + JSON.stringify(png));
+    expect(!fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8').includes('og-image'), 'sw.js precaches the share image (only share previews use it)');
+    expect(problems.length === 0, problems.join(' ; '));
+});
+
 // Waits until a service worker controls the page and its cache is filled
 async function openWithServiceWorker() {
     const opened = await openPage({ serviceWorkers: 'allow' });
