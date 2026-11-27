@@ -1040,6 +1040,53 @@ check('a second pick right after the first ends at the second place', async () =
     expect(errors.length === 0, 'page errors: ' + errors[0]);
 });
 
+check('picking a city while a point is open closes the point; the map ends on the city', async () => {
+    const HAIFA = 'חיפה';
+    const where = '390x844';
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    try {
+        const cityState = city => page.evaluate(city => {
+            const bounds = map.getBounds();
+            const own = allLocations.filter(l => l.city === city);
+            const sheet = document.getElementById('sidebar');
+            return { inView: own.filter(l => bounds.contains([l.lat, l.lng])).length, total: own.length, selected: selectedLocationId,
+                open: sheet.style.display !== 'none' && !sheet.classList.contains('hidden'), search: window.location.search,
+                pins: document.querySelectorAll('.battery-marker.selected').length };
+        }, city);
+        // 1. a shop picked, then 150 ms later a city typed and Enter, while the map still flies to the shop
+        await type(page, SHOP_TEXT, 20);
+        await page.waitForSelector('.suggestion-item[data-type=location]');
+        await page.click('.suggestion-item[data-type=location] >> nth=0');
+        await page.waitForTimeout(150);
+        await page.locator('#search-input').fill(HAIFA); await press(page, 'Enter');
+        await mapSettled(page); await page.waitForTimeout(400);
+        let s = await cityState(HAIFA);
+        expect(s.inView > s.total / 2 && s.selected === null && !s.open && s.pins === 0 && s.search === '?city=' + encodeURIComponent(HAIFA),
+            `${where}, a shop picked then Enter on ${HAIFA}: ${JSON.stringify(s)}`);
+        // 2. a point open and at rest, then a city suggestion picked
+        await clearSearch(page);
+        const id = await page.evaluate(c => allLocations.find(l => l.city === c).id, HAIFA);
+        await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page);
+        await type(page, CITY, 20);
+        await page.waitForSelector('.suggestion-item[data-type=city]');
+        await page.click('.suggestion-item[data-type=city] >> nth=0');
+        await mapSettled(page); await page.waitForTimeout(400);
+        s = await cityState(CITY);
+        expect(s.inView > s.total / 2 && s.selected === null && !s.open && s.pins === 0 && s.search === '?city=' + encodeURIComponent(CITY),
+            `${where}, a point open then the ${CITY} suggestion: ${JSON.stringify(s)}`);
+        // 3. a point open, then text that is not a city: the point stays open
+        await clearSearch(page);
+        await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page);
+        await type(page, SHOP_TEXT, 20); await settle(page);
+        s = await cityState(HAIFA);
+        expect(s.selected === id && s.open && s.search === '?id=' + id, `${where}, a point open then "${SHOP_TEXT}" typed: ${JSON.stringify(s)}`);
+        const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+        expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+    } finally {
+        await context.close();
+    }
+});
+
 check('a search while the map is zooming to a picked place leaves no broken listener behind', async () => {
     const { context, page, problems } = await openApp();
     const [first] = await farApartPlaces(page);

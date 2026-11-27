@@ -1056,6 +1056,10 @@ function closeSuggestions() {
 }
 
 // Auto-zoom to visible markers
+// Every flight the app starts counts here. A "moveend" handler of an older flight
+// sees a newer number and does nothing, so it cannot pan back to an old place.
+let mapMoveCount = 0;
+
 function zoomToVisibleMarkers(visibleMarkers) {
     if (visibleMarkers.length === 0) return;
 
@@ -1065,6 +1069,7 @@ function zoomToVisibleMarkers(visibleMarkers) {
         if (only) focusOnLocation(only.location.id);
     } else {
         const group = L.featureGroup(visibleMarkers);
+        mapMoveCount++;
         map.flyToBounds(group.getBounds(), {
             padding: [50, 50],
             duration: 0.8,
@@ -1259,8 +1264,11 @@ function setupAutocomplete() {
     });
 }
 
-// Show exactly one city on the map, with its name in the search box
+// Show exactly one city on the map, with its name in the search box.
+// An open point is closed first: the address then carries the city, and the
+// map is not taken back to the point when its flight ends.
 function showCity(city) {
+    if (selectedLocationId !== null) hideSidebar();
     const searchInput = document.getElementById('search-input');
     const clearBtn = document.getElementById('search-clear');
     if (searchInput) searchInput.value = city;
@@ -1286,10 +1294,12 @@ function focusOnLocation(locationId, fromHistory = false) {
     // flyTo ends a flight or pan that is still running, and ending a pan fires
     // "moveend" at once. So the listener is added after flyTo: the next "moveend"
     // is then the end of this flight.
+    const move = ++mapMoveCount;
     map.flyTo(centre, zoom, { duration: 0.8 });
     map.once('moveend', () => {
-        // The details may be closed or show another place by now: then do nothing
-        if (selectedLocationId === locationId) keepPinAboveSheet(location);
+        // The details may be closed or show another place, or a newer flight
+        // may have started, by now: then do nothing
+        if (move === mapMoveCount && selectedLocationId === locationId) keepPinAboveSheet(location);
     });
 }
 
@@ -1323,6 +1333,7 @@ function showNearest(nearest) {
     const view = L.latLngBounds([[userLocation.lat, userLocation.lng], [location.lat, location.lng]]);
     // On a desktop, and on a phone held sideways, the details panel covers the map's left side
     const panel = sidePanelWidth();
+    const move = ++mapMoveCount;
     map.flyToBounds(view, {
         paddingTopLeft: [40 + panel, 80], // room above for the pin, which is drawn above its point
         paddingBottomRight: [40, sheetHeight() + 40],
@@ -1330,7 +1341,7 @@ function showNearest(nearest) {
         duration: 0.8
     });
     map.once('moveend', () => {
-        if (selectedLocationId === location.id) keepPinAboveSheet(location);
+        if (move === mapMoveCount && selectedLocationId === location.id) keepPinAboveSheet(location);
     });
 }
 
