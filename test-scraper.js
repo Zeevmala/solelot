@@ -157,6 +157,23 @@ test('pointKind: fuel = name starts "תחנת דלק" or has אלונית / דו
     assert.strictEqual(pointKind('קפה ליד תחנת דלק', ['12']), 'shop');
 });
 
+test('pointKind: a name that starts "YELLOW" and says פז is a Paz fuel station', () => {
+    // real: 346651, copied unchanged from the MAI response of 2026-11-27
+    const raw = {
+        id: '346651', map_id: '5', category: '12', lat: '31.984975', lng: '34.915484', address: null,
+        title: 'YELLOW - ימל אירפורט סיטי-ניתוב- בטי אבויה - פז -משווק<br><span style="font-size: 16px;">צומת אל על, בדרך לשהם, שהם.</span>',
+        custom_field_data: [
+            { name: 'city', value: 'שהם' }, { name: 'street', value: 'צומת אל על' }, { name: 'house_number', value: '0' },
+            { name: 'neighborhood', value: 'בדרך לשהם' }, { name: 'business_name', value: 'YELLOW - ימל אירפורט סיטי-ניתוב- בטי אבויה - פז -משווק' }
+        ]
+    };
+    assert.strictEqual(transformMarker(raw).location.kind, 'fuel');
+    assert.strictEqual(pointKind('YELLOW - רמת דניה ירושלים - פז משווק', ['12']), 'fuel');
+    // YELLOW without פז, or פז only inside another word, is not enough
+    assert.strictEqual(pointKind('YELLOW - חנות נוחות', ['12']), 'shop');
+    assert.strictEqual(pointKind('YELLOW - פזית', ['12']), 'shop');
+});
+
 test('pointKind: municipal = a municipal word in the name, or category 14 except two electrical chains', () => {
     for (const name of ['רשות מקומית - מוקד איסוף', 'חשמלית - מקס שיין 9', 'מועצה אזורית גזר',
         'עיריית חולון - מתנ"ס', 'תל אביב - מוקד איסוף', 'מרכז איסוף עירוני']) {
@@ -704,6 +721,33 @@ test('overrides whose id is not in the MAI response are reported', () => {
     assert.deepStrictEqual(buildLocations([marker({ id: '71' })]).overridesUnmatched, []);
 });
 
+test('overrides on records that are skipped or merged away are reported as without effect', () => {
+    const at = (id, lat, fields) => marker({ id, lat, lng: '35.0' }, fields);
+    const overrides = {
+        1: { city: 'נשר' },                 // a school: skipped whatever its city is
+        2: { exclude: true },               // a school: skipped anyway, the exclude is not needed
+        3: { exclude: true },               // a real exclude
+        5: { city: 'חיפה' },                // a second entry of shop 4, merged into it
+        6: { city: 'נשר' },                 // a city fix that works
+        99: { city: 'עכו' }                 // not in the response: reported as unmatched instead
+    };
+    const { overridesWithoutEffect, overridesUnmatched, locations } = buildLocations([
+        at('1', '32.80', { business_name: 'מוקד איסוף - בית ספר רעות' }),
+        at('2', '32.81', { business_name: 'מוקד איסוף - תיכון הראל' }),
+        at('3', '32.82', { business_name: 'גלי' }),
+        at('4', '32.83000', { business_name: 'רמי לוי' }),
+        at('5', '32.83010', { business_name: 'רמי לוי - תקשורת' }),
+        at('6', '32.84', { business_name: 'באג' })
+    ], overrides);
+    assert.deepStrictEqual(locations.map(l => [l.id, l.city]), [[4, 'חיפה'], [6, 'נשר']]);
+    assert.deepStrictEqual(overridesWithoutEffect, [
+        { id: 1, reason: 'skipped: school (not open to the public)' },
+        { id: 2, reason: 'skipped: school (not open to the public)' },
+        { id: 5, reason: 'same shop as 4' }
+    ]);
+    assert.deepStrictEqual(overridesUnmatched, ['99']);
+});
+
 test('checkCount: under 1,000 never saves; under 90 % of the previous file needs --force', () => {
     assert.match(checkCount(999, null, false), /Only 999/);
     assert.match(checkCount(999, 900, true), /Only 999/);          // --force does not switch this guard off
@@ -723,16 +767,30 @@ test('parseArgs: --input needs a path', () => {
 
 // --- the real fixture: 33 markers copied from the MAI API on 2026-11-25 ---
 
-test('one shop listed twice: same chain within 50 m, same street or one without a house number -> the lower id stays', () => {
+// The three אייס records at צומת וולקן, copied unchanged from the MAI response of 2026-11-27
+const ACE_VULCAN = [
+    { id: '343950', map_id: '5', category: '12', lat: '32.811498', lng: '35.073005', address: null,
+        title: 'אייס קנה ובנה<br><span style="font-size: 16px;">מרכז ביג, קרית אתא.</span>',
+        custom_field_data: [{ name: 'city', value: 'קרית אתא' }, { name: 'neighborhood', value: 'מרכז ביג' }, { name: 'business_name', value: 'אייס קנה ובנה' }] },
+    { id: '344152', map_id: '5', category: '12', lat: '32.811818', lng: '35.072960', address: null,
+        title: 'אייס קנה ובנה<br><span style="font-size: 16px;">צומת וולקן, צומת וולקן, דיפו חוצות.</span>',
+        custom_field_data: [{ name: 'city', value: 'דיפו חוצות' }, { name: 'street', value: 'צומת וולקן' }, { name: 'neighborhood', value: 'צומת וולקן' }, { name: 'business_name', value: 'אייס קנה ובנה' }] },
+    { id: '345148', map_id: '5', category: '12', lat: '32.811844', lng: '35.072932', address: null,
+        title: 'אייס קנה ובנה<br><span style="font-size: 16px;">החרושת, צומת וולקן, מפרץ חיפה, חוצות.</span>',
+        custom_field_data: [{ name: 'city', value: 'חוצות' }, { name: 'street', value: 'החרושת' }, { name: 'neighborhood', value: 'צומת וולקן, מפרץ חיפה' }, { name: 'business_name', value: 'אייס קנה ובנה' }] }
+];
+
+test('one shop listed twice: same chain and city within 50 m, same street or one without a house number -> the lower id stays', () => {
     const { locations, dropped, stats } = buildLocations([
         // real: 345582 / 345669, the phone counter inside the same רמי לוי, 18 m apart
         marker({ id: '345669', lat: '31.796689', lng: '35.146284' }, { business_name: 'רמי לוי', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
         marker({ id: '345582', lat: '31.79683328091107', lng: '35.14636170421983' }, { business_name: 'רמי לוי - תקשורת', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
-        // real: 344152 / 345148 אייס צומת וולקן, 4 m apart; neither has a house number, the streets differ
-        marker({ id: '344152', lat: '32.811818', lng: '35.072960' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'צומת וולקן', house_number: undefined, neighborhood: 'צומת וולקן' }),
-        marker({ id: '345148', lat: '32.811844', lng: '35.072932' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'החרושת', house_number: undefined, neighborhood: 'צומת וולקן, מפרץ חיפה' })
-    ]);
-    assert.deepStrictEqual(locations.map(l => l.id), [344152, 345582]);
+        ...ACE_VULCAN
+    ], { 344152: { city: 'חיפה' }, 345148: { city: 'חיפה' } });
+    // 344152 and 345148 (4 m apart, no house numbers, both חיפה by override) are one shop.
+    // 343950 is 36 m away but listed under קריית אתא: another city is never the same shop,
+    // so the Haifa Ace survives under חיפה and a search for חיפה finds it.
+    assert.deepStrictEqual(locations.map(l => [l.id, l.city]), [[343950, 'קריית אתא'], [344152, 'חיפה'], [345582, 'מבשרת ציון']]);
     assert.deepStrictEqual(dropped.sameShop, [{ id: 345148, sameAs: 344152 }, { id: 345669, sameAs: 345582 }]);
     assert.strictEqual(stats.sameShop, 2);
 });
@@ -747,6 +805,18 @@ test('one shop listed twice: different house numbers are never merged (אבי ס
     ]);
     assert.deepStrictEqual(locations.map(l => l.id), [343536, 343540, 343543]);
     assert.deepStrictEqual(dropped.sameShop, []);
+});
+
+test('one shop listed twice: a record without a house number between two numbered shops joins neither', () => {
+    // the reviewer's case: 100 has no number, 101 (אלנבי 113) is 22 m north and 102 (אלנבי 124) 22 m south.
+    // 100 could be either shop, so nothing is merged and both numbered shops keep their own pin.
+    const avi = (id, lat, number) => marker({ id, lat, lng: '34.78' }, { business_name: 'אבי סופר', city: 'תל אביב', street: 'אלנבי', house_number: number });
+    const { locations, dropped } = buildLocations([avi('100', '32.06000', undefined), avi('101', '32.06020', '113'), avi('102', '32.05980', '124')]);
+    assert.deepStrictEqual(locations.map(l => l.id), [100, 101, 102]);
+    assert.deepStrictEqual(dropped.sameShop, []);
+    // with only one numbered shop next to it, the record without a number is still the same shop
+    const pair = buildLocations([avi('100', '32.06000', undefined), avi('101', '32.06020', '113')]);
+    assert.deepStrictEqual(pair.dropped.sameShop, [{ id: 101, sameAs: 100 }]);
 });
 
 test('one shop listed twice: not another chain, not another fuel brand, not over 50 m, not a municipal point', () => {
@@ -891,6 +961,7 @@ test('run writes locations.json and data_meta.json, with no .tmp file left', asy
         duplicates_removed: 0,
         stacked_dropped: 0,
         overrides_unmatched: [77],
+        overrides_without_effect: [],
         changes: null // there was no previous file to compare with
     });
     assert.deepStrictEqual(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')), []);
@@ -985,7 +1056,8 @@ test('run saves a small change and writes it to data_meta.json', async (t) => {
 
 test('run refuses to save when over 10 % of the overrides match no marker, unless forced', async (t) => {
     const dir = tempDir(t);
-    fs.writeFileSync(path.join(dir, 'locations.json'), 'OLD');
+    const previous = JSON.stringify({ locations: [] });                      // readable, so only the override guard speaks
+    fs.writeFileSync(path.join(dir, 'locations.json'), previous);
     const input = writeRaw(dir, manyMarkers(1200));
     const overrides = JSON.parse(fs.readFileSync(path.join(dir, 'data_overrides.json'), 'utf8')).overrides;
     delete overrides[400009];
@@ -993,12 +1065,27 @@ test('run refuses to save when over 10 % of the overrides match no marker, unles
     fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides }));
     await assert.rejects(run({ dir, input }),
         /2 of 10 overrides match no MAI marker - MAI may have renumbered its markers\..*NOT changed/);
-    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), 'OLD');
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), previous);
     assert.ok(!fs.existsSync(path.join(dir, 'data_meta.json')));
 
     fs.rmSync(path.join(dir, 'locations.json'));
     const meta = await run({ dir, input, force: true });
     assert.deepStrictEqual(meta.overrides_unmatched, [77, 78]);
+});
+
+test('run refuses to save when the previous locations.json cannot be read, unless forced', async (t) => {
+    // without the previous file the 90 % and 5 % guards have nothing to compare with
+    const dir = tempDir(t);
+    const input = writeRaw(dir, manyMarkers(1200));
+    for (const broken of ['OLD', JSON.stringify({ locations: 'none' })]) {
+        fs.writeFileSync(path.join(dir, 'locations.json'), broken);
+        await assert.rejects(run({ dir, input }), /previous locations\.json could not be read.*--force.*NOT changed/);
+        assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), broken);
+        assert.ok(!fs.existsSync(path.join(dir, 'data_meta.json')));
+    }
+    const meta = await run({ dir, input, force: true });
+    assert.strictEqual(meta.kept, 1199);
+    assert.strictEqual(meta.changes, null);
 });
 
 test('command line: --input without a path is a usage error (exit 1)', () => {
@@ -1018,6 +1105,8 @@ test('isSchool: schools, yeshivas and kindergartens, but not streets, shops or c
     ]) assert.ok(isSchool(name), name);
     // a school campus that does not use the word "school" (found on the map in the November 2026 audit)
     for (const name of ['מוקד איסוף - תיכונט ע"ש אלתרמן', 'מוקד איסוף - חמ"ד מודיעים - יהלום, כניסה ראשית']) assert.ok(isSchool(name), name);
+    // a junior high with a number is a school, not a brigade street (found in the 2026-11-27 review)
+    for (const name of ['מוקד איסוף - חטיבת ביניים 6', 'חטיבת הביניים 2']) assert.ok(isSchool(name), name);
     // opposite or next to a school is not inside it; "חטיבת <name> <number>" is a street address
     for (const name of [
         'נחלת החדשה, מול בית הספר', 'מוקד איסוף - ליד בי"ס קשת', 'מוקד איסוף - מול התיכון',

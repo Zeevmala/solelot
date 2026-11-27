@@ -88,8 +88,9 @@ const SCHOOL_WORDS = [
 ];
 // "מול בית הספר" / "ליד התיכון": opposite or next to a school is not inside it
 const SCHOOL_PATTERN = new RegExp('(^|[^א-ת])(?<!(?:מול|ליד) )(' + SCHOOL_WORDS.join('|') + ')($|[^א-ת])');
-// "חטיבת אלכסנדרוני 2": a brigade name followed by a house number is a street address
-const BRIGADE_STREET = /חטיבת [א-ת"']+ \d+/g;
+// "חטיבת אלכסנדרוני 2": a brigade name followed by a house number is a street address.
+// "חטיבת ביניים 6" / "חטיבת הביניים 2" is a junior high with a number, not a street.
+const BRIGADE_STREET = /חטיבת (?!ה?ביניים )[א-ת"']+ \d+/g;
 
 function isSchool(name) {
     // "חטיבת הנח"ל 30" is a street; petrol stations are named after the street they are on
@@ -103,7 +104,8 @@ function isSchool(name) {
 // "עיריית חיפה - מוקד איסוף" into "מוקד איסוף - ...". Category 14 (small electrical items)
 // is used only as a sign of a municipal point; the map does not say what else a point takes.
 // Checked by hand on a seeded sample of 40 (2026-11-27, see docs/brain/DECISIONS.md).
-const FUEL_NAME = /^תחנת דלק|אלונית|דור אלון/;
+// "YELLOW - חגור - פז - משווק": YELLOW is Paz's shop brand, and with the word פז the record is a Paz station
+const FUEL_NAME = /^תחנת דלק|אלונית|דור אלון|^YELLOW.*(^|[^א-ת])פז($|[^א-ת])/;
 const MUNICIPAL_NAME = /רשות מקומית|חשמלית|מועצה|עיריית|מוקד איסוף|מרכז איסוף/;
 const SHOPS_WITH_ELECTRICAL = /^(מחסני חשמל|איידיגיטל)/; // chains that also take category 14
 function pointKind(rawName, categories) {
@@ -645,11 +647,27 @@ function houseNumber(street) {
 }
 
 // MAI lists some shops twice: "רמי לוי" and "רמי לוי - תקשורת" (the phone counter inside it), or one
-// branch under two names. Two entries are one shop when they have the same shopChain, are at most
-// SAME_SHOP_METERS apart, and have the same street (streetKey) or one of them has no house number.
+// branch under two names. Two entries are one shop when they have the same shopChain and the same city,
+// are at most SAME_SHOP_METERS apart, and have the same street (streetKey) or one of them has no house
+// number. Two cities are never one shop: one shop listed under two cities needs an override that says
+// which label fits the pin (אייס 343950 "קריית אתא" and 344152 "חיפה", 36 m apart).
 // Two different house numbers are never one shop: אבי סופר at אלנבי 113, 122 and 124 are three shops
-// within 23 m. The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
+// within 23 m. So a record without a house number that sits within SAME_SHOP_METERS of numbered shops
+// of its chain with two or more different numbers could be any of them: it is merged with none.
+// The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
 function dropSameShop(entries) {
+    const sameChainNear = (a, b) => a !== b && a.location.city === b.location.city &&
+        shopChain(a.location.name) === shopChain(b.location.name) &&
+        distanceMeters(a.location, b.location) <= SAME_SHOP_METERS;
+    // the house numbers around each record without one
+    const numbersAround = new Map();
+    for (const entry of entries) {
+        if (houseNumber(entry.street) || !shopChain(entry.location.name)) continue;
+        numbersAround.set(entry, new Set(entries.filter(other => sameChainNear(entry, other))
+            .map(other => houseNumber(other.street)).filter(Boolean)));
+    }
+    const between = entry => numbersAround.has(entry) && numbersAround.get(entry).size > 1;
+
     const byChain = new Map(); // chain -> entries kept so far
     const dropped = [];
     const gone = new Set();
@@ -659,9 +677,11 @@ function dropSameShop(entries) {
         if (!byChain.has(chain)) byChain.set(chain, []);
         const number = houseNumber(entry.street);
         const twin = byChain.get(chain).find(other => {
+            if (other.location.city !== entry.location.city) return false;
             const otherNumber = houseNumber(other.street);
             if (number && otherNumber && number !== otherNumber) return false;
             if (number && otherNumber && streetKey(entry.street) !== streetKey(other.street)) return false;
+            if ((number && between(other)) || (otherNumber && between(entry))) return false;
             return distanceMeters(entry.location, other.location) <= SAME_SHOP_METERS;
         });
         if (twin) {
@@ -688,15 +708,17 @@ function loadOverrides(file) {
     return JSON.parse(fs.readFileSync(file, 'utf8')).overrides || {};
 }
 
-// The previous locations.json, or null when there is none yet
+// The previous locations.json: { locations } (null when there is none yet), or { error }
+// when the file is there but cannot be read. The 90 % and 5 % guards compare with it,
+// so an unreadable file must stop the run, not switch them off.
 function loadPrevious(file) {
-    if (!fs.existsSync(file)) return null;
+    if (!fs.existsSync(file)) return { locations: null };
     try {
         const previous = JSON.parse(fs.readFileSync(file, 'utf8')).locations;
-        return Array.isArray(previous) ? previous : null;
+        if (!Array.isArray(previous)) return { error: 'it has no "locations" list' };
+        return { locations: previous };
     } catch (e) {
-        console.warn('Could not read previous locations.json: ' + e.message);
-        return null;
+        return { error: e.message };
     }
 }
 
@@ -716,10 +738,17 @@ function buildLocations(markers, overrides = {}) {
 
     const skipped = {};
     const entries = [];
+    const withoutEffect = new Map(); // override id -> why it changes nothing on the map
     for (const marker of sorted) {
         const result = transformMarker(marker, overrides);
         if (result.skip) {
             skipped[result.skip] = (skipped[result.skip] || 0) + 1;
+            const id = String(marker && marker.id);
+            if (Object.prototype.hasOwnProperty.call(overrides, id)) {
+                // an exclude on a record that is skipped for another reason anyway (a school) is not needed
+                const reason = overrides[id].exclude ? transformMarker(marker).skip : result.skip;
+                if (reason) withoutEffect.set(id, 'skipped: ' + reason);
+            }
         } else {
             entries.push(result);
         }
@@ -753,6 +782,20 @@ function buildLocations(markers, overrides = {}) {
     const markerIds = new Set(markers.filter(m => m && typeof m === 'object').map(m => String(m.id)));
     const overridesUnmatched = Object.keys(overrides).filter(id => !markerIds.has(id)).sort((a, b) => a - b);
 
+    // Nor does one on a record that is in the response but never reaches the map
+    const mergedAway = [
+        ...sameSpot.map(d => [d.id, 'same point as ' + d.sameAs]),
+        ...sameShop.map(d => [d.id, 'same shop as ' + d.sameAs]),
+        ...sameName.map(d => [d.id, 'same name and place as ' + d.sameAs]),
+        ...stacked.flatMap(group => group.ids.map(id => [id, 'stacked on one coordinate with other streets']))
+    ];
+    for (const [id, reason] of mergedAway) {
+        if (Object.prototype.hasOwnProperty.call(overrides, String(id))) withoutEffect.set(String(id), reason);
+    }
+    const overridesWithoutEffect = [...withoutEffect]
+        .map(([id, reason]) => ({ id: Number(id), reason }))
+        .sort((a, b) => a.id - b.id);
+
     return {
         locations,
         skipped,
@@ -766,7 +809,8 @@ function buildLocations(markers, overrides = {}) {
         },
         dropped: { sameSpot, sameName, sameShop, stacked },
         farTwins,
-        overridesUnmatched
+        overridesUnmatched,
+        overridesWithoutEffect
     };
 }
 
@@ -857,7 +901,8 @@ function writeJsonAtomic(file, data) {
  *   dir    folder with facilities.json, data_overrides.json and the output (default: this folder)
  *   input  path of a saved API response; without it the live API is fetched
  *   force  save even when the count fell under 90 % of the previous file, over 5 % of
- *          its points were removed or moved, or over 10 % of the overrides match nothing
+ *          its points were removed or moved, over 10 % of the overrides match nothing, or the
+ *          previous locations.json cannot be read
  * Returns the object written to data_meta.json.
  */
 async function run(options = {}) {
@@ -884,10 +929,10 @@ async function run(options = {}) {
     }
     console.log('Fetched ' + markers.length + ' markers');
 
-    const previous = loadPrevious(files.output);
+    const { locations: previous, error: previousError } = loadPrevious(files.output);
     const overrides = loadOverrides(files.overrides);
     const built = buildLocations(markers, overrides);
-    const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched } = built;
+    const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched, overridesWithoutEffect } = built;
     console.log('Skipped:', skipped);
     console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped + stats.sameShop) + ', names disambiguated: ' + stats.renamed);
     for (const d of [...dropped.sameSpot, ...dropped.sameName]) {
@@ -910,6 +955,10 @@ async function run(options = {}) {
     if (overridesUnmatched.length > 0) {
         console.warn('Overrides not matched by any MAI marker: [' + overridesUnmatched.join(', ') + ']');
     }
+    if (overridesWithoutEffect.length > 0) {
+        console.warn('Overrides without effect (the record is skipped or merged away; delete them when the reason is settled):');
+        for (const o of overridesWithoutEffect) console.warn('  ' + o.id + ': ' + o.reason);
+    }
 
     const facilities = loadFacilities(files.facilities);
     const usedIds = new Set(stores.map(s => s.id));
@@ -921,6 +970,14 @@ async function run(options = {}) {
     // Refuse to overwrite good data with a broken response (e.g. API schema change)
     const previousStores = previous ? previous.filter(loc => loc.type === 'store') : null;
     let problem = checkCount(stores.length, previousStores && previousStores.length, options.force);
+    if (!problem && previousError) {
+        if (options.force) {
+            console.warn('The previous locations.json could not be read (' + previousError + '); saving anyway (--force).');
+        } else {
+            problem = 'The previous locations.json could not be read (' + previousError + '), so the count and ' +
+                'change guards have nothing to compare with. Check the file; to replace it anyway, run again with --force.';
+        }
+    }
     if (!problem) problem = checkOverrides(overridesUnmatched.length, Object.keys(overrides).length, options.force);
 
     // What changed since the previous file (null when there is none to compare with)
@@ -951,6 +1008,7 @@ async function run(options = {}) {
         duplicates_removed: stats.sameSpot + stats.dropped + stats.sameShop,
         stacked_dropped: stats.stackedPoints,
         overrides_unmatched: overridesUnmatched.map(Number),
+        overrides_without_effect: overridesWithoutEffect,
         changes: changes
     };
     writeJsonAtomic(files.output, { locations });
