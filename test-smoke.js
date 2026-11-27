@@ -467,6 +467,29 @@ check('with a point open, the details never cover the map buttons, the credits o
     }
 });
 
+check('a message shown over the open sheet sits above it and lets taps through to the navigate buttons', async () => {
+    for (const [width, height] of [[390, 844], [360, 740], [320, 568], [667, 375]]) {
+        const where = `${width}x${height}`;
+        const { context, page } = await openApp({ viewport: { width, height }, hasTouch: true, isMobile: true });
+        try {
+            const id = await page.evaluate(c => allLocations.find(l => l.city === c).id, CITY);
+            await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page);
+            await page.evaluate(() => showNotification('לא הצלחנו לאתר מיקום. חפשו עיר או רחוב', 5000)); await page.waitForTimeout(500);
+            const s = await page.evaluate(() => {
+                const hit = el => { const b = el.getBoundingClientRect(); const t = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2); return t && el.contains(t) ? 'ok' : (t ? t.id || t.className || t.tagName : 'nothing'); };
+                const toast = document.getElementById('notification').getBoundingClientRect();
+                const sheet = document.getElementById('sidebar').getBoundingClientRect();
+                const isSheet = sheet.width >= window.innerWidth;
+                return { waze: hit(document.querySelector('#sidebar .sidebar-nav-btn.waze')), google: hit(document.querySelector('#sidebar .sidebar-nav-btn.google')),
+                    shown: toast.height > 0, aboveSheet: !isSheet || toast.bottom <= sheet.top };
+            });
+            expect(s.waze === 'ok' && s.google === 'ok' && s.shown && s.aboveSheet, `${where}, a message with the sheet open: ${JSON.stringify(s)}`);
+        } finally {
+            await context.close();
+        }
+    }
+});
+
 // The locate button: where it is, how big, what it says (a touch phone and a desktop)
 const locateButtonState = page => page.evaluate(() => {
     const btn = document.querySelector('.locate-btn');
