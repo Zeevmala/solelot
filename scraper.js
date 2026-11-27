@@ -944,7 +944,7 @@ function writeJsonAtomic(file, data) {
  *   input  path of a saved API response; without it the live API is fetched
  *   force  save even when the count fell under 90 % of the previous file, over 5 % of
  *          its points were removed or moved, over 10 % of the overrides match nothing, or the
- *          previous locations.json cannot be read
+ *          previous locations.json cannot be read or has no collection points
  * Returns the object written to data_meta.json.
  */
 async function run(options = {}) {
@@ -1012,11 +1012,15 @@ async function run(options = {}) {
     // Refuse to overwrite good data with a broken response (e.g. API schema change)
     const previousStores = previous ? previous.filter(loc => loc.type === 'store') : null;
     let problem = checkCount(stores.length, previousStores && previousStores.length, options.force);
-    if (!problem && previousError) {
+    // A previous file with no collection points is as useless to the guards as an unreadable one:
+    // 90 % and 5 % of 0 let anything through.
+    const previousProblem = previousError ? 'could not be read (' + previousError + ')'
+        : (previousStores && previousStores.length === 0 ? 'has no collection points' : null);
+    if (!problem && previousProblem) {
         if (options.force) {
-            console.warn('The previous locations.json could not be read (' + previousError + '); saving anyway (--force).');
+            console.warn('The previous locations.json ' + previousProblem + '; saving anyway (--force).');
         } else {
-            problem = 'The previous locations.json could not be read (' + previousError + '), so the count and ' +
+            problem = 'The previous locations.json ' + previousProblem + ', so the count and ' +
                 'change guards have nothing to compare with. Check the file; to replace it anyway, run again with --force.';
         }
     }

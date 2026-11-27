@@ -1096,7 +1096,8 @@ test('run saves a small change and writes it to data_meta.json', async (t) => {
 
 test('run refuses to save when over 10 % of the overrides match no marker, unless forced', async (t) => {
     const dir = tempDir(t);
-    const previous = JSON.stringify({ locations: [] });                      // readable, so only the override guard speaks
+    // readable, with a collection point, so only the override guard speaks
+    const previous = JSON.stringify({ locations: [{ id: 1, name: 'x', address: 'x', city: 'חיפה', type: 'store', lat: 32.8, lng: 35.0, hours: '' }] });
     fs.writeFileSync(path.join(dir, 'locations.json'), previous);
     const input = writeRaw(dir, manyMarkers(1200));
     const overrides = JSON.parse(fs.readFileSync(path.join(dir, 'data_overrides.json'), 'utf8')).overrides;
@@ -1126,6 +1127,21 @@ test('run refuses to save when the previous locations.json cannot be read, unles
     const meta = await run({ dir, input, force: true });
     assert.strictEqual(meta.kept, 1199);
     assert.strictEqual(meta.changes, null);
+});
+
+test('run refuses to save when the previous locations.json has no collection points, unless forced', async (t) => {
+    // a count of 0 would pass the 90 % and 5 % guards without comparing anything
+    const dir = tempDir(t);
+    const input = writeRaw(dir, manyMarkers(1200));
+    const facility = { id: 1, name: 'מפעל', address: 'x', city: 'חיפה', type: 'facility', lat: 32.8, lng: 35.0, hours: '' };
+    for (const empty of [JSON.stringify({ locations: [] }), JSON.stringify({ locations: [facility] })]) {
+        fs.writeFileSync(path.join(dir, 'locations.json'), empty);
+        await assert.rejects(run({ dir, input }), /previous locations\.json has no collection points.*--force.*NOT changed/);
+        assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), empty);
+        assert.ok(!fs.existsSync(path.join(dir, 'data_meta.json')));
+    }
+    const meta = await run({ dir, input, force: true });
+    assert.strictEqual(meta.kept, 1199);
 });
 
 test('command line: --input without a path is a usage error (exit 1)', () => {
