@@ -14,7 +14,7 @@ const scraper = require('./scraper.js');
 const { transformMarker, buildLocations, determineChain, normalizeCity, municipalName } = scraper;
 const {
     clean, isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters,
-    streetKey, sameStreet, checkCount, parseArgs, run
+    streetKey, sameStreet, checkCount, parseArgs, run, changesSince, shopChain
 } = scraper;
 
 // A marker shaped like the real MAI API response
@@ -35,10 +35,8 @@ function marker(overrides = {}, fields = {}) {
     };
 }
 
-const noCache = new Map();
-
 test('transformMarker builds a clean location from structured fields', () => {
-    const { location } = transformMarker(marker(), noCache);
+    const { location } = transformMarker(marker());
     assert.deepStrictEqual(location, {
         id: 500001,
         name: 'באג',
@@ -53,34 +51,35 @@ test('transformMarker builds a clean location from structured fields', () => {
 });
 
 test('transformMarker never lets HTML from the title into the name', () => {
-    const { location } = transformMarker(marker(), noCache);
+    const { location } = transformMarker(marker());
     assert.ok(!location.name.includes('<'));
     assert.ok(!location.address.includes('<'));
 });
 
 test('transformMarker rejects markers that must not reach the map', () => {
-    assert.strictEqual(transformMarker(marker({ map_id: '2' }), noCache).skip, 'old map');
-    assert.strictEqual(transformMarker(marker({ category: '14' }), noCache).skip, 'not a battery point');
-    assert.strictEqual(transformMarker(marker({ lat: '' }), noCache).skip, 'bad coordinates');
-    assert.strictEqual(transformMarker(marker({ lat: null, lng: null }), noCache).skip, 'bad coordinates');
-    assert.strictEqual(transformMarker(marker({ lat: '0', lng: '0' }), noCache).skip, 'outside Israel bounds');
-    assert.strictEqual(transformMarker(marker({ lat: '36.7', lng: '-119.4' }), noCache).skip, 'outside Israel bounds');
-    assert.strictEqual(transformMarker(marker({}, { business_name: 'טיב טעם - לא פעיל' }), noCache).skip, 'marked inactive by MAI');
-    assert.strictEqual(transformMarker(marker({ title: '' }, { business_name: undefined }), noCache).skip, 'no name');
+    assert.strictEqual(transformMarker(marker({ map_id: '2' })).skip, 'old map');
+    assert.strictEqual(transformMarker(marker({ category: '14' })).skip, 'not a battery point');
+    assert.strictEqual(transformMarker(marker({ lat: '' })).skip, 'bad coordinates');
+    assert.strictEqual(transformMarker(marker({ lat: null, lng: null })).skip, 'bad coordinates');
+    assert.strictEqual(transformMarker(marker({ lat: '0', lng: '0' })).skip, 'outside Israel bounds');
+    assert.strictEqual(transformMarker(marker({ lat: '36.7', lng: '-119.4' })).skip, 'outside Israel bounds');
+    assert.strictEqual(transformMarker(marker({}, { business_name: 'טיב טעם - לא פעיל' })).skip, 'marked inactive by MAI');
+    assert.strictEqual(transformMarker(marker({ title: '' }, { business_name: undefined })).skip, 'no name');
 });
 
 test('transformMarker accepts a battery category inside a list', () => {
-    assert.ok(transformMarker(marker({ category: '12,14,15' }), noCache).location);
+    assert.ok(transformMarker(marker({ category: '12,14,15' })).location);
 });
 
 test('generic municipal names become "מוקד איסוף - <place>"', () => {
     const { location } = transformMarker(marker({}, {
         business_name: 'רשות מקומית - מוקד איסוף',
         neighborhood: 'מתנ"ס רעות'
-    }), noCache);
+    }));
     assert.strictEqual(location.name, 'מוקד איסוף - מתנ"ס רעות');
     assert.strictEqual(location.chain, 'municipality');
-    assert.strictEqual(location.address, 'הרצל 10, מתנ"ס רעות, חיפה');
+    // the name already ends with the place, so the address does not repeat it ("good to great" audit)
+    assert.strictEqual(location.address, 'הרצל 10, חיפה');
 });
 
 test('municipalName strips boilerplate, the city and repeats', () => {
@@ -101,20 +100,36 @@ test('normalizeCity gives each city one spelling', () => {
     assert.strictEqual(normalizeCity("ג'סר א-זרקא"), "ג'סר א-זרקא"); // hyphen inside a name is kept
 });
 
-test('a marker without a city falls back to the cache, else is skipped', () => {
+test('a marker without a city is skipped unless data_overrides.json gives it one', () => {
     const bare = marker({ title: 'ויצמן 20', custom_field_data: [] });
-    assert.strictEqual(transformMarker(bare, noCache).skip, 'no city');
-    const cache = new Map([['32.80000,35.00000', 'חיפה']]);
-    const { location } = transformMarker(bare, cache);
+    assert.strictEqual(transformMarker(bare).skip, 'no city');
+    const { location } = transformMarker(bare, { 500001: { city: 'חיפה' } });
     assert.strictEqual(location.city, 'חיפה');
     assert.strictEqual(location.name, 'נקודת איסוף - ויצמן 20');
 });
 
+test('the previous locations.json does not change what is built', async (t) => {
+    const dir = tempDir(t);
+    const bare = marker({ id: '400500', lat: '31.5', lng: '34.9', title: 'ויצמן 20', custom_field_data: [] });
+    const input = writeRaw(dir, [...manyMarkers(1200), bare]);
+    // a previous file that knows a city for the coordinate of the city-less marker
+    const previous = { locations: [{ id: 400500, name: 'נקודת איסוף - ויצמן 20', address: 'ויצמן 20, חיפה', city: 'חיפה',
+        type: 'store', chain: 'other', lat: 31.5, lng: 34.9, hours: 'בדוק באתר' }] };
+    fs.writeFileSync(path.join(dir, 'locations.json'), JSON.stringify(previous));
+    const meta = await run({ dir, input, force: true });
+    assert.strictEqual(meta.skipped['no city'], 1);
+    const withPrevious = fs.readFileSync(path.join(dir, 'locations.json'), 'utf8');
+
+    fs.rmSync(path.join(dir, 'locations.json'));
+    await run({ dir, input });
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), withPrevious);
+});
+
 test('data_overrides.json entries fix a city or exclude a point', () => {
-    const fixed = transformMarker(marker(), noCache, { 500001: { city: 'נשר' } });
+    const fixed = transformMarker(marker(), { 500001: { city: 'נשר' } });
     assert.strictEqual(fixed.location.city, 'נשר');
     assert.strictEqual(fixed.location.address, 'הרצל 10, נשר');
-    const excluded = transformMarker(marker(), noCache, { 500001: { exclude: true } });
+    const excluded = transformMarker(marker(), { 500001: { exclude: true } });
     assert.strictEqual(excluded.skip, 'excluded by data_overrides.json');
 });
 
@@ -125,7 +140,7 @@ test('buildLocations removes repeats and tells same-name branches apart', () => 
         marker({ id: '3', lat: '32.81' }, { street: 'הנביאים', house_number: '5' }), // another branch
         marker({ id: '4', map_id: '2' })                                  // skipped
     ];
-    const { locations, skipped } = buildLocations(markers, noCache);
+    const { locations, skipped } = buildLocations(markers);
     assert.deepStrictEqual(locations.map(l => l.name), ['באג - הרצל 10', 'באג - הנביאים 5']);
     assert.strictEqual(skipped['old map'], 1);
     const keys = locations.map(l => l.name + '|' + l.city);
@@ -159,7 +174,7 @@ test('names that MAI marked as closed or duplicate are skipped', () => {
     assert.ok(isMarkedInactive('קרביץ - קניון מודיעין - כפילות 323383'));
     assert.ok(isMarkedInactive('עיריית אופקים - בית ספר עמל פסגות (בוטל)'));
     assert.strictEqual(
-        transformMarker(marker({}, { business_name: 'בית ספר אלון - מוקד איסוף - כפל' }), noCache).skip,
+        transformMarker(marker({}, { business_name: 'בית ספר אלון - מוקד איסוף - כפל' })).skip,
         'marked inactive by MAI');
 });
 
@@ -168,7 +183,7 @@ test('"כפול" and "כפל" inside a longer word do not mark a point as closed
     assert.ok(!isMarkedInactive('מכולת מכפולת הזהב'));
     assert.ok(!isMarkedInactive('מכפלה'));
     assert.ok(!isMarkedInactive('סופר-פארם'));
-    assert.ok(transformMarker(marker({}, { business_name: 'מכפולת' }), noCache).location);
+    assert.ok(transformMarker(marker({}, { business_name: 'מכפולת' })).location);
 });
 
 test('normalizeCity: one spelling for the localities found in the audit', () => {
@@ -237,40 +252,40 @@ test('joinStreet: no house number 0, no number written twice', () => {
 });
 
 test('address cleanup inside transformMarker', () => {
-    const zero = transformMarker(marker({}, { street: 'מרכז מגה אור', house_number: '0' }), noCache).location;
+    const zero = transformMarker(marker({}, { street: 'מרכז מגה אור', house_number: '0' })).location;
     assert.strictEqual(zero.address, 'מרכז מגה אור, חיפה');
-    const doubled = transformMarker(marker({}, { street: 'הרצל 97', house_number: '97' }), noCache).location;
+    const doubled = transformMarker(marker({}, { street: 'הרצל 97', house_number: '97' })).location;
     assert.strictEqual(doubled.address, 'הרצל 97, חיפה');
-    const cityTwice = transformMarker(marker({}, { street: 'המלאכה', house_number: '2', neighborhood: 'חיפה' }), noCache).location;
+    const cityTwice = transformMarker(marker({}, { street: 'המלאכה', house_number: '2', neighborhood: 'חיפה' })).location;
     assert.strictEqual(cityTwice.address, 'המלאכה 2, חיפה');
     // the repeated part is spelled like MAI's city, before our spelling fix
-    const oldSpelling = transformMarker(marker({}, { city: 'זכרון יעקב', street: 'זכרון יעקב', house_number: undefined }), noCache).location;
+    const oldSpelling = transformMarker(marker({}, { city: 'זכרון יעקב', street: 'זכרון יעקב', house_number: undefined })).location;
     assert.strictEqual(oldSpelling.address, 'זיכרון יעקב');
 });
 
 test('the chain-internal branch code is removed from the name', () => {
-    const { location } = transformMarker(marker({}, { business_name: 'מגה קניון חדרה - חוויה ואיכות בעיר-3570/90' }), noCache);
+    const { location } = transformMarker(marker({}, { business_name: 'מגה קניון חדרה - חוויה ואיכות בעיר-3570/90' }));
     assert.strictEqual(location.name, 'מגה קניון חדרה');
     assert.strictEqual(location.chain, 'mega');
 });
 
 test('a business name that is only the address becomes "נקודת איסוף - <street>"', () => {
     // real records: 343467 "ההשראה 2, שלומי", 345324 (place only), 344752 (city field holds the address)
-    const a = transformMarker(marker({}, { city: 'שלומי', street: 'ההשראה', house_number: '2', business_name: 'ההשראה 2, שלומי' }), noCache).location;
+    const a = transformMarker(marker({}, { city: 'שלומי', street: 'ההשראה', house_number: '2', business_name: 'ההשראה 2, שלומי' })).location;
     assert.strictEqual(a.name, 'נקודת איסוף - ההשראה 2');
     assert.strictEqual(a.address, 'ההשראה 2, שלומי');
     const b = transformMarker(marker({}, {
         city: 'ירושלים', street: undefined, house_number: undefined,
         neighborhood: 'מרכז מסחרי נווה יעקב', business_name: 'מרכז מסחרי נווה יעקב, ירושלים'
-    }), noCache).location;
+    })).location;
     assert.strictEqual(b.name, 'נקודת איסוף - מרכז מסחרי נווה יעקב');
     const c = transformMarker(marker({}, {
         city: 'פנחס לבון 18 נתניה', street: 'פנחס לבון', house_number: '18', business_name: 'פנחס לבון 18, נתניה'
-    }), noCache).location;
+    })).location;
     assert.strictEqual(c.name, 'נקודת איסוף - פנחס לבון 18');
     assert.strictEqual(c.city, 'נתניה');
     // a real name is left alone
-    assert.strictEqual(transformMarker(marker(), noCache).location.name, 'באג');
+    assert.strictEqual(transformMarker(marker()).location.name, 'באג');
 });
 
 test('streetKey ignores numbers, quotes and street words', () => {
@@ -290,7 +305,7 @@ test('stacked coordinates: different streets on one coordinate are all dropped a
         marker({ id: '13' }, { business_name: 'חנות ג', street: 'ויצמן', house_number: '3' }),
         marker({ id: '14', lat: '32.9' }, { business_name: 'חנות ד' }) // alone on its coordinate
     ];
-    const { locations, stats, dropped } = buildLocations(markers, noCache);
+    const { locations, stats, dropped } = buildLocations(markers);
     assert.deepStrictEqual(locations.map(l => l.id), [14]);
     assert.deepStrictEqual(dropped.stacked, [{ coord: '32.8,35', ids: [11, 12, 13] }]);
     assert.strictEqual(stats.stackedGroups, 1);
@@ -303,7 +318,7 @@ test('stacked coordinates: a shopping centre (same street, different shops) is k
         marker({ id: '22' }, { business_name: 'טיב טעם', street: 'איינשטיין', house_number: '40', neighborhood: 'קניון רמת אביב' }),
         marker({ id: '23' }, { business_name: 'קרביץ', street: "רח' איינשטיין", house_number: '40' })
     ];
-    const { locations, dropped } = buildLocations(markers, noCache);
+    const { locations, dropped } = buildLocations(markers);
     assert.deepStrictEqual(locations.map(l => l.id), [21, 22, 23]);
     assert.deepStrictEqual(dropped.stacked, []);
 });
@@ -314,7 +329,7 @@ test('stacked coordinates: one street written short and long is still one street
         marker({ id: '26' }, { business_name: 'קרביץ', street: 'אבא הלל', house_number: '301' }),
         marker({ id: '27' }, { business_name: 'גולף', street: 'אבא הלל', house_number: '301' })
     ];
-    const { locations, dropped } = buildLocations(markers, noCache);
+    const { locations, dropped } = buildLocations(markers);
     assert.deepStrictEqual(locations.map(l => l.id), [25, 26, 27]);
     assert.deepStrictEqual(dropped.stacked, []);
 });
@@ -356,7 +371,7 @@ test('streetKey keeps a road number: כביש 40 is not כביש 4', () => {
     const { dropped } = buildLocations([
         marker({ id: '81' }, { business_name: 'תחנה א', street: 'כביש 40', house_number: undefined }),
         marker({ id: '82' }, { business_name: 'תחנה ב', street: 'כביש 4', house_number: undefined })
-    ], noCache);
+    ]);
     assert.deepStrictEqual(dropped.stacked[0].ids, [81, 82]);
 });
 
@@ -381,7 +396,7 @@ test('stacked coordinates: real groups that must be kept (one street, spelled di
         marker({ id: '345845', lat: '32.945048' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, neighborhood: 'ספרייה', business_name: 'רשות מקומית - מרכז איסוף' }),
         marker({ id: '345848', lat: '32.945048' }, { city: "כפר ג'וליס", street: undefined, house_number: undefined, business_name: municipal })
     ];
-    const { locations, dropped } = buildLocations(markers, noCache);
+    const { locations, dropped } = buildLocations(markers);
     assert.deepStrictEqual(dropped.stacked, []);
     assert.strictEqual(locations.length, markers.length);
 });
@@ -408,7 +423,7 @@ test('stacked coordinates: real groups that must still be dropped', () => {
         marker({ id: '344213', lat: '33.046997' }, { city: 'פסוטה', street: 'יחיא אל עדי', house_number: undefined, neighborhood: 'מתנ"ס', business_name: municipal }),
         marker({ id: '344505', lat: '33.046997' }, { city: 'פסוטה', street: 'אל אחטל', house_number: undefined, neighborhood: 'מועצה מקומית', business_name: municipal })
     ];
-    const { locations, dropped } = buildLocations(markers, noCache);
+    const { locations, dropped } = buildLocations(markers);
     assert.deepStrictEqual(locations, []);
     assert.deepStrictEqual(dropped.stacked.map(g => g.ids), [
         [342659, 343317, 343439, 343447, 343789],
@@ -423,7 +438,7 @@ test('stacked coordinates: a point without a street', () => {
     const sameCity = buildLocations([
         marker({ id: '31' }, { business_name: 'חנות א' }),
         marker({ id: '32' }, { business_name: 'חנות ב', street: undefined, house_number: undefined })
-    ], noCache);
+    ]);
     assert.deepStrictEqual(sameCity.locations.map(l => l.id), [31, 32]);
     assert.strictEqual(sameCity.locations[1].address, 'חיפה');
 
@@ -431,7 +446,7 @@ test('stacked coordinates: a point without a street', () => {
     const twoVillages = buildLocations([
         marker({ id: '33' }, { business_name: 'מוקד א', city: 'שוקדה', street: undefined, house_number: undefined }),
         marker({ id: '34' }, { business_name: 'מוקד ב', city: 'שובה', street: undefined, house_number: undefined })
-    ], noCache);
+    ]);
     assert.deepStrictEqual(twoVillages.locations, []);
     assert.deepStrictEqual(twoVillages.dropped.stacked[0].ids, [33, 34]);
 
@@ -439,7 +454,7 @@ test('stacked coordinates: a point without a street', () => {
     const mixed = buildLocations([
         marker({ id: '35' }, { business_name: 'מוקד א', city: 'רבדים', street: undefined, house_number: undefined }),
         marker({ id: '36' }, { business_name: 'מוקד ב', city: 'שדה יואב', street: 'מזכירות', house_number: undefined })
-    ], noCache);
+    ]);
     assert.deepStrictEqual(mixed.locations, []);
 });
 
@@ -448,7 +463,7 @@ test('stacked coordinates: same chain name does not hide two different addresses
     const { locations, stats, dropped } = buildLocations([
         marker({ id: '41' }, { business_name: 'גוד פארם', city: 'פתח תקווה', street: 'רוטשילד', house_number: '57' }),
         marker({ id: '42' }, { business_name: 'גוד פארם', city: 'כרמיאל', street: 'מעלה כמון', house_number: '9' })
-    ], noCache);
+    ]);
     assert.deepStrictEqual(locations, []);
     assert.strictEqual(stats.sameSpot, 0);
     assert.deepStrictEqual(dropped.stacked[0].ids, [41, 42]);
@@ -469,7 +484,7 @@ test('same name, city and street: near = one point twice, far = two points', () 
         marker({ id: '53', lat: '32.81000' }, fields),  // ~1.1 km away   -> another point, same address
         marker({ id: '54', lat: '32.82000' }, { ...fields, street: 'ויצמן', house_number: '186' }) // another street
     ];
-    const { locations, dropped, farTwins, stats } = buildLocations(markers, noCache);
+    const { locations, dropped, farTwins, stats } = buildLocations(markers);
     assert.deepStrictEqual(locations.map(l => [l.id, l.name]), [
         [51, 'מוקד איסוף - מרכז מיחזור'],
         [53, 'מוקד איסוף - מרכז מיחזור (2)'],
@@ -493,8 +508,8 @@ test('the order of the markers in the API response does not change the result', 
         marker({ id: '60', lat: '32.83' }, { business_name: 'קרביץ' }),
         marker({ id: '9', map_id: '2' })
     ];
-    const forward = buildLocations(markers, noCache);
-    const backward = buildLocations([...markers].reverse(), noCache);
+    const forward = buildLocations(markers);
+    const backward = buildLocations([...markers].reverse());
     assert.deepStrictEqual(backward, forward);
     assert.deepStrictEqual(forward.locations.map(l => l.id), [60, 61, 63, 64]); // sorted, lowest id of a repeat survives
     assert.strictEqual(markers[0].id, '63', 'the input array is not reordered');
@@ -511,14 +526,14 @@ test('parseCoordinate accepts plain decimals only', () => {
 });
 
 test('transformMarker skips half-numeric coordinates and non-numeric ids', () => {
-    assert.strictEqual(transformMarker(marker({ lat: '32,8' }), noCache).skip, 'bad coordinates');
-    assert.strictEqual(transformMarker(marker({ lng: '35.0abc' }), noCache).skip, 'bad coordinates');
-    assert.strictEqual(transformMarker(marker({ id: '12a' }), noCache).skip, 'bad id');
-    assert.strictEqual(transformMarker(marker({ id: '' }), noCache).skip, 'bad id');
-    assert.strictEqual(transformMarker(marker({ id: undefined }), noCache).skip, 'bad id');
-    assert.strictEqual(transformMarker(marker({ id: '<b>7</b>' }), noCache).skip, 'bad id');
-    assert.strictEqual(transformMarker(marker({ id: 500001 }), noCache).location.id, 500001); // a number is fine
-    const { skipped } = buildLocations([marker({ id: 'x1' }), marker({ id: '2', lat: '32.8abc' })], noCache);
+    assert.strictEqual(transformMarker(marker({ lat: '32,8' })).skip, 'bad coordinates');
+    assert.strictEqual(transformMarker(marker({ lng: '35.0abc' })).skip, 'bad coordinates');
+    assert.strictEqual(transformMarker(marker({ id: '12a' })).skip, 'bad id');
+    assert.strictEqual(transformMarker(marker({ id: '' })).skip, 'bad id');
+    assert.strictEqual(transformMarker(marker({ id: undefined })).skip, 'bad id');
+    assert.strictEqual(transformMarker(marker({ id: '<b>7</b>' })).skip, 'bad id');
+    assert.strictEqual(transformMarker(marker({ id: 500001 })).location.id, 500001); // a number is fine
+    const { skipped } = buildLocations([marker({ id: 'x1' }), marker({ id: '2', lat: '32.8abc' })]);
     assert.deepStrictEqual(skipped, { 'bad id': 1, 'bad coordinates': 1 });
 });
 
@@ -532,16 +547,119 @@ test('clean decodes HTML entities, then removes tags', () => {
     assert.strictEqual(clean('&lt;script&gt;alert(1)&lt;/script&gt;שם'), 'alert(1) שם'); // an encoded tag is still a tag
     assert.strictEqual(clean('&amp;lt;b&amp;gt;'), '&lt;b&gt;'); // decoded once, not twice
     assert.strictEqual(clean('a&#0;b&#99999999;c'), 'a b c');
-    const { location } = transformMarker(marker({}, { business_name: 'H&amp;M &lt;b&gt;קניון&lt;/b&gt;' }), noCache);
+    const { location } = transformMarker(marker({}, { business_name: 'H&amp;M &lt;b&gt;קניון&lt;/b&gt;' }));
     assert.strictEqual(location.name, 'H&M קניון');
+});
+
+test('clean drops a trailing hyphen, and keeps a number with a hyphen as MAI writes a floor below ground', () => {
+    assert.strictEqual(clean('חנות הרצל -'), 'חנות הרצל');
+    // real: 343431 "קומה 1-" is floor -1 typed right to left; MAI writes it "(1-)" elsewhere (346291)
+    assert.strictEqual(clean('בניין העירייה - חדר אשפה קומה 1-'), 'בניין העירייה - חדר אשפה קומה (1-)');
+    assert.strictEqual(clean('קומת חנייה (1-) כניסה 1'), 'קומת חנייה (1-) כניסה 1');
+});
+
+// --- name and address clean-up (real records from the "good to great" audit) ---
+
+const municipal = { business_name: 'רשות מקומית - מוקד איסוף' };
+
+test('a part of the name that repeats an earlier part is left out', () => {
+    // real: 347201 "חשמלית - חשמלית - מקס שיין 9"; 347510 "חשמלית - חשמלית - הרי הגלבוע"
+    const bin = name => transformMarker(marker({}, { business_name: name, city: 'רחובות', street: '.', house_number: '.' })).location;
+    assert.strictEqual(bin('חשמלית - חשמלית - מקס שיין 9').name, 'חשמלית - מקס שיין 9');
+    assert.strictEqual(bin('חשמלית - חשמלית - הרי הגלבוע').name, 'חשמלית - הרי הגלבוע');
+    // a name with no repeat keeps its own spacing
+    assert.strictEqual(bin('קרביץ מלחה- קניון עזריאלי').name, 'קרביץ מלחה- קניון עזריאלי');
+});
+
+test('an address that is only the city takes the street from the end of the name', () => {
+    // real: 347223 "- חשמלית - סמטת רוזמרין 17" | "חולון"; 347201 (רחובות)
+    const bin = (name, city) => transformMarker(marker({}, { business_name: name, city, street: '.', house_number: '.' })).location;
+    assert.deepStrictEqual([bin('- חשמלית - סמטת רוזמרין 17', 'חולון').name, bin('- חשמלית - סמטת רוזמרין 17', 'חולון').address],
+        ['חשמלית - סמטת רוזמרין 17', 'סמטת רוזמרין 17, חולון']);
+    assert.strictEqual(bin('חשמלית - חשמלית - מקס שיין 9', 'רחובות').address, 'מקס שיין 9, רחובות');
+    // no house number at the end: not clearly a street, the address stays the city
+    assert.strictEqual(bin('חשמלית - חשמלית - הרי הגלבוע', 'רחובות').address, 'רחובות');
+    // one part only: the name is the shop, not a street
+    assert.strictEqual(bin('גלי 3', 'רחובות').address, 'רחובות');
+});
+
+test('municipal boilerplate is removed from the place field too', () => {
+    // real: 344186, 344286, 346635
+    const a = transformMarker(marker({}, { ...municipal, city: 'צורן', street: 'השקמה', house_number: '4', neighborhood: 'מוקד איסוף - חשמלית' })).location;
+    assert.deepStrictEqual([a.name, a.address], ['מוקד איסוף - חשמלית', 'השקמה 4, צורן']);
+    const b = transformMarker(marker({}, { ...municipal, city: 'הרצליה', street: 'שדרות נווה עובד', house_number: '6', neighborhood: 'עיריית הרצליה - מוקד איסוף - מתנ"ס נוף ים' })).location;
+    assert.deepStrictEqual([b.name, b.address], ['מוקד איסוף - עיריית הרצליה - מתנ"ס נוף ים', 'שדרות נווה עובד 6, הרצליה']);
+    const c = transformMarker(marker({}, { business_name: 'עיריית רמת גן - מוקד איסוף עירוני - מכללת שנקר - האגף החדש', city: 'רמת גן', street: 'אנה פרנק', house_number: '12' })).location;
+    assert.strictEqual(c.name, 'מוקד איסוף - עיריית רמת גן - מכללת שנקר - האגף החדש');
+});
+
+test('בע"מ is removed from a shop name', () => {
+    // real: 343665, 344167, 346599
+    const name = business => transformMarker(marker({}, { business_name: business })).location;
+    assert.strictEqual(name('שופרסל סטוק בע"מ').name, 'שופרסל סטוק');
+    assert.strictEqual(name('שופרסל סטוק בע"מ').chain, 'shufersal');
+    assert.strictEqual(name('שופרסל סטוק בע"מ - סניף חולון').name, 'שופרסל סטוק - סניף חולון');
+    assert.strictEqual(name('קבוצת גולף א.ק. בע"מ - מודיעין מרכז מגה אור').name, 'קבוצת גולף א.ק. - מודיעין מרכז מגה אור');
+});
+
+test('Arabic-script text and parcel numbers are removed (שפרעם street names)', () => {
+    // real: 345905 and 345907; the Arabic copy is cut off and the "house number" is a parcel (גוש/חלקה)
+    const a = transformMarker(marker({}, { ...municipal, city: 'שפרעם', street: 'זאהר עומר א - זידאני ظاهر العم', house_number: '10262/31' })).location;
+    assert.deepStrictEqual([a.name, a.address], ['מוקד איסוף - זאהר עומר א - זידאני', 'זאהר עומר א - זידאני, שפרעם']);
+    const b = transformMarker(marker({}, { ...municipal, city: 'שפרעם', street: "ג'בור יוסף ג'בור جبور يوسف جبو", house_number: '10301/10302/23/2' })).location;
+    assert.strictEqual(b.address, "ג'בור יוסף ג'בור, שפרעם");
+    // an ordinary house number stays
+    assert.strictEqual(transformMarker(marker({}, { street: 'הרצל', house_number: '10/2' })).location.address, 'הרצל 10/2, חיפה');
+});
+
+test('the city is not written twice in the address', () => {
+    // real: 345560 (place "מרכז ביג, כרמיאל"), 346666 (street "סכנין, כביש ראשי"), 342668 (place "מודיעין-עילית")
+    const a = transformMarker(marker({}, { business_name: 'קרביץ', city: 'כרמיאל', street: 'מעלה כמון', house_number: '2', neighborhood: 'מרכז ביג, כרמיאל' })).location;
+    assert.strictEqual(a.address, 'מעלה כמון 2, מרכז ביג, כרמיאל');
+    const b = transformMarker(marker({}, { business_name: 'ביג אלקטריק - סניף סכנין', city: 'סכנין', street: 'סכנין, כביש ראשי', house_number: '0' })).location;
+    assert.strictEqual(b.address, 'כביש ראשי, סכנין');
+    const c = transformMarker(marker({}, { business_name: 'זול בשפע', city: 'מודיעין עילית', street: "שד' יחזקאל 2", house_number: '2', neighborhood: 'מודיעין-עילית' })).location;
+    assert.strictEqual(c.address, "שד' יחזקאל 2, מודיעין עילית");
+});
+
+test('a street does not start with "רחוב" or "רח\'"', () => {
+    // real: 342578, 344140, 344931, 342662
+    const a = transformMarker(marker({}, { business_name: 'רשות מקומית - מרכז איסוף', city: 'נס ציונה', street: 'רחוב הטייסים', house_number: '34', neighborhood: 'מרכז הטייסים' })).location;
+    assert.deepStrictEqual([a.name, a.address], ['מוקד איסוף - מרכז הטייסים', 'הטייסים 34, נס ציונה']);
+    const b = transformMarker(marker({}, { business_name: 'קרביץ', city: 'חדרה', street: "רח' גיבורים קניון לב", house_number: undefined, neighborhood: 'חדרה' })).location;
+    assert.strictEqual(b.address, 'גיבורים קניון לב, חדרה');
+    const c = transformMarker(marker({}, { business_name: 'תחנת דלק - פז YELLOW', city: 'חיפה', street: 'עין דיר', house_number: '16', neighborhood: 'רחוב הבנקים' })).location;
+    assert.strictEqual(c.address, 'עין דיר 16, הבנקים, חיפה');
+    assert.strictEqual(transformMarker(marker({}, { business_name: 'מגה - רחוב דרך הים 26' })).location.name, 'מגה - דרך הים 26');
+    // the city רחובות is not a street word
+    assert.strictEqual(transformMarker(marker({}, { city: 'רחובות', street: 'הרצל', house_number: '1' })).location.address, 'הרצל 1, רחובות');
+});
+
+test('the place is left out of the address when the name already ends with it', () => {
+    // real: 342583 "רמי לוי" | "בית הדפוס 13, גבעת שאול, ירושלים" and a second רמי לוי in ירושלים:
+    // telling them apart adds the place to the name, so the address no longer repeats it
+    const { locations } = buildLocations([
+        marker({ id: '1', lat: '31.79' }, { business_name: 'רמי לוי', city: 'ירושלים', street: 'בית הדפוס', house_number: '13', neighborhood: 'גבעת שאול' }),
+        marker({ id: '2', lat: '31.75' }, { business_name: 'רמי לוי', city: 'ירושלים', street: 'פייר קניג', house_number: '30', neighborhood: 'תלפיות' })
+    ]);
+    assert.deepStrictEqual(locations.map(l => [l.name, l.address]), [
+        ['רמי לוי - גבעת שאול', 'בית הדפוס 13, ירושלים'],
+        ['רמי לוי - תלפיות', 'פייר קניג 30, ירושלים']
+    ]);
+    // real: 342576 "מוקד איסוף - מול מרכז מחזור החושן" | "החושן, מול מרכז מחזור החושן, נס ציונה"
+    const one = transformMarker(marker({}, { ...municipal, city: 'נס ציונה', street: 'החושן', house_number: undefined, neighborhood: 'מול מרכז מחזור החושן' })).location;
+    assert.deepStrictEqual([one.name, one.address], ['מוקד איסוף - מול מרכז מחזור החושן', 'החושן, נס ציונה']);
+    // a name that does not end with the place keeps the place in the address
+    const shop = transformMarker(marker({}, { business_name: 'באג', neighborhood: 'קניון חיפה' })).location;
+    assert.strictEqual(shop.address, 'הרצל 10, קניון חיפה, חיפה');
 });
 
 test('overrides whose id is not in the MAI response are reported', () => {
     const overrides = { 71: { city: 'נשר' }, 99999: { exclude: true }, 88888: { city: 'עכו' } };
-    const { overridesUnmatched, locations } = buildLocations([marker({ id: '71' })], noCache, overrides);
+    const { overridesUnmatched, locations } = buildLocations([marker({ id: '71' })], overrides);
     assert.deepStrictEqual(overridesUnmatched, ['88888', '99999']);
     assert.strictEqual(locations[0].city, 'נשר');
-    assert.deepStrictEqual(buildLocations([marker({ id: '71' })], noCache).overridesUnmatched, []);
+    assert.deepStrictEqual(buildLocations([marker({ id: '71' })]).overridesUnmatched, []);
 });
 
 test('checkCount: under 1,000 never saves; under 90 % of the previous file needs --force', () => {
@@ -563,12 +681,63 @@ test('parseArgs: --input needs a path', () => {
 
 // --- the real fixture: 33 markers copied from the MAI API on 2026-11-25 ---
 
+test('one shop listed twice: same chain within 50 m, same street or one without a house number -> the lower id stays', () => {
+    const { locations, dropped, stats } = buildLocations([
+        // real: 345582 / 345669, the phone counter inside the same רמי לוי, 18 m apart
+        marker({ id: '345669', lat: '31.796689', lng: '35.146284' }, { business_name: 'רמי לוי', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
+        marker({ id: '345582', lat: '31.79683328091107', lng: '35.14636170421983' }, { business_name: 'רמי לוי - תקשורת', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
+        // real: 344152 / 345148 אייס צומת וולקן, 4 m apart; neither has a house number, the streets differ
+        marker({ id: '344152', lat: '32.811818', lng: '35.072960' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'צומת וולקן', house_number: undefined, neighborhood: 'צומת וולקן' }),
+        marker({ id: '345148', lat: '32.811844', lng: '35.072932' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'החרושת', house_number: undefined, neighborhood: 'צומת וולקן, מפרץ חיפה' })
+    ]);
+    assert.deepStrictEqual(locations.map(l => l.id), [344152, 345582]);
+    assert.deepStrictEqual(dropped.sameShop, [{ id: 345148, sameAs: 344152 }, { id: 345669, sameAs: 345582 }]);
+    assert.strictEqual(stats.sameShop, 2);
+});
+
+test('one shop listed twice: different house numbers are never merged (אבי סופר, אלנבי 113, 122 and 124)', () => {
+    // real: three shops within 23 m
+    const avi = (id, lat, lng, number) => marker({ id, lat, lng }, { business_name: 'אבי סופר', city: 'תל אביב', street: 'אלנבי', house_number: number });
+    const { locations, dropped } = buildLocations([
+        avi('343536', '32.062731', '34.773254', '113'),
+        avi('343540', '32.062690', '34.773227', '124'),
+        avi('343543', '32.062893', '34.773172', '122')
+    ]);
+    assert.deepStrictEqual(locations.map(l => l.id), [343536, 343540, 343543]);
+    assert.deepStrictEqual(dropped.sameShop, []);
+});
+
+test('one shop listed twice: not another chain, not another fuel brand, not over 50 m, not a municipal point', () => {
+    const at = (id, lat, fields) => marker({ id, lat, lng: '35.0' }, { street: 'הרצל', house_number: '10', ...fields });
+    const { locations, dropped } = buildLocations([
+        at('1', '32.80000', { business_name: 'באג' }),
+        at('2', '32.80010', { business_name: 'גלי' }),                              // 11 m, another chain
+        at('3', '32.81000', { business_name: 'תחנת דלק - פז YELLOW' }),
+        at('4', '32.81010', { business_name: 'תחנת דלק - דור אלון' }),              // 11 m, another brand
+        at('5', '32.82000', { business_name: 'מחסני חשמל' }),
+        at('6', '32.82055', { business_name: 'מחסני חשמל - סניף הרצל' }),            // 61 m
+        at('7', '32.83000', { business_name: 'רשות מקומית - מוקד איסוף', neighborhood: 'ספרייה' }),
+        at('8', '32.83010', { business_name: 'רשות מקומית - מוקד איסוף', neighborhood: 'מתנ"ס' }) // two buildings
+    ]);
+    assert.deepStrictEqual(locations.map(l => l.id), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.deepStrictEqual(dropped.sameShop, []);
+});
+
+test('shopChain: the first part of the name, with the brand for a fuel station; none for a municipal point', () => {
+    assert.strictEqual(shopChain('רמי לוי - תקשורת - קניון עטרות'), 'רמי לוי');
+    assert.strictEqual(shopChain('רמי לוי'), 'רמי לוי');
+    assert.strictEqual(shopChain('תחנת דלק - פז YELLOW - צומת סעד'), 'תחנת דלק - פז YELLOW');
+    assert.strictEqual(shopChain('סופר-פארם - דיזנגוף'), 'סופר-פארם');
+    assert.strictEqual(shopChain('מוקד איסוף - ספרייה'), '');
+    assert.strictEqual(shopChain('נקודת איסוף - הרצל 4'), '');
+});
+
 const FIXTURE = path.join(__dirname, 'test-fixtures', 'raw_sample.json');
 
 test('fixture: every kind of real marker ends up where it should', () => {
     const markers = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
     assert.strictEqual(markers.length, 33);
-    const { locations, skipped, dropped, stats, farTwins } = buildLocations(markers, noCache, {});
+    const { locations, skipped, dropped, stats, farTwins } = buildLocations(markers, {});
     const byId = new Map(locations.map(l => [l.id, l]));
 
     // normal structured record; HTML from the title never leaks
@@ -640,7 +809,11 @@ function tempDir(t) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scraper-test-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     fs.writeFileSync(path.join(dir, 'facilities.json'), JSON.stringify({ locations: [] }));
-    fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides: { 400001: { exclude: true }, 77: { city: 'x' } } }));
+    // 10 overrides, one of them (77) matching no marker. The other eight give markers the city they
+    // already have, so they change nothing. One unmatched in ten is allowed; more refuses to save.
+    const overrides = { 400001: { exclude: true }, 77: { city: 'x' } };
+    for (let id = 400002; id <= 400009; id++) overrides[id] = { city: 'חיפה' };
+    fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides }));
     return dir;
 }
 
@@ -670,14 +843,19 @@ test('run writes locations.json and data_meta.json, with no .tmp file left', asy
         skipped: { 'old map': 1, 'excluded by data_overrides.json': 1 },
         duplicates_removed: 0,
         stacked_dropped: 0,
-        overrides_unmatched: [77]
+        overrides_unmatched: [77],
+        changes: null // there was no previous file to compare with
     });
     assert.deepStrictEqual(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')), []);
 
-    // a second run on the same input gives the same bytes
+    // a second run on the same input gives the same bytes, and reports that nothing changed
     const first = fs.readFileSync(path.join(dir, 'locations.json'), 'utf8');
-    await run({ dir, input });
+    const again = await run({ dir, input });
     assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), first);
+    assert.deepStrictEqual(again.changes, {
+        counts: { added: 0, removed: 0, moved: 0, renamed: 0, cityChanged: 0 },
+        added: [], removed: [], moved: [], renamed: [], cityChanged: []
+    });
 });
 
 test('run refuses to save under 1,000 points and leaves the old files alone', async (t) => {
@@ -703,7 +881,77 @@ test('run refuses to save under 90 % of the previous count unless forced', async
     assert.strictEqual(meta.kept, 1699);
     assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8')).locations.length, 1699);
 
-    await run({ dir, input: writeRaw(dir, manyMarkers(1600)) });             // 1,599 of 1,699 = 94 % -> fine
+    await run({ dir, input: writeRaw(dir, manyMarkers(1650)) });             // 1,649 of 1,699 = 97 % -> fine
+});
+
+test('changesSince lists what was added, removed, moved over 100 m, renamed or given another city', () => {
+    const at = (id, lat, extra = {}) => ({ id, name: 'חנות ' + id, city: 'חיפה', lat, lng: 35.0, ...extra });
+    const previous = [at(1, 32.8), at(2, 32.8), at(3, 32.8), at(4, 32.8), at(5, 32.8), at(6, 32.8)];
+    const stores = [
+        at(1, 32.8),                        // unchanged
+        at(3, 32.8018),                     // 200 m north
+        at(4, 32.8005),                     // 56 m north: not a move
+        at(5, 32.8, { name: 'חנות חדשה' }),
+        at(6, 32.8, { city: 'נשר' }),
+        at(7, 32.8)                         // new; 2 is gone
+    ];
+    assert.deepStrictEqual(changesSince(previous, stores), {
+        added: [7], removed: [2], moved: [3], renamed: [5], cityChanged: [6]
+    });
+    const none = changesSince(previous, previous);
+    assert.deepStrictEqual(none, { added: [], removed: [], moved: [], renamed: [], cityChanged: [] });
+});
+
+// The markers of manyMarkers, with the first `count` moved 150 m north
+function withMoved(markers, count) {
+    return markers.map((m, i) => (i < count ? { ...m, lat: (Number(m.lat) + 0.00135).toFixed(5) } : m));
+}
+
+test('run refuses to save when over 5 % of the points moved or went, unless forced', async (t) => {
+    const dir = tempDir(t);
+    await run({ dir, input: writeRaw(dir, manyMarkers(1200)) });             // previous file: 1,199 points
+    const before = fs.readFileSync(path.join(dir, 'locations.json'), 'utf8');
+    const metaBefore = fs.readFileSync(path.join(dir, 'data_meta.json'), 'utf8');
+
+    const moved = writeRaw(dir, withMoved(manyMarkers(1200), 73));            // 72 kept points moved = 6 %
+    await assert.rejects(run({ dir, input: moved }), /72 of 1199 points were removed or moved.*--force.*NOT changed/);
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), before);
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'data_meta.json'), 'utf8'), metaBefore);
+
+    const meta = await run({ dir, input: moved, force: true });
+    assert.strictEqual(meta.changes.counts.moved, 72);
+    assert.strictEqual(meta.changes.moved.length, 72);
+    assert.deepStrictEqual(meta.changes.moved.slice(0, 2), [400000, 400002]); // 400001 is excluded
+});
+
+test('run saves a small change and writes it to data_meta.json', async (t) => {
+    const dir = tempDir(t);
+    await run({ dir, input: writeRaw(dir, manyMarkers(1200)) });
+    const next = withMoved(manyMarkers(1201), 3).slice(0, 1201).filter(m => m.id !== '400010');
+    const meta = await run({ dir, input: writeRaw(dir, next) });
+    assert.deepStrictEqual(meta.changes, {
+        counts: { added: 1, removed: 1, moved: 2, renamed: 0, cityChanged: 0 },
+        added: [401200], removed: [400010], moved: [400000, 400002], renamed: [], cityChanged: []
+    });
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'data_meta.json'), 'utf8')).changes, meta.changes);
+});
+
+test('run refuses to save when over 10 % of the overrides match no marker, unless forced', async (t) => {
+    const dir = tempDir(t);
+    fs.writeFileSync(path.join(dir, 'locations.json'), 'OLD');
+    const input = writeRaw(dir, manyMarkers(1200));
+    const overrides = JSON.parse(fs.readFileSync(path.join(dir, 'data_overrides.json'), 'utf8')).overrides;
+    delete overrides[400009];
+    overrides[78] = { exclude: true };                                       // now 2 of 10 match nothing
+    fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides }));
+    await assert.rejects(run({ dir, input }),
+        /2 of 10 overrides match no MAI marker - MAI may have renumbered its markers\..*NOT changed/);
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), 'OLD');
+    assert.ok(!fs.existsSync(path.join(dir, 'data_meta.json')));
+
+    fs.rmSync(path.join(dir, 'locations.json'));
+    const meta = await run({ dir, input, force: true });
+    assert.deepStrictEqual(meta.overrides_unmatched, [77, 78]);
 });
 
 test('command line: --input without a path is a usage error (exit 1)', () => {
@@ -721,6 +969,13 @@ test('isSchool: schools, yeshivas and kindergartens, but not streets, shops or c
         'מוקד איסוף - ישיבת הסדר', 'מוקד איסוף - אולפנת בהרן', 'מוקד איסוף - ממ"ד גוננים', 'מוקד איסוף - גני ילדים',
         'מוקד איסוף - קריית החינוך', 'מוקד איסוף - "התיכון הישראלי למדעים ואומנויות"', 'מוקד איסוף - בית חינוך קהילתי גאולה', 'מוקד איסוף - תלמוד תורה'
     ]) assert.ok(isSchool(name), name);
+    // a school campus that does not use the word "school" (found on the map in the November 2026 audit)
+    for (const name of ['מוקד איסוף - תיכונט ע"ש אלתרמן', 'מוקד איסוף - חמ"ד מודיעים - יהלום, כניסה ראשית']) assert.ok(isSchool(name), name);
+    // opposite or next to a school is not inside it; "חטיבת <name> <number>" is a street address
+    for (const name of [
+        'נחלת החדשה, מול בית הספר', 'מוקד איסוף - ליד בי"ס קשת', 'מוקד איסוף - מול התיכון',
+        'עיריית רמת השרון - מרכז איסוף - חשמלית - חטיבת אלכסנדרוני 2', 'מוקד איסוף - חטיבת גולני 14'
+    ]) assert.ok(!isSchool(name), name);
     for (const name of [
         'תחנת דלק - סונול סו גוד - חטיבת הנח"ל 30', 'תחנת דלק - פז YELLOW - חטיבה תשע פינת הולנד', 'חשמלית - אלישיב',
         'מוקד איסוף - סמוך לגן ילדים', 'באג - אוניברסיטת ת"א, שער 8', 'מוקד איסוף - מכללת לוינסקי', 'בית מדרש דרכי דוד',
@@ -729,10 +984,68 @@ test('isSchool: schools, yeshivas and kindergartens, but not streets, shops or c
 });
 
 test('a school is skipped, whether the school is in the name or in the place field', () => {
-    const inName = transformMarker(marker({}, { business_name: 'בית ספר רעות' }), noCache);
+    const inName = transformMarker(marker({}, { business_name: 'בית ספר רעות' }));
     assert.strictEqual(inName.skip, 'school (not open to the public)');
-    const inPlace = transformMarker(marker({}, { business_name: 'רשות מקומית - מוקד איסוף', neighborhood: 'בית ספר רימונים' }), noCache);
+    const inPlace = transformMarker(marker({}, { business_name: 'רשות מקומית - מוקד איסוף', neighborhood: 'בית ספר רימונים' }));
     assert.strictEqual(inPlace.skip, 'school (not open to the public)');
-    const onSchoolStreet = transformMarker(marker({}, { business_name: 'שופרסל', street: 'בית הספר', house_number: '4' }), noCache);
+    const onSchoolStreet = transformMarker(marker({}, { business_name: 'שופרסל', street: 'בית הספר', house_number: '4' }));
     assert.ok(onSchoolStreet.location, 'a shop on a street named after a school stays');
+});
+
+test('real records the school rule used to drop by mistake are kept', () => {
+    // 344744: a petrol station whose place field names the junction by the school next to it
+    const station = transformMarker(marker({ id: '344744' }, {
+        city: 'צומת גולני דרומה', street: undefined, house_number: undefined,
+        neighborhood: 'צומת גולני דרומה-בית ספר כדורי', business_name: 'תחנת דלק - דור אלון'
+    }));
+    assert.strictEqual(station.location.name, 'תחנת דלק - דור אלון');
+    // 342750: a collection centre opposite a school
+    const opposite = transformMarker(marker({ id: '342750' }, {
+        city: 'ראשון לציון', street: 'העצמאות', house_number: undefined,
+        neighborhood: 'נחלת החדשה, מול בית הספר', business_name: 'רשות מקומית - מרכז איסוף'
+    }));
+    assert.ok(opposite.location, 'opposite a school: ' + opposite.skip);
+    // 346995: "חטיבת אלכסנדרוני 2" is the street address
+    const street = transformMarker(marker({ id: '346995' }, {
+        city: 'רמת השרון', street: 'חטיבת אלכסנדרוני', house_number: '2', neighborhood: 'מורשה',
+        business_name: 'עיריית רמת השרון - מרכז איסוף - חשמלית - חטיבת אלכסנדרוני 2'
+    }));
+    assert.ok(street.location, 'a street named after a brigade: ' + street.skip);
+    // still a school: the bin is in the car park of the high school (342792, left out until the owner decides)
+    const carPark = transformMarker(marker({ id: '342792' }, {
+        city: 'מודיעין', street: 'נחל עיון', house_number: undefined,
+        neighborhood: 'החנייה האחורית של תיכון עירוני ב\' ע"ש רבין', business_name: 'רשות מקומית - מרכז איסוף - חשמלית'
+    }));
+    assert.strictEqual(carPark.skip, 'school (not open to the public)');
+});
+
+test('normalizeCity: spellings and labels found in the "good to great" audit', () => {
+    const cases = {
+        'ביתר עלית': 'ביתר עילית',
+        'באקה אל גארבייה': 'באקה אל-גרבייה',
+        'כפר תמרה': 'טמרה',
+        'כפר טורעאן': 'טורעאן',
+        'כוכב יאיר': 'כוכב יאיר צור יגאל',
+        'מועצה אזורית משגב': 'משגב',
+        "גוש חלב ג'ש": 'גוש חלב',
+        'נוה מבטח': 'נווה מבטח',
+        'סילבר': 'כפר סילבר',
+        'פעמי תשז': 'פעמי תש"ז',
+        // a letter that is part of the name needs its geresh, or it reads as a typing slip
+        'קיבוץ דגניה א': "דגניה א'",
+        // one place under a short and a long name, pins 21 m and 364 m apart
+        'הילה': 'מצפה הילה',
+        'גרנות': 'גרנות הגליל',
+        // abbreviations and a Latin letter inside a Hebrew name
+        'צ.צלמון': 'צומת צלמון',
+        'א.ת.עמק חפר': 'עמק חפר',
+        'מחלף M הדרך': 'מחלף אם הדרך',
+        // a trailing bracket is a remark, not part of the name
+        'עובדה (שיכון משפחות)': 'עובדה',
+        'שדה תרומות (ביכורה)': 'שדי תרומות', // and the moshav is שדי, not שדה
+        'מועצה אזורית גולן': 'מועצה אזורית גולן' // other regional councils are left as they are
+    };
+    for (const [raw, expected] of Object.entries(cases)) {
+        assert.strictEqual(normalizeCity(raw), expected, raw);
+    }
 });

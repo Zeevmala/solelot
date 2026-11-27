@@ -10,17 +10,126 @@
     "Added 2026-11-25: 346330 and 346351 share one coordinate at the centre of באר שבע with no street (\"בכניסה הצפונית\", \"פארק אופיק\"). In a city that size a centre pin can be kilometres from the place, so both are left out.",
     "Added 2026-11-25 after review of the refreshed file: 345747 (address נתב\"ג לוד, pin in באר שבע, 76 km away) and 342784 (address רמות ירושלים, pin in north תל אביב, 46 km away) came back when same-name twins stopped being dropped; 345502 and 345653 share one coordinate in מגדל העמק but name two different industrial zones with no street.",
     "Added 2026-11-25: 346434 (רמי לוי, העמל 20) had the city \"ים\"; Nominatim puts the pin in the industrial area of כפר סבא.",
+    "Added 2026-11-26: 25 city entries for markers that MAI publishes with a street but no city (343975-343996, 346749, 346774, 347297). Until now the scraper took their city from the previous locations.json by coordinate, so a lost file or a coordinate nudged by 1 m would have removed them for good; the cities here are the ones that file had.",
+    "Added 2026-11-26: 343108 is inside the ביאליק רוגוזין school campus (\\\"ביאליק רוגוזין, כניסה ראשית\\\"), which does not say school in words the school rule can see; schools are left off the map.",
+    "Added 2026-11-26 (\"good to great\" audit), 33 city fixes where the pin is right and the city label is wrong. 11 from the data-quality report, each checked there against OpenStreetMap (342668 מודיעין עילית, 346666 סכנין, 346665 כסרא סמיע, 344436 ירושלים, 346222 גבעת חן, 342842 רמת יוחנן, 342845 כפר הנוער הדתי, 347324 עין בוקק, 346155 באר שבע, 344330 חולון, 344132 משמר השבעה). 344902 and 344905 name קריית חיים as their place and sit among its points, so they join that city. 12 from the spatial report, where the pin sits among points of the neighbouring town (346693, 344847, 347124, 345339, 343571, 343676, 346245, 344139, 344699, 344708, 345879, 345956). 8 where one building was listed under two or three cities: מרכז מסחרי תל חנן and דרך בר יהודה 111 are in נשר (343443, 345153, 345364, 346694); מבצע קדש 56 is in בני ברק and דרך העמק 41 in נוף הגליל by a Nominatim reverse geocode of the pin (344033, 345259, 345577); 344549 shares its coordinate with a נתניה point (פולג is a part of נתניה).",
+    "Added 2026-11-26: 343449 (תל חנן), 344534 (עמק שרה) and 344555 (פולג) each were the only point of a neighbourhood listed as a city, sitting among points of נשר, באר שבע and נתניה (validator warning 14c). 343053 has the regional council as its city; Nominatim puts the pin in פארק תעשיות משגב תרדיון, so its city is תרדיון (as משגב it had the same name as 343050, 2 km away).",
+    "Added 2026-11-26 (spatial audit): 14 excludes where points of one street in one city are over 1.5 km apart and a Nominatim reverse or forward geocode puts the pin in another town or on another street than the address (342619, 343674, 343678, 343793, 344802, 344960, 345162, 345267, 345578, 345581, 345646, 345672, 345809, 346367; 1.9-10 km off). 3 second entries of one point under a wrong city, pins under 30 m apart, the entry that contradicts its pin is left out (343051 = 347269, 344893 = 344892, 346460 = 346186).",
+    "Added 2026-11-26 (same address, pins over 1 km apart), each checked with Nominatim: 342645 and 344846 (קניון מלחה) sit on בית\"ר street in תלפיות, 3.6 km east of the mall and of its nine other pins; 345126 (ביג צ'ק פוסט) is at דרך בר יהודה 107 in נשר and 345129 at נווה שאנן, 2.0 and 1.3 km from the complex at בר יהודה 111; 345088 (קניון עזריאלי חיפה) is at ויצו 9, כרמליה, 1.2 km from its six other pins; 345922 (אבן עזרא 16, אשדוד) is 834 m from every part of the street in OpenStreetMap, at כיכר התרבות, while its twin 346101 is 57 m from it; 346589 (ויצמן 1, אשדוד) is on ויצמן street in קריית מלאכי, 12 km from אשדוד, the same slip as 346367. Kept: 344011 (הרצל 91, רמלה) is on the house-level geocode; 346743 and 346744 (דרך השלום 20, נשר) are both on the street (9 m and 45 m) and nothing says which is number 20; 347326 (קולומביה, address ביג רגבה, pin and city חוצות המפרץ, 19 km apart) cannot be told.",
+    "Added 2026-11-26 (new validator warning 14d: same street in one city, nearest same-street point over 1.5 km away), each checked with Nominatim: 346486 (קואופ שופ, דב גור 27, אשדוד) is 2.25 km from every part of דב גור while 347344 (דב גור 15) is 39 m from it; 345778 (מחסני חשמל, שדרות המייסדים 15, מעלה אדומים) is on שדרות החברה הכלכלית, 2.8 km from the three points at numbers 15-17, which sit together at גבעת המייסדים.",
+    "Added 2026-11-26: 3 second entries of one shop (validator check 25: same chain, same address, under 100 m), 63-90 m apart, so further apart than the 50 m the scraper merges by itself; the higher id is left out, as the scraper does: 343429 = 343376 (רמי לוי, דבורה הנביאה 128, תל אביב), 346637 = 343522 (קרביץ, המלאכה 2, רעננה), 344569 = 344434 (רמי לוי, תדהר 1, פרדס חנה).",
+    "Added 2026-11-26: 344231 (קרביץ, \"מתחפ ביג פוריה\") is in טבריה: Nominatim puts the pin on המברג in אזור תעשייה טבריה עלית, where the other shops of the same BIG centre are listed under טבריה. It became the only point of \"פוריה\" when its second entry 346634 was merged into it (warning 14c).",
+    "Added 2026-11-26: 346759 (קרביץ - קניון עופר השרון) is a second entry of 346641 (קרביץ - השרון- קניון עופר), same chain and address (הרצל 60, נתניה), 92 m apart; it showed in check 25 once the place stopped being repeated in the address. The higher id is left out.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
+    "342668": {
+      "city": "מודיעין עילית"
+    },
+    "342842": {
+      "city": "רמת יוחנן"
+    },
+    "342845": {
+      "city": "כפר הנוער הדתי"
+    },
+    "343053": {
+      "city": "תרדיון"
+    },
     "343180": {
       "city": "כפר מונש"
+    },
+    "343443": {
+      "city": "נשר"
+    },
+    "343449": {
+      "city": "נשר"
+    },
+    "343571": {
+      "city": "מעלות תרשיחא"
     },
     "343647": {
       "city": "נתיבות"
     },
+    "343676": {
+      "city": "עפולה"
+    },
     "343803": {
       "city": "כפר תבור"
+    },
+    "343975": {
+      "city": "תל אביב"
+    },
+    "343976": {
+      "city": "תל אביב"
+    },
+    "343977": {
+      "city": "תל אביב"
+    },
+    "343978": {
+      "city": "תל אביב"
+    },
+    "343979": {
+      "city": "תל אביב"
+    },
+    "343980": {
+      "city": "תל אביב"
+    },
+    "343981": {
+      "city": "תל אביב"
+    },
+    "343982": {
+      "city": "צור יצחק"
+    },
+    "343983": {
+      "city": "פתח תקווה"
+    },
+    "343984": {
+      "city": "רעננה"
+    },
+    "343985": {
+      "city": "רמת השרון"
+    },
+    "343986": {
+      "city": "ראשון לציון"
+    },
+    "343987": {
+      "city": "חולון"
+    },
+    "343988": {
+      "city": "הרצליה"
+    },
+    "343989": {
+      "city": "תל אביב"
+    },
+    "343990": {
+      "city": "תל אביב"
+    },
+    "343991": {
+      "city": "תל אביב"
+    },
+    "343992": {
+      "city": "תל אביב"
+    },
+    "343993": {
+      "city": "תל אביב"
+    },
+    "343994": {
+      "city": "תל אביב"
+    },
+    "343995": {
+      "city": "תל אביב"
+    },
+    "343996": {
+      "city": "תל אביב"
+    },
+    "344033": {
+      "city": "בני ברק"
+    },
+    "344132": {
+      "city": "משמר השבעה"
+    },
+    "344139": {
+      "city": "בני דרור"
     },
     "344147": {
       "city": "דליאת א-כרמל"
@@ -43,8 +152,14 @@
     "344228": {
       "city": "נהריה"
     },
+    "344231": {
+      "city": "טבריה"
+    },
     "344254": {
       "city": "פתח תקווה"
+    },
+    "344330": {
+      "city": "חולון"
     },
     "344352": {
       "city": "הרצליה"
@@ -55,11 +170,29 @@
     "344424": {
       "city": "כנות"
     },
+    "344436": {
+      "city": "ירושלים"
+    },
     "344449": {
       "city": "נצרת"
     },
     "344456": {
       "city": "עידן"
+    },
+    "344534": {
+      "city": "באר שבע"
+    },
+    "344549": {
+      "city": "נתניה"
+    },
+    "344555": {
+      "city": "נתניה"
+    },
+    "344699": {
+      "city": "באר טוביה"
+    },
+    "344708": {
+      "city": "צמח"
     },
     "344714": {
       "city": "מודיעין"
@@ -73,6 +206,9 @@
     "344824": {
       "city": "עוספייה"
     },
+    "344847": {
+      "city": "מעלה אדומים"
+    },
     "344864": {
       "city": "בית שמש"
     },
@@ -81,6 +217,12 @@
     },
     "344890": {
       "city": "יגור"
+    },
+    "344902": {
+      "city": "קריית חיים"
+    },
+    "344905": {
+      "city": "קריית חיים"
     },
     "344911": {
       "city": "צמח"
@@ -91,6 +233,9 @@
     "345148": {
       "city": "חיפה"
     },
+    "345153": {
+      "city": "נשר"
+    },
     "345212": {
       "city": "נווה זיו"
     },
@@ -99,6 +244,9 @@
     },
     "345247": {
       "city": "פתח תקווה"
+    },
+    "345259": {
+      "city": "נוף הגליל"
     },
     "345286": {
       "city": "תל אביב"
@@ -109,8 +257,17 @@
     "345329": {
       "city": "תל אביב"
     },
+    "345339": {
+      "city": "פתח תקווה"
+    },
+    "345364": {
+      "city": "נשר"
+    },
     "345424": {
       "city": "פתח תקווה"
+    },
+    "345577": {
+      "city": "נוף הגליל"
     },
     "345594": {
       "city": "אלעד"
@@ -126,6 +283,9 @@
     },
     "345868": {
       "city": "חורפיש"
+    },
+    "345879": {
+      "city": "צמח"
     },
     "345902": {
       "city": "שפרעם"
@@ -163,6 +323,9 @@
     "345913": {
       "city": "שפרעם"
     },
+    "345956": {
+      "city": "טבריה"
+    },
     "345969": {
       "city": "רמת גן"
     },
@@ -190,8 +353,17 @@
     "346143": {
       "city": "אילון"
     },
+    "346155": {
+      "city": "באר שבע"
+    },
     "346168": {
       "city": "גוש עציון"
+    },
+    "346222": {
+      "city": "גבעת חן"
+    },
+    "346245": {
+      "city": "עפולה"
     },
     "346338": {
       "city": "ניצן"
@@ -214,8 +386,20 @@
     "346664": {
       "city": "ניצנה"
     },
+    "346665": {
+      "city": "כסרא סמיע"
+    },
+    "346666": {
+      "city": "סכנין"
+    },
     "346677": {
       "city": "תל מונד"
+    },
+    "346693": {
+      "city": "אום אל פחם"
+    },
+    "346694": {
+      "city": "נשר"
     },
     "346707": {
       "city": "תל מונד"
@@ -244,11 +428,32 @@
     "346748": {
       "city": "כפר קרע"
     },
+    "346749": {
+      "city": "אבן יהודה"
+    },
+    "346774": {
+      "city": "כפר סבא"
+    },
     "346821": {
       "city": "אלעד"
     },
+    "347124": {
+      "city": "דביר"
+    },
     "347289": {
       "city": "אום אל פחם"
+    },
+    "347297": {
+      "city": "תל אביב"
+    },
+    "347324": {
+      "city": "עין בוקק"
+    },
+    "342619": {
+      "exclude": true
+    },
+    "342645": {
+      "exclude": true
     },
     "342705": {
       "exclude": true
@@ -268,6 +473,12 @@
     "343022": {
       "exclude": true
     },
+    "343051": {
+      "exclude": true
+    },
+    "343108": {
+      "exclude": true
+    },
     "343248": {
       "exclude": true
     },
@@ -281,6 +492,9 @@
       "exclude": true
     },
     "343383": {
+      "exclude": true
+    },
+    "343429": {
       "exclude": true
     },
     "343492": {
@@ -301,6 +515,12 @@
     "343671": {
       "exclude": true
     },
+    "343674": {
+      "exclude": true
+    },
+    "343678": {
+      "exclude": true
+    },
     "343679": {
       "exclude": true
     },
@@ -308,6 +528,9 @@
       "exclude": true
     },
     "343755": {
+      "exclude": true
+    },
+    "343793": {
       "exclude": true
     },
     "343804": {
@@ -343,6 +566,9 @@
     "344531": {
       "exclude": true
     },
+    "344569": {
+      "exclude": true
+    },
     "344574": {
       "exclude": true
     },
@@ -352,10 +578,19 @@
     "344773": {
       "exclude": true
     },
+    "344802": {
+      "exclude": true
+    },
     "344803": {
       "exclude": true
     },
+    "344846": {
+      "exclude": true
+    },
     "344862": {
+      "exclude": true
+    },
+    "344893": {
       "exclude": true
     },
     "344918": {
@@ -364,10 +599,25 @@
     "344919": {
       "exclude": true
     },
+    "344960": {
+      "exclude": true
+    },
     "345038": {
       "exclude": true
     },
     "345057": {
+      "exclude": true
+    },
+    "345088": {
+      "exclude": true
+    },
+    "345126": {
+      "exclude": true
+    },
+    "345129": {
+      "exclude": true
+    },
+    "345162": {
       "exclude": true
     },
     "345186": {
@@ -383,6 +633,9 @@
       "exclude": true
     },
     "345266": {
+      "exclude": true
+    },
+    "345267": {
       "exclude": true
     },
     "345271": {
@@ -409,6 +662,12 @@
     "345558": {
       "exclude": true
     },
+    "345578": {
+      "exclude": true
+    },
+    "345581": {
+      "exclude": true
+    },
     "345588": {
       "exclude": true
     },
@@ -418,7 +677,13 @@
     "345640": {
       "exclude": true
     },
+    "345646": {
+      "exclude": true
+    },
     "345653": {
+      "exclude": true
+    },
+    "345672": {
       "exclude": true
     },
     "345747": {
@@ -427,7 +692,13 @@
     "345748": {
       "exclude": true
     },
+    "345778": {
+      "exclude": true
+    },
     "345803": {
+      "exclude": true
+    },
+    "345809": {
       "exclude": true
     },
     "345838": {
@@ -437,6 +708,9 @@
       "exclude": true
     },
     "345901": {
+      "exclude": true
+    },
+    "345922": {
       "exclude": true
     },
     "346018": {
@@ -469,16 +743,31 @@
     "346351": {
       "exclude": true
     },
+    "346367": {
+      "exclude": true
+    },
+    "346460": {
+      "exclude": true
+    },
     "346463": {
       "exclude": true
     },
     "346484": {
       "exclude": true
     },
+    "346486": {
+      "exclude": true
+    },
+    "346589": {
+      "exclude": true
+    },
     "346606": {
       "exclude": true
     },
     "346615": {
+      "exclude": true
+    },
+    "346637": {
       "exclude": true
     },
     "346687": {
@@ -491,6 +780,9 @@
       "exclude": true
     },
     "346751": {
+      "exclude": true
+    },
+    "346759": {
       "exclude": true
     },
     "346766": {
