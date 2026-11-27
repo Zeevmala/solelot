@@ -47,9 +47,11 @@ const TEL_AVIV = { latitude: 32.0853, longitude: 34.7818, accuracy: 30 };
 // ---------- a small static web server for ROOT ----------
 // "faults" lets a check break a file on purpose: { '/style.css': 404 }
 // "swVersion" serves sw.js with another cache name, as a new deploy would.
+// "indexTitle" serves index.html with another <title>, so a check can tell the new page from the old.
+// "maxAge" sends Cache-Control: max-age=N instead of no-store, as GitHub Pages does (600 s).
 const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript', mjs: 'text/javascript', css: 'text/css',
     json: 'application/json', png: 'image/png', ico: 'image/x-icon', woff2: 'font/woff2', svg: 'image/svg+xml' };
-const server = { faults: {}, swVersion: null, base: '' };
+const server = { faults: {}, swVersion: null, indexTitle: null, maxAge: null, base: '' };
 function startServer() {
     const httpServer = http.createServer((req, res) => {
         const urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -60,7 +62,11 @@ function startServer() {
         if (urlPath === '/sw.js' && server.swVersion) {
             body = Buffer.from(body.toString('utf8').replace(/const STATIC_CACHE = '[^']+'/, `const STATIC_CACHE = '${server.swVersion}'`));
         }
-        res.writeHead(200, { 'Content-Type': TYPES[file.split('.').pop()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+        if (file === path.join(ROOT, 'index.html') && server.indexTitle) {
+            body = Buffer.from(body.toString('utf8').replace(/<title>[^<]*<\/title>/, `<title>${server.indexTitle}</title>`));
+        }
+        res.writeHead(200, { 'Content-Type': TYPES[file.split('.').pop()] || 'application/octet-stream',
+            'Cache-Control': server.maxAge ? `max-age=${server.maxAge}` : 'no-store' });
         res.end(body);
     });
     return new Promise(resolve => httpServer.listen(0, '127.0.0.1', () => {
@@ -1127,6 +1133,56 @@ check('the service worker registers, and an offline reload still shows the marke
     await context.close();
     expect(worked && count > 1000, `offline reload: page loaded ${worked}, ${count} markers`);
     expect(dated, `offline reload: the credit line does not say "${wanted}"`);
+});
+
+// A deploy: the next sw.js has a new cache name and index.html a new title
+const deploy = title => { server.swVersion = 'static-smoke-deploy'; server.indexTitle = title; };
+const undeploy = () => { server.swVersion = null; server.indexTitle = null; server.maxAge = null; server.faults = {}; };
+
+check('a deploy reaches a returning visitor on the next load, unless the page was already touched; offline still works', async () => {
+    const NEW = 'גרסה חדשה מהשרת';
+    // 1. not touched: load, deploy, load again -> the new page within 10 s (the HTTP cache must not hand the old files to the new worker)
+    server.maxAge = 600;
+    let { context, page, problems } = await openWithServiceWorker();
+    try {
+        deploy(NEW);
+        await page.goto(server.base); // a plain visit, as from the home screen (a reload would revalidate the HTTP cache by itself)
+        const arrived = await page.waitForFunction(t => document.title === t, NEW, { timeout: 10000 }).then(() => true, () => false);
+        const title = await page.title();
+        expect(arrived, `the page still says "${title}" 10 s after loading it again following a deploy`);
+        await dataLoaded(page);
+        // 3. offline reload of the new version still shows the map and the points
+        await context.setOffline(true);
+        await page.reload();
+        const offline = await dataLoaded(page).then(() => true, () => false);
+        const count = offline ? (await shown(page)).count : 0;
+        expect(offline && count > 1000 && (await page.title()) === NEW, `offline reload after the update: loaded ${offline}, ${count} markers, title "${await page.title()}"`);
+        const own = problems.filter(p => !p.includes('Failed to load resource') && !p.includes('net::ERR_INTERNET_DISCONNECTED'));
+        expect(own.length === 0, own.join(' ; '));
+    } finally {
+        undeploy();
+        await context.close();
+    }
+    // 2. touched: a tap, then a deploy and the new worker taking over -> no reload under the user's finger
+    ({ context, page } = await openWithServiceWorker());
+    try {
+        await page.evaluate(() => { window.smokeSamePage = true; });
+        await page.mouse.click(60, 400); // a tap on the map
+        deploy(NEW);
+        const took = await page.evaluate(async () => {
+            const registration = await navigator.serviceWorker.getRegistration();
+            const changed = new Promise(done => navigator.serviceWorker.addEventListener('controllerchange', () => done(true), { once: true }));
+            await registration.update();
+            return Promise.race([changed, new Promise(done => setTimeout(() => done(false), 10000))]);
+        });
+        await page.waitForTimeout(1500);
+        const same = await page.evaluate(() => window.smokeSamePage === true).catch(() => false);
+        expect(took, 'the new worker did not take over the page, so nothing was tested');
+        expect(same && (await page.title()) !== NEW, 'the page reloaded although it had been tapped');
+    } finally {
+        undeploy();
+        await context.close();
+    }
 });
 
 check('a deploy with a missing precached file keeps the old service worker and its cache', async () => {

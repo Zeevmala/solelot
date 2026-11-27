@@ -38,6 +38,11 @@ const OPTIONAL_ASSETS = [
     './cartowolf/fonts/ibm-plex-sans-latin-600-normal.woff2'
 ];
 
+// The precache asks the server, not the browser's HTTP cache: GitHub Pages sends
+// max-age=600, so a plain cache.addAll() right after a deploy could store the old files
+// under the new cache name, and the new version would arrive one visit late.
+const fresh = (url) => new Request(url, { cache: 'reload' });
+
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
     console.log('Service Worker installing...');
@@ -46,10 +51,10 @@ self.addEventListener('install', (event) => {
         caches.open(STATIC_CACHE)
             .then((cache) => {
                 console.log('Caching critical assets');
-                return cache.addAll(CRITICAL_ASSETS).then(() => {
+                return cache.addAll(CRITICAL_ASSETS.map(fresh)).then(() => {
                     console.log('Caching optional assets (best-effort)');
                     return Promise.allSettled(
-                        OPTIONAL_ASSETS.map(url => cache.add(url))
+                        OPTIONAL_ASSETS.map(url => cache.add(fresh(url)))
                     ).then(results => {
                         results.forEach((result, i) => {
                             if (result.status === 'rejected') {
