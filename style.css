@@ -1213,6 +1213,12 @@ body {
         transform: translateX(-100%);
     }
 
+    /* The credits stay in the free half of the map (the OpenStreetMap credit must be readable) */
+    .leaflet-control-attribution {
+        max-width: calc(50vw - 16px);
+        white-space: normal;
+    }
+
     .sidebar-close {
         left: 15px;
         top: 15px;

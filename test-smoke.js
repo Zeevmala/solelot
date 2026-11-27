@@ -438,7 +438,14 @@ const coveredControls = page => page.evaluate(() => {
     };
     probe('locate button', document.querySelector('.locate-btn'));
     probe('basemap button', document.querySelector('.basemap-toggle-btn'));
-    probe('credit link', document.querySelector('.leaflet-control-attribution a'));
+    // every credit link, at both ends and the middle: the OpenStreetMap credit is a licence requirement
+    document.querySelectorAll('.leaflet-control-attribution a').forEach((el, i) => {
+        const b = el.getBoundingClientRect();
+        for (const x of [b.left + 2, (b.left + b.right) / 2, b.right - 2]) {
+            const t = document.elementFromPoint(x, (b.top + b.bottom) / 2);
+            if (!t || !(t === el || el.contains(t))) out.push(`credit link ${i + 1} ("${el.textContent}") at ${Math.round(x)}: covered by ${nameOf(t)}`);
+        }
+    });
     probe('selected pin', selectedPin.getElement());
     return out;
 });
