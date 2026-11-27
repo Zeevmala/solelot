@@ -776,7 +776,7 @@ body {
 .sidebar-nav-btn {
     flex: 1 1 0;
     min-height: 48px;
-    padding: 12px;
+    padding: 12px 8px; /* "ניווט ב-Google Maps" fits on one line in the 380px desktop sidebar */
     text-align: center;
     text-decoration: none;
     border-radius: var(--cw-radius-lg);

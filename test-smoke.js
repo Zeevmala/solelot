@@ -458,6 +458,7 @@ const sheetLayout = page => page.evaluate(() => {
         navTexts: navs.map(a => a.textContent.trim()),
         navFilled: navs.length === 2 && navs.every(a => getComputedStyle(a).backgroundColor === accent),
         navSameSize: navs.length === 2 && Math.abs(navs[0].offsetWidth - navs[1].offsetWidth) <= 1 && navs[0].offsetHeight === navs[1].offsetHeight && navs[0].offsetHeight >= 48,
+        navOneLine: navs.every(a => a.offsetHeight <= 48), // a second line of text makes the button taller than its 48 px minimum
         feedbackTexts: feedback.map(b => b.textContent.trim()),
         feedbackNames: feedback.map(b => b.getAttribute('aria-label')),
         feedbackHeight: Math.min(...feedback.map(b => b.offsetHeight)),
@@ -483,7 +484,14 @@ check('the sheet: name, distance and address, filled navigate buttons, labelled 
         'feedback buttons: ' + JSON.stringify(s));
     expect(s.titleLines !== 1 || s.sheetHeight <= 300, `the sheet is ${s.sheetHeight}px high for a one-line name`);
     expect(long.navInView, `"${longest.name}" (${longest.name.length} letters): navigate row not in view, ${JSON.stringify(long)}`);
+    expect(s.navOneLine, 'a navigate label wraps on the phone: ' + JSON.stringify(s));
     expect(errors.length === 0, errors.join(' ; '));
+    // the desktop sidebar is narrower than a phone sheet: the labels must still fit on one line
+    const desk = await openApp({ viewport: { width: 1440, height: 900 }, geolocation: { latitude: 32.08, longitude: 34.78, accuracy: 20 }, permissions: ['geolocation'] });
+    await tapLocate(desk.page);
+    const d = await sheetLayout(desk.page);
+    await desk.context.close();
+    expect(d.inOrder && d.navFilled && d.navSameSize && d.navOneLine, 'desktop sidebar: ' + JSON.stringify(d));
 });
 
 check('pins: single pins at street level, larger hit areas, selected pin 1.4x, a shared coordinate still opens by spiderfy', async () => {
