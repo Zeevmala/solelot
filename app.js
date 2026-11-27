@@ -42,14 +42,17 @@ document.querySelectorAll('link[data-deferred]').forEach(link => { link.media = 
 // Register Service Worker
 if ('serviceWorker' in navigator) {
     // After a deploy, the new worker takes over a page the old one served. Reload once
-    // to show the new version, but only if nobody has tapped or typed yet: a reload
-    // under someone's finger would throw away what they were doing. A page with no
+    // to show the new version, but only if nobody has tapped, typed, scrolled or
+    // touched the screen yet (a mouse wheel fires no pointerdown): a reload under
+    // someone's finger would throw away what they were doing. A page with no
     // worker at load (the first visit) does not reload.
     if (navigator.serviceWorker.controller) {
         let touched = false;
         const markTouched = () => { touched = true; };
         window.addEventListener('pointerdown', markTouched, { once: true, capture: true });
         window.addEventListener('keydown', markTouched, { once: true, capture: true });
+        window.addEventListener('wheel', markTouched, { once: true, capture: true, passive: true });
+        window.addEventListener('touchstart', markTouched, { once: true, capture: true, passive: true });
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!touched) location.reload();
         }, { once: true });

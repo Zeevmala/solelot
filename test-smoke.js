@@ -1363,6 +1363,27 @@ check('a deploy reaches a returning visitor on the next load, unless the page wa
         undeploy();
         await context.close();
     }
+    // 3. scrolled: a mouse wheel over the map counts as touched too (it fires no pointerdown)
+    ({ context, page } = await openWithServiceWorker());
+    try {
+        await page.evaluate(() => { window.smokeSamePage = true; });
+        await page.mouse.move(60, 400); await page.mouse.wheel(0, -200); // zoom the map in with the wheel
+        await page.waitForTimeout(300);
+        deploy(NEW);
+        const took = await page.evaluate(async () => {
+            const registration = await navigator.serviceWorker.getRegistration();
+            const changed = new Promise(done => navigator.serviceWorker.addEventListener('controllerchange', () => done(true), { once: true }));
+            await registration.update();
+            return Promise.race([changed, new Promise(done => setTimeout(() => done(false), 10000))]);
+        });
+        await page.waitForTimeout(1500);
+        const same = await page.evaluate(() => window.smokeSamePage === true).catch(() => false);
+        expect(took, 'the new worker did not take over the page after a wheel, so nothing was tested');
+        expect(same && (await page.title()) !== NEW, 'the page reloaded although the map had been zoomed with the wheel');
+    } finally {
+        undeploy();
+        await context.close();
+    }
 });
 
 check('the automatic reload after a deploy, with a point open, adds no history step', async () => {
