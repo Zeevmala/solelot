@@ -645,8 +645,10 @@ function houseNumber(street) {
 }
 
 // MAI lists some shops twice: "רמי לוי" and "רמי לוי - תקשורת" (the phone counter inside it), or one
-// branch under two names. Two entries are one shop when they have the same shopChain, are at most
-// SAME_SHOP_METERS apart, and have the same street (streetKey) or one of them has no house number.
+// branch under two names. Two entries are one shop when they have the same shopChain and the same city,
+// are at most SAME_SHOP_METERS apart, and have the same street (streetKey) or one of them has no house
+// number. Two cities are never one shop: one shop listed under two cities needs an override that says
+// which label fits the pin (אייס 343950 "קריית אתא" and 344152 "חיפה", 36 m apart).
 // Two different house numbers are never one shop: אבי סופר at אלנבי 113, 122 and 124 are three shops
 // within 23 m. The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
 function dropSameShop(entries) {
@@ -659,6 +661,7 @@ function dropSameShop(entries) {
         if (!byChain.has(chain)) byChain.set(chain, []);
         const number = houseNumber(entry.street);
         const twin = byChain.get(chain).find(other => {
+            if (other.location.city !== entry.location.city) return false;
             const otherNumber = houseNumber(other.street);
             if (number && otherNumber && number !== otherNumber) return false;
             if (number && otherNumber && streetKey(entry.street) !== streetKey(other.street)) return false;

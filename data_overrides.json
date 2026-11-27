@@ -21,6 +21,7 @@
     "Added 2026-11-26: 344231 (קרביץ, \"מתחפ ביג פוריה\") is in טבריה: Nominatim puts the pin on המברג in אזור תעשייה טבריה עלית, where the other shops of the same BIG centre are listed under טבריה. It became the only point of \"פוריה\" when its second entry 346634 was merged into it (warning 14c).",
     "Added 2026-11-26: 346759 (קרביץ - קניון עופר השרון) is a second entry of 346641 (קרביץ - השרון- קניון עופר), same chain and address (הרצל 60, נתניה), 92 m apart; it showed in check 25 once the place stopped being repeated in the address. The higher id is left out.",
     "Added 2026-11-27 (owner decision): points inside places the public cannot freely enter are left out, like schools. 343333 (\"מוקד איסוף - מחנה רמון\", שדה בוקר) is an air force base; 344808 (MAI name \"משטרת ישראל, מבנה מרכזי\", חיים בר לב 1, ירושלים) is inside the national police headquarters; 345833 (\"מכינה קדם צבאית\", ההדרים 21, כפר יונה) is a pre-army academy.",
+    "Added 2026-11-27: 5 second entries of one shop under another city, which the scraper merged by chain and distance until it learned that two cities are never one shop. Each pair checked with Nominatim (reverse geocode of the pin, forward geocode of the places); the entry whose label does not fit its pin is left out. 343950 (אייס, \"מרכז ביג, קרית אתא\") is 36 m from 344152 (צומת וולקן, חיפה); its pin is at הסולל, רובע מפרץ חיפה, חיפה. 346211 (דור אלון, \"גבעת השלושה\") is 9 m from 345318 (כביש 40, כניסה למושב נווה ירק); the pin is 841 m from נווה ירק and 4.4 km from גבעת השלושה. 346441 (דלק מנטה, \"בית לחם הגלילית\") is 2 m from 343849 (כביש 77, מחלף זרזיר); the pin is on road 7626, 114 m from צומת זרזיר and 1.9 km from the village. 347313 (קולומביה, \"צומת כח\") is 12 m from 347314 (\"שבילים, צומת זרזיר\"); the pin is 136 m from צומת זרזיר, and צומת כ\"ח is in the Upper Galilee, 55 km away. 346634 (קרביץ, \"צומת פוריה א.ת\", city פוריה) is 1 m from 344231 (טבריה by override); the pin is on המברג, אזור תעשייה טבריה עלית, טבריה.",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -56,6 +57,9 @@
     },
     "343803": {
       "city": "כפר תבור"
+    },
+    "343950": {
+      "exclude": true
     },
     "343975": {
       "city": "תל אביב"
@@ -360,6 +364,9 @@
     "346168": {
       "city": "גוש עציון"
     },
+    "346211": {
+      "exclude": true
+    },
     "346222": {
       "city": "גבעת חן"
     },
@@ -372,6 +379,9 @@
     "346434": {
       "city": "כפר סבא"
     },
+    "346441": {
+      "exclude": true
+    },
     "346508": {
       "city": "נאות חובב"
     },
@@ -383,6 +393,9 @@
     },
     "346627": {
       "city": "מבשרת ציון"
+    },
+    "346634": {
+      "exclude": true
     },
     "346664": {
       "city": "ניצנה"
@@ -446,6 +459,9 @@
     },
     "347297": {
       "city": "תל אביב"
+    },
+    "347313": {
+      "exclude": true
     },
     "347324": {
       "city": "עין בוקק"

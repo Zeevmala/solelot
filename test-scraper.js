@@ -723,16 +723,30 @@ test('parseArgs: --input needs a path', () => {
 
 // --- the real fixture: 33 markers copied from the MAI API on 2026-11-25 ---
 
-test('one shop listed twice: same chain within 50 m, same street or one without a house number -> the lower id stays', () => {
+// The three אייס records at צומת וולקן, copied unchanged from the MAI response of 2026-11-27
+const ACE_VULCAN = [
+    { id: '343950', map_id: '5', category: '12', lat: '32.811498', lng: '35.073005', address: null,
+        title: 'אייס קנה ובנה<br><span style="font-size: 16px;">מרכז ביג, קרית אתא.</span>',
+        custom_field_data: [{ name: 'city', value: 'קרית אתא' }, { name: 'neighborhood', value: 'מרכז ביג' }, { name: 'business_name', value: 'אייס קנה ובנה' }] },
+    { id: '344152', map_id: '5', category: '12', lat: '32.811818', lng: '35.072960', address: null,
+        title: 'אייס קנה ובנה<br><span style="font-size: 16px;">צומת וולקן, צומת וולקן, דיפו חוצות.</span>',
+        custom_field_data: [{ name: 'city', value: 'דיפו חוצות' }, { name: 'street', value: 'צומת וולקן' }, { name: 'neighborhood', value: 'צומת וולקן' }, { name: 'business_name', value: 'אייס קנה ובנה' }] },
+    { id: '345148', map_id: '5', category: '12', lat: '32.811844', lng: '35.072932', address: null,
+        title: 'אייס קנה ובנה<br><span style="font-size: 16px;">החרושת, צומת וולקן, מפרץ חיפה, חוצות.</span>',
+        custom_field_data: [{ name: 'city', value: 'חוצות' }, { name: 'street', value: 'החרושת' }, { name: 'neighborhood', value: 'צומת וולקן, מפרץ חיפה' }, { name: 'business_name', value: 'אייס קנה ובנה' }] }
+];
+
+test('one shop listed twice: same chain and city within 50 m, same street or one without a house number -> the lower id stays', () => {
     const { locations, dropped, stats } = buildLocations([
         // real: 345582 / 345669, the phone counter inside the same רמי לוי, 18 m apart
         marker({ id: '345669', lat: '31.796689', lng: '35.146284' }, { business_name: 'רמי לוי', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
         marker({ id: '345582', lat: '31.79683328091107', lng: '35.14636170421983' }, { business_name: 'רמי לוי - תקשורת', city: 'מבשרת ציון', street: 'החוצבים', house_number: '10' }),
-        // real: 344152 / 345148 אייס צומת וולקן, 4 m apart; neither has a house number, the streets differ
-        marker({ id: '344152', lat: '32.811818', lng: '35.072960' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'צומת וולקן', house_number: undefined, neighborhood: 'צומת וולקן' }),
-        marker({ id: '345148', lat: '32.811844', lng: '35.072932' }, { business_name: 'אייס קנה ובנה', city: 'חיפה', street: 'החרושת', house_number: undefined, neighborhood: 'צומת וולקן, מפרץ חיפה' })
-    ]);
-    assert.deepStrictEqual(locations.map(l => l.id), [344152, 345582]);
+        ...ACE_VULCAN
+    ], { 344152: { city: 'חיפה' }, 345148: { city: 'חיפה' } });
+    // 344152 and 345148 (4 m apart, no house numbers, both חיפה by override) are one shop.
+    // 343950 is 36 m away but listed under קריית אתא: another city is never the same shop,
+    // so the Haifa Ace survives under חיפה and a search for חיפה finds it.
+    assert.deepStrictEqual(locations.map(l => [l.id, l.city]), [[343950, 'קריית אתא'], [344152, 'חיפה'], [345582, 'מבשרת ציון']]);
     assert.deepStrictEqual(dropped.sameShop, [{ id: 345148, sameAs: 344152 }, { id: 345669, sameAs: 345582 }]);
     assert.strictEqual(stats.sameShop, 2);
 });
