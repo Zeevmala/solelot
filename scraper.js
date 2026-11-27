@@ -88,8 +88,9 @@ const SCHOOL_WORDS = [
 ];
 // "מול בית הספר" / "ליד התיכון": opposite or next to a school is not inside it
 const SCHOOL_PATTERN = new RegExp('(^|[^א-ת])(?<!(?:מול|ליד) )(' + SCHOOL_WORDS.join('|') + ')($|[^א-ת])');
-// "חטיבת אלכסנדרוני 2": a brigade name followed by a house number is a street address
-const BRIGADE_STREET = /חטיבת [א-ת"']+ \d+/g;
+// "חטיבת אלכסנדרוני 2": a brigade name followed by a house number is a street address.
+// "חטיבת ביניים 6" / "חטיבת הביניים 2" is a junior high with a number, not a street.
+const BRIGADE_STREET = /חטיבת (?!ה?ביניים )[א-ת"']+ \d+/g;
 
 function isSchool(name) {
     // "חטיבת הנח"ל 30" is a street; petrol stations are named after the street they are on

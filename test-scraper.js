@@ -1088,6 +1088,8 @@ test('isSchool: schools, yeshivas and kindergartens, but not streets, shops or c
     ]) assert.ok(isSchool(name), name);
     // a school campus that does not use the word "school" (found on the map in the November 2026 audit)
     for (const name of ['מוקד איסוף - תיכונט ע"ש אלתרמן', 'מוקד איסוף - חמ"ד מודיעים - יהלום, כניסה ראשית']) assert.ok(isSchool(name), name);
+    // a junior high with a number is a school, not a brigade street (found in the 2026-11-27 review)
+    for (const name of ['מוקד איסוף - חטיבת ביניים 6', 'חטיבת הביניים 2']) assert.ok(isSchool(name), name);
     // opposite or next to a school is not inside it; "חטיבת <name> <number>" is a street address
     for (const name of [
         'נחלת החדשה, מול בית הספר', 'מוקד איסוף - ליד בי"ס קשת', 'מוקד איסוף - מול התיכון',
