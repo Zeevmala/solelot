@@ -704,6 +704,33 @@ test('overrides whose id is not in the MAI response are reported', () => {
     assert.deepStrictEqual(buildLocations([marker({ id: '71' })]).overridesUnmatched, []);
 });
 
+test('overrides on records that are skipped or merged away are reported as without effect', () => {
+    const at = (id, lat, fields) => marker({ id, lat, lng: '35.0' }, fields);
+    const overrides = {
+        1: { city: 'נשר' },                 // a school: skipped whatever its city is
+        2: { exclude: true },               // a school: skipped anyway, the exclude is not needed
+        3: { exclude: true },               // a real exclude
+        5: { city: 'חיפה' },                // a second entry of shop 4, merged into it
+        6: { city: 'נשר' },                 // a city fix that works
+        99: { city: 'עכו' }                 // not in the response: reported as unmatched instead
+    };
+    const { overridesWithoutEffect, overridesUnmatched, locations } = buildLocations([
+        at('1', '32.80', { business_name: 'מוקד איסוף - בית ספר רעות' }),
+        at('2', '32.81', { business_name: 'מוקד איסוף - תיכון הראל' }),
+        at('3', '32.82', { business_name: 'גלי' }),
+        at('4', '32.83000', { business_name: 'רמי לוי' }),
+        at('5', '32.83010', { business_name: 'רמי לוי - תקשורת' }),
+        at('6', '32.84', { business_name: 'באג' })
+    ], overrides);
+    assert.deepStrictEqual(locations.map(l => [l.id, l.city]), [[4, 'חיפה'], [6, 'נשר']]);
+    assert.deepStrictEqual(overridesWithoutEffect, [
+        { id: 1, reason: 'skipped: school (not open to the public)' },
+        { id: 2, reason: 'skipped: school (not open to the public)' },
+        { id: 5, reason: 'same shop as 4' }
+    ]);
+    assert.deepStrictEqual(overridesUnmatched, ['99']);
+});
+
 test('checkCount: under 1,000 never saves; under 90 % of the previous file needs --force', () => {
     assert.match(checkCount(999, null, false), /Only 999/);
     assert.match(checkCount(999, 900, true), /Only 999/);          // --force does not switch this guard off
@@ -917,6 +944,7 @@ test('run writes locations.json and data_meta.json, with no .tmp file left', asy
         duplicates_removed: 0,
         stacked_dropped: 0,
         overrides_unmatched: [77],
+        overrides_without_effect: [],
         changes: null // there was no previous file to compare with
     });
     assert.deepStrictEqual(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')), []);

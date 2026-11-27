@@ -22,6 +22,7 @@
     "Added 2026-11-26: 346759 (קרביץ - קניון עופר השרון) is a second entry of 346641 (קרביץ - השרון- קניון עופר), same chain and address (הרצל 60, נתניה), 92 m apart; it showed in check 25 once the place stopped being repeated in the address. The higher id is left out.",
     "Added 2026-11-27 (owner decision): points inside places the public cannot freely enter are left out, like schools. 343333 (\"מוקד איסוף - מחנה רמון\", שדה בוקר) is an air force base; 344808 (MAI name \"משטרת ישראל, מבנה מרכזי\", חיים בר לב 1, ירושלים) is inside the national police headquarters; 345833 (\"מכינה קדם צבאית\", ההדרים 21, כפר יונה) is a pre-army academy.",
     "Added 2026-11-27: 5 second entries of one shop under another city, which the scraper merged by chain and distance until it learned that two cities are never one shop. Each pair checked with Nominatim (reverse geocode of the pin, forward geocode of the places); the entry whose label does not fit its pin is left out. 343950 (אייס, \"מרכז ביג, קרית אתא\") is 36 m from 344152 (צומת וולקן, חיפה); its pin is at הסולל, רובע מפרץ חיפה, חיפה. 346211 (דור אלון, \"גבעת השלושה\") is 9 m from 345318 (כביש 40, כניסה למושב נווה ירק); the pin is 841 m from נווה ירק and 4.4 km from גבעת השלושה. 346441 (דלק מנטה, \"בית לחם הגלילית\") is 2 m from 343849 (כביש 77, מחלף זרזיר); the pin is on road 7626, 114 m from צומת זרזיר and 1.9 km from the village. 347313 (קולומביה, \"צומת כח\") is 12 m from 347314 (\"שבילים, צומת זרזיר\"); the pin is 136 m from צומת זרזיר, and צומת כ\"ח is in the Upper Galilee, 55 km away. 346634 (קרביץ, \"צומת פוריה א.ת\", city פוריה) is 1 m from 344231 (טבריה by override); the pin is on המברג, אזור תעשייה טבריה עלית, טבריה.",
+    "Removed 2026-11-27: 7 overrides that did nothing, found by the new \"overrides without effect\" report of scraper.js. Their records are skipped as schools (owner decision, settled), so the city fixes 344824 (עוספייה), 345329 (תל אביב), 345596 and 345597 (אלעד), 346048 (שפרעם), 347289 (אום אל פחם) and the exclude 345588 change nothing. Kept although they do nothing today, because the rule that removes their record may change: 345148 (merged as the same shop as 344152) and 345913 (merged by the same-name rule into 345903).",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -208,9 +209,6 @@
     "344792": {
       "city": "תל אביב"
     },
-    "344824": {
-      "city": "עוספייה"
-    },
     "344847": {
       "city": "מעלה אדומים"
     },
@@ -259,9 +257,6 @@
     "345296": {
       "city": "תל אביב"
     },
-    "345329": {
-      "city": "תל אביב"
-    },
     "345339": {
       "city": "פתח תקווה"
     },
@@ -275,12 +270,6 @@
       "city": "נוף הגליל"
     },
     "345594": {
-      "city": "אלעד"
-    },
-    "345596": {
-      "city": "אלעד"
-    },
-    "345597": {
       "city": "אלעד"
     },
     "345764": {
@@ -339,9 +328,6 @@
     },
     "346034": {
       "city": "תל אביב"
-    },
-    "346048": {
-      "city": "שפרעם"
     },
     "346049": {
       "city": "שפרעם"
@@ -453,9 +439,6 @@
     },
     "347124": {
       "city": "דביר"
-    },
-    "347289": {
-      "city": "אום אל פחם"
     },
     "347297": {
       "city": "תל אביב"
@@ -689,9 +672,6 @@
       "exclude": true
     },
     "345581": {
-      "exclude": true
-    },
-    "345588": {
       "exclude": true
     },
     "345639": {

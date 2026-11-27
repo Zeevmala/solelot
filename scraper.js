@@ -736,10 +736,17 @@ function buildLocations(markers, overrides = {}) {
 
     const skipped = {};
     const entries = [];
+    const withoutEffect = new Map(); // override id -> why it changes nothing on the map
     for (const marker of sorted) {
         const result = transformMarker(marker, overrides);
         if (result.skip) {
             skipped[result.skip] = (skipped[result.skip] || 0) + 1;
+            const id = String(marker && marker.id);
+            if (Object.prototype.hasOwnProperty.call(overrides, id)) {
+                // an exclude on a record that is skipped for another reason anyway (a school) is not needed
+                const reason = overrides[id].exclude ? transformMarker(marker).skip : result.skip;
+                if (reason) withoutEffect.set(id, 'skipped: ' + reason);
+            }
         } else {
             entries.push(result);
         }
@@ -773,6 +780,20 @@ function buildLocations(markers, overrides = {}) {
     const markerIds = new Set(markers.filter(m => m && typeof m === 'object').map(m => String(m.id)));
     const overridesUnmatched = Object.keys(overrides).filter(id => !markerIds.has(id)).sort((a, b) => a - b);
 
+    // Nor does one on a record that is in the response but never reaches the map
+    const mergedAway = [
+        ...sameSpot.map(d => [d.id, 'same point as ' + d.sameAs]),
+        ...sameShop.map(d => [d.id, 'same shop as ' + d.sameAs]),
+        ...sameName.map(d => [d.id, 'same name and place as ' + d.sameAs]),
+        ...stacked.flatMap(group => group.ids.map(id => [id, 'stacked on one coordinate with other streets']))
+    ];
+    for (const [id, reason] of mergedAway) {
+        if (Object.prototype.hasOwnProperty.call(overrides, String(id))) withoutEffect.set(String(id), reason);
+    }
+    const overridesWithoutEffect = [...withoutEffect]
+        .map(([id, reason]) => ({ id: Number(id), reason }))
+        .sort((a, b) => a.id - b.id);
+
     return {
         locations,
         skipped,
@@ -786,7 +807,8 @@ function buildLocations(markers, overrides = {}) {
         },
         dropped: { sameSpot, sameName, sameShop, stacked },
         farTwins,
-        overridesUnmatched
+        overridesUnmatched,
+        overridesWithoutEffect
     };
 }
 
@@ -908,7 +930,7 @@ async function run(options = {}) {
     const { locations: previous, error: previousError } = loadPrevious(files.output);
     const overrides = loadOverrides(files.overrides);
     const built = buildLocations(markers, overrides);
-    const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched } = built;
+    const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched, overridesWithoutEffect } = built;
     console.log('Skipped:', skipped);
     console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped + stats.sameShop) + ', names disambiguated: ' + stats.renamed);
     for (const d of [...dropped.sameSpot, ...dropped.sameName]) {
@@ -930,6 +952,10 @@ async function run(options = {}) {
     }
     if (overridesUnmatched.length > 0) {
         console.warn('Overrides not matched by any MAI marker: [' + overridesUnmatched.join(', ') + ']');
+    }
+    if (overridesWithoutEffect.length > 0) {
+        console.warn('Overrides without effect (the record is skipped or merged away; delete them when the reason is settled):');
+        for (const o of overridesWithoutEffect) console.warn('  ' + o.id + ': ' + o.reason);
     }
 
     const facilities = loadFacilities(files.facilities);
@@ -980,6 +1006,7 @@ async function run(options = {}) {
         duplicates_removed: stats.sameSpot + stats.dropped + stats.sameShop,
         stacked_dropped: stats.stackedPoints,
         overrides_unmatched: overridesUnmatched.map(Number),
+        overrides_without_effect: overridesWithoutEffect,
         changes: changes
     };
     writeJsonAtomic(files.output, { locations });
