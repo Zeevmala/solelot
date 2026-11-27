@@ -844,6 +844,17 @@ test('one shop listed twice: a record without a house number between two numbere
     // with only one numbered shop next to it, the record without a number is still the same shop
     const pair = buildLocations([avi('100', '32.06000', undefined), avi('101', '32.06020', '113')]);
     assert.deepStrictEqual(pair.dropped.sameShop, [{ id: 101, sameAs: 100 }]);
+    // the same number on two streets is two shops too (review of 2026-11-27): הרצל 10 and ויצמן 10,
+    // whichever id is lower
+    const g = (id, lat, street, number) => marker({ id, lat, lng: '35.0' }, { business_name: 'גלי', city: 'חיפה', street, house_number: number });
+    for (const markers of [
+        [g('100', '32.80000', 'החרושת', undefined), g('101', '32.80020', 'הרצל', '10'), g('102', '32.79980', 'ויצמן', '10')],
+        [g('200', '32.80020', 'הרצל', '10'), g('201', '32.79980', 'ויצמן', '10'), g('202', '32.80000', 'החרושת', undefined)]
+    ]) {
+        const built = buildLocations(markers);
+        assert.deepStrictEqual(built.locations.map(l => l.id), markers.map(m => Number(m.id)));
+        assert.deepStrictEqual(built.dropped.sameShop, []);
+    }
 });
 
 test('one shop listed twice: not another chain, not another fuel brand, not over 50 m, not a municipal point', () => {

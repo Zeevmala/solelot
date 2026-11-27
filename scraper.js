@@ -656,7 +656,8 @@ function houseNumber(street) {
 // which label fits the pin (אייס 343950 "קריית אתא" and 344152 "חיפה", 36 m apart).
 // Two different house numbers are never one shop: אבי סופר at אלנבי 113, 122 and 124 are three shops
 // within 23 m. So a record without a house number that sits within SAME_SHOP_METERS of numbered shops
-// of its chain with two or more different numbers could be any of them: it is merged with none.
+// of its chain at two or more different addresses (street and number) could be any of them: it is
+// merged with none.
 // The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
 function dropSameShop(entries) {
     // each chain is worked out once: the report of overrides without effect runs this step once per override
@@ -667,14 +668,16 @@ function dropSameShop(entries) {
         if (!byChainCity.has(key)) byChainCity.set(key, []);
         byChainCity.get(key).push(entry);
     }
-    // the house numbers around each record without one (same chain, same city, within SAME_SHOP_METERS)
+    // the addresses with a house number around each record without one (same chain, same city, within
+    // SAME_SHOP_METERS): street and number, since הרצל 10 and ויצמן 10 are two shops
     const numbersAround = new Map();
     for (const entry of entries) {
         if (houseNumber(entry.street) || !chainOf.get(entry)) continue;
         const sameChainCity = byChainCity.get(chainOf.get(entry) + '\0' + entry.location.city);
         numbersAround.set(entry, new Set(sameChainCity
             .filter(other => other !== entry && distanceMeters(entry.location, other.location) <= SAME_SHOP_METERS)
-            .map(other => houseNumber(other.street)).filter(Boolean)));
+            .filter(other => houseNumber(other.street))
+            .map(other => streetKey(other.street) + ' ' + houseNumber(other.street))));
     }
     const between = entry => numbersAround.has(entry) && numbersAround.get(entry).size > 1;
 
