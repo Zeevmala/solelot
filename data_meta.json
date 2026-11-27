@@ -1,6 +1,6 @@
 {
   "source": "https://mai.org.il/wp-json/wpgmza/v1/markers",
-  "fetched_at": "2026-11-27T10:09:24.158Z",
+  "fetched_at": "2026-11-27T10:45:14.836Z",
   "raw_markers": 8603,
   "kept": 3576,
   "skipped": {
@@ -8,41 +8,28 @@
     "no name": 416,
     "school (not open to the public)": 519,
     "not a battery point": 87,
-    "excluded by data_overrides.json": 130,
+    "excluded by data_overrides.json": 129,
     "outside Israel bounds": 1,
     "marked inactive by MAI": 15
   },
   "duplicates_removed": 76,
-  "stacked_dropped": 142,
+  "stacked_dropped": 143,
   "overrides_unmatched": [],
-  "overrides_without_effect": [
-    {
-      "id": 345148,
-      "reason": "same shop as 344152"
-    },
-    {
-      "id": 345913,
-      "reason": "same name and place as 345903"
-    }
-  ],
+  "overrides_without_effect": [],
   "changes": {
     "counts": {
-      "added": 2,
-      "removed": 2,
+      "added": 0,
+      "removed": 0,
       "moved": 0,
       "renamed": 0,
-      "cityChanged": 0
+      "cityChanged": 1
     },
-    "added": [
-      344152,
-      347314
-    ],
-    "removed": [
-      343950,
-      347313
-    ],
+    "added": [],
+    "removed": [],
     "moved": [],
     "renamed": [],
-    "cityChanged": []
+    "cityChanged": [
+      347314
+    ]
   }
 }
