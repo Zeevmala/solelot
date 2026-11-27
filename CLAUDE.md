@@ -15,19 +15,20 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - **Facilities**: none shown. Batte-Re and RE-CAR were added and then removed at the owner's request (Nov 2026). `facilities.json` is empty; the app still supports the type
 
 ## Current Features
-- Interactive Leaflet map centered on Israel (OSM tiles; light = CSS-desaturated default — CARTO now requires an API key)
+- Interactive Leaflet map centered on Israel (OSM tiles; light = the default, OSM through `filter: saturate(0.3) brightness(1.06) contrast(0.88)` so the sea stays faintly blue while pins and clusters remain the strongest colour — CARTO now requires an API key)
 - Custom SVG pin markers: green battery pin = collection point, orange factory pin = recycling facility (different shape AND colour)
-- Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered
+- Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered. Cluster radius 70 / 55 / 48 / 20 px at zoom ≤ 9 / ≤ 13 / ≤ 15 / 16+, so a pick or "nearest" (zoom 16+) shows single pins; points on one exact coordinate still spread out when tapped (spiderfy). Pins and small clusters have invisible `::after` hit areas larger than the drawing; the selected pin is drawn 1.4×
 - Legend (bottom right) that also works as an on/off filter per type — shown only when the data has both types, so it is hidden while there are no facilities
 - Map opens framed on Israel (`fitBounds`) and cannot be panned far outside it (`maxBounds`)
 - Search with autocomplete suggestions (city + location)
-- GPS geolocation ("find my location" button: accuracy circle, frames you with the nearest collection point, shows distance in popups)
-- Navigation links (Google Maps / Waze) in popups and sidebar
-- Location detail sidebar
-- "Report a problem" link in popups/sidebar (Google Form)
-- Thumbs-up in popups/sidebar opens the same Google Form marked "✔ הנקודה קיימת:" in the name field, so the owner receives a confirmation that the point exists
-- Empty state with clear/retry when search has no results
+- GPS geolocation: a filled pill "הנקודה הקרובה אליי" in the bottom right (thumb zone, 48px; a round re-centre button after the first fix). One tap opens the nearest collection point with its distance. The +/− zoom buttons are hidden on touch phones (`pointer: coarse`), kept on desktop
+- Location details (sidebar on desktop, bottom sheet on phones), in this order: the name; one line with the distance ("… בקו אווירי", when located) and the address; the kind of place when the record has `kind` (`pointKindText()`: fuel → תחנת דלק, shop → חנות, municipal → נקודת איסוף עירונית); two filled navigate buttons of equal size, "ניווט ב-Waze" and "ניווט ב-Google Maps"; two labelled feedback buttons
+- "דיווח על בעיה" opens the Google Form filled in with the point
+- "הנקודה קיימת" opens the same Google Form marked "✔ הנקודה קיימת:" in the name field, so the owner receives a confirmation that the point exists
+- Empty state with clear/retry when search has no results: "לא נמצאו נקודות איסוף" / "אפשר לחפש עיר, רחוב או שם של חנות" / "ניקוי החיפוש". When the text names a chain MAI does not list (סופר פארם, אופיס דיפו, KSP, פלאפון, סלקום, also in English; `chainNotListedText()`), it says "הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י."
+- Search placeholder "עיר, רחוב או חנות"; suggestion rows carry drawn icons (the battery for a point, an outline pin for a city, "N נקודות איסוף")
 - PWA support (installable, offline via service worker)
+- The credit line (bottom right) reads "נתונים: תאגיד מ.א.י · עודכן <d.m.yyyy>, © OpenStreetMap". The date is `fetched_at` from `data_meta.json`, fetched after the points (`showDataDate()`, `formatUpdatedDate()`, Israel time); on any failure the date is left out. `data_meta.json` is an optional precached asset in `sw.js` and network-first like `locations.json`. The whole line is one attribution entry (`setMapCredits()`), so the date stays next to the MAI credit
 - Multiple basemap options (light, streets)
 - Accessibility (ARIA labels, keyboard navigation, skip links)
 - Open Graph + Twitter Card meta tags for social sharing
@@ -77,7 +78,8 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Map colours: collection point = `--cw-data-cat-3` (sea green), facility = `--cw-data-cat-2` (orange), user location = `--cw-accent`. SVGs in `app.js` use `fill="currentColor"` and the class `pin-casing` for white parts; the colour itself is set in `style.css`
 - The page is fixed to the light theme (`data-theme="light"` on `<html>`): the OSM basemap is a light picture, and the dark-theme pin colours are made for a dark map
 - Font: IBM Plex Sans / IBM Plex Sans Hebrew, served from `cartowolf/fonts/` (no Google Fonts). Weights 400, 500, 600 only
-- UI text is in **Hebrew**
+- UI text is in **Hebrew**, in neutral forms ("ניקוי החיפוש", "ניסיון נוסף", not a masculine imperative). No emoji in `app.js` or `index.html` (`LC_ALL=C.UTF-8 grep -nP '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]' app.js index.html` prints nothing): icons are inline SVG in `currentColor`. A distance keeps its number and unit together with a no-break space (`formatDistance`)
+- The map credit line has no Leaflet prefix (`setPrefix(false)`); Leaflet is credited in `README.md`
 - Layout is **RTL** (right-to-left)
 - No build tools - plain static files, no npm
 - Location types: `store` (collection point) or `facility` (recycling plant)
@@ -87,7 +89,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ### Architecture — Do NOT Change
 - No build tools. Plain HTML/CSS/JS. No npm, no bundler, no TypeScript. Keep it that way.
-- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, kind?, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `kind` is `"fuel"`, `"shop"` or `"municipal"`, set by `pointKind()` in `scraper.js`, and missing when the point cannot be classified (no business name, or the name is only the address). `description` is optional and shown in popup/sidebar.
+- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, kind?, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `kind` is `"fuel"`, `"shop"` or `"municipal"`, set by `pointKind()` in `scraper.js`, and missing when the point cannot be classified (no business name, or the name is only the address). `description` is optional and shown in the details. `kind` is shown as one line in the details (`pointKindText()` in `app.js`).
 - `type` must be exactly `"store"` or `"facility"`. Adding a third value requires updating `typeNames` in `app.js` AND adding a test.
 - All UI strings are Hebrew. Layout is RTL. Do not add English UI text.
 - `test.html` and `test-map.html` run in the browser (open the file) and in the gate (headless Chrome). Pure functions are copied verbatim from `app.js`; the gate fails if a copy differs from `app.js`. A green test page still does NOT prove the app works: also load the real page and check the browser console.
@@ -194,7 +196,7 @@ Slightly under 44px touch target. Consider increasing to 44px.
 ### Performance Notes (at ~3,600 locations)
 - **Search**: Full scan (7 string ops × ~4,200 markers) per debounce tick. Fine at 4K. At 10K+, pre-build a `Map<city, locations[]>` index.
 - **Markers**: ~4,200 markers × 2–3 event listeners each. Marker SVGs are flat (no per-marker gradients/filters). Fine at 4K. At 10K+, switch to virtual markers (create on `moveend` for visible bounds only).
-- **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 40 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
+- **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 48 / 20 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
 - **Tiles**: 200-tile cache cap with cleanup every 20 puts. Adequate. At high zoom/pan frequency, reduce cleanup interval to 10.
 
 <!-- factory:start -->

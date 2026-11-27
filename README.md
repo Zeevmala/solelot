@@ -132,7 +132,7 @@ node validate_data.js  # must end with ALL CHECKS PASSED
 
 - **Location data**: the public map of the MAI corporation ([mai.org.il](https://mai.org.il)). The data is not covered by this repository's MIT licence.
 - **Map data and tiles**: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
-- **Map library**: [Leaflet](https://leafletjs.com/) and [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster).
+- **Map library**: [Leaflet](https://leafletjs.com/) and [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster). They are credited here rather than on the map, so the map's credit line keeps the room for the data sources.
 - **Fonts**: IBM Plex Sans, IBM Plex Sans Hebrew and IBM Plex Mono, under the SIL Open Font License 1.1 (`cartowolf/fonts/LICENSE.txt`).
 
 ## License

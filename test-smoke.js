@@ -170,12 +170,71 @@ check('plain load: no console errors, tiles load with crossorigin, MAI credit sh
     await page.click('.basemap-toggle-btn'); // the second basemap is a separate tile layer
     const tiles2 = await tileState();
     const credit = await page.evaluate(() => [...document.querySelectorAll('.leaflet-control-attribution a')].map(a => a.textContent.trim() + '|' + a.href));
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300);
+    const attribution = await page.evaluate(() => { const el = document.querySelector('.leaflet-control-attribution');
+        return { text: el.textContent, links: el.querySelectorAll('a').length, width: Math.round(el.getBoundingClientRect().width) }; });
     await context.close();
     expect(problems.length === 0, 'problems on plain load: ' + problems.join(' ; '));
     expect(tiles.n > 0 && tiles.cors === tiles.n && tiles.loaded === tiles.n, 'tiles of the first basemap: ' + JSON.stringify(tiles));
     expect(tiles2.n > 0 && tiles2.cors === tiles2.n && tiles2.loaded === tiles2.n, 'tiles of the second basemap: ' + JSON.stringify(tiles2));
     expect(credit.includes('נתונים: תאגיד מ.א.י|https://mai.org.il/'), 'no MAI credit link in the attribution: ' + credit.join(', '));
     expect(credit.some(c => c.startsWith('OpenStreetMap|')), 'no OpenStreetMap credit');
+    expect(!/Leaflet/.test(attribution.text) && attribution.links === 2, 'the credit line has no Leaflet prefix, only the two data credits: ' + JSON.stringify(attribution));
+    expect(attribution.width <= 390 - 24, 'the credit line is wider than the phone: ' + JSON.stringify(attribution));
+});
+
+check('light basemap keeps a hint of colour: the sea reads as sea', async () => {
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 } });
+    await page.evaluate(() => map.setView([32.0, 34.4], 8, { animate: false }));
+    await page.waitForFunction(() => { const t = [...document.querySelectorAll('img.leaflet-tile')]; return t.length > 0 && t.every(i => i.complete && i.naturalWidth > 0); }, null, { timeout: 20000 });
+    // a sea pixel, drawn through the same CSS filter the light basemap uses
+    const sea = await page.evaluate(() => {
+        const at = map.latLngToContainerPoint([32.4, 34.2]); const box = map.getContainer().getBoundingClientRect();
+        const tile = [...document.querySelectorAll('.basemap-light img.leaflet-tile')].find(img => { const b = img.getBoundingClientRect();
+            return box.left + at.x >= b.left && box.left + at.x < b.right && box.top + at.y >= b.top && box.top + at.y < b.bottom; });
+        if (!tile) return null;
+        const b = tile.getBoundingClientRect();
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
+        const ctx = canvas.getContext('2d'); ctx.filter = getComputedStyle(tile.parentElement.parentElement).filter; ctx.drawImage(tile, 0, 0);
+        const [r, g, bl] = ctx.getImageData(Math.floor((box.left + at.x - b.left) * 256 / b.width), Math.floor((box.top + at.y - b.top) * 256 / b.height), 1, 1).data;
+        return { r, g, b: bl, filter: ctx.filter };
+    });
+    await context.close();
+    expect(sea && sea.b - sea.r >= 10, 'sea pixel at zoom 8: ' + JSON.stringify(sea));
+    expect(problems.length === 0, problems.join(' ; '));
+});
+
+// "עודכן d.m.yyyy" as data_meta.json says, in Israel time (the same rule as formatUpdatedDate in app.js)
+const expectedUpdated = () => {
+    const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'data_meta.json'), 'utf8'));
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(new Date(meta.fetched_at));
+    const part = type => Number(parts.find(p => p.type === type).value); // en-GB writes 05, people write 5
+    return `עודכן ${part('day')}.${part('month')}.${part('year')}`;
+};
+const creditText = page => page.evaluate(() => document.querySelector('.leaflet-control-attribution').textContent);
+
+check('the credit line says when the data was updated; without data_meta.json it says nothing and logs nothing', async () => {
+    const wanted = expectedUpdated();
+    let { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 } });
+    await page.waitForFunction(w => document.querySelector('.leaflet-control-attribution').textContent.includes(w), wanted, { timeout: 5000 }).catch(() => {});
+    const text = await creditText(page);
+    const box = await page.evaluate(() => { const b = document.querySelector('.leaflet-control-attribution').getBoundingClientRect(); return { width: Math.round(b.width), height: Math.round(b.height) }; });
+    await context.close();
+    const mai = text.indexOf('נתונים: תאגיד מ.א.י'), date = text.indexOf(wanted), osm = text.indexOf('OpenStreetMap');
+    expect(mai >= 0 && date > mai && osm > date, `credit line "${text}", wanted "${wanted}" after the MAI credit`);
+    expect(box.width <= 390 - 24 && box.height <= 24, 'credit line box at 390 px: ' + JSON.stringify(box));
+    expect(problems.length === 0, problems.join(' ; '));
+    // the file missing, then broken: no date, no error from the page
+    for (const fault of [{ status: 404 }, { status: 200, body: 'not json' }, { status: 200, body: '{"fetched_at":"<b>x</b>"}' }]) {
+        ({ context, page, problems } = await openPage({ viewport: { width: 390, height: 844 } }));
+        await page.route('**/data_meta.json', route => route.fulfill({ status: fault.status, contentType: 'application/json', body: fault.body || 'missing' }));
+        await page.goto(server.base); await dataLoaded(page); await page.waitForTimeout(800);
+        const without = await creditText(page);
+        await context.close();
+        const own = problems.filter(p => p.startsWith('page error') || (p.startsWith('console error') && !p.includes('Failed to load resource')));
+        expect(!without.includes('עודכן') && without.includes('נתונים: תאגיד מ.א.י') && without.includes('OpenStreetMap'), `${JSON.stringify(fault)}: credit line "${without}"`);
+        expect(own.length === 0, `${JSON.stringify(fault)}: ${own.join(' ; ')}`);
+    }
 });
 
 check('picking a city suggestion shows only that city', async () => {
@@ -342,6 +401,205 @@ check('nearest: one tap opens the nearest point above the sheet; a second tap re
             await context.close();
             expect(errors.length === 0, `${label}: ${errors.join(' ; ')}`);
         }
+    }
+});
+
+// The locate button: where it is, how big, what it says (a touch phone and a desktop)
+const locateButtonState = page => page.evaluate(() => {
+    const btn = document.querySelector('.locate-btn');
+    const box = btn.getBoundingClientRect();
+    const label = btn.querySelector('.locate-label');
+    const credit = document.querySelector('.leaflet-control-attribution').getBoundingClientRect();
+    const probe = document.createElement('div'); probe.style.color = 'var(--cw-accent)'; document.body.appendChild(probe);
+    const accent = getComputedStyle(probe).color; probe.remove();
+    const overlaps = !(box.bottom <= credit.top || box.top >= credit.bottom || box.right <= credit.left || box.left >= credit.right);
+    return { top: box.top, bottom: box.bottom, left: box.left, right: box.right, width: box.width, height: box.height,
+        label: label && getComputedStyle(label).display !== 'none' ? label.textContent : '',
+        labelLines: label ? Math.round(label.getBoundingClientRect().height / parseFloat(getComputedStyle(label).lineHeight || 20)) : 0,
+        aria: btn.getAttribute('aria-label'), filled: getComputedStyle(btn).backgroundColor === accent,
+        overlapsCredit: overlaps, zoomShown: getComputedStyle(document.querySelector('.leaflet-control-zoom')).display !== 'none',
+        screen: [window.innerWidth, window.innerHeight] };
+});
+
+check('the locate button is a labelled pill in the bottom right; +/- hidden on touch phones only', async () => {
+    const LABEL = 'הנקודה הקרובה אליי';
+    for (const [viewport, touch] of [[{ width: 390, height: 844 }, true], [{ width: 360, height: 800 }, true], [{ width: 1440, height: 900 }, false]]) {
+        const where = `${viewport.width}x${viewport.height}`;
+        const { context, page, problems } = await openApp({ viewport, hasTouch: touch, isMobile: touch, geolocation: { latitude: 32.08, longitude: 34.78, accuracy: 20 }, permissions: ['geolocation'] });
+        const s = await locateButtonState(page);
+        expect(s.label === LABEL && s.aria === LABEL && s.height >= 48 && s.filled && !s.overlapsCredit,
+            `${where}: ${JSON.stringify(s)}`);
+        expect(s.right >= viewport.width - 24 && s.top >= viewport.height * 2 / 3, `${where}: not in the bottom right: ${JSON.stringify(s)}`);
+        expect(s.zoomShown === !touch, `${where}: +/- shown ${s.zoomShown} on a ${touch ? 'touch phone' : 'desktop'}`);
+        // after the first fix it is a round re-centre button with the same name
+        await tapLocate(page);
+        await page.evaluate(() => hideSidebar()); await page.waitForTimeout(500);
+        const after = await locateButtonState(page);
+        const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+        await context.close();
+        expect(after.label === '' && after.aria === LABEL && after.width >= 48 && after.width === after.height && after.filled,
+            `${where}, after the first fix: ${JSON.stringify(after)}`);
+        expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+    }
+});
+
+// The open sheet, measured: order of its parts, the filled navigate buttons, labelled feedback
+const sheetLayout = page => page.evaluate(() => {
+    const top = selector => { const el = document.querySelector('#sidebar ' + selector); return el ? el.getBoundingClientRect() : null; };
+    const probe = document.createElement('div'); probe.style.color = 'var(--cw-accent)'; document.body.appendChild(probe);
+    const accent = getComputedStyle(probe).color; probe.remove();
+    const parts = ['h2', '.sidebar-meta', '.sidebar-nav', '.feedback-row'].map(top);
+    const navs = [...document.querySelectorAll('#sidebar .sidebar-nav-btn')];
+    const feedback = [...document.querySelectorAll('#sidebar .feedback-btn')];
+    const sheet = document.getElementById('sidebar').getBoundingClientRect();
+    return {
+        inOrder: parts.every((box, i) => box && (i === 0 || box.top >= parts[i - 1].bottom - 1)),
+        distanceGap: top('.distance') && parts[0] ? Math.round(top('.distance').top - parts[0].bottom) : null,
+        navTexts: navs.map(a => a.textContent.trim()),
+        navFilled: navs.length === 2 && navs.every(a => getComputedStyle(a).backgroundColor === accent),
+        navSameSize: navs.length === 2 && Math.abs(navs[0].offsetWidth - navs[1].offsetWidth) <= 1 && navs[0].offsetHeight === navs[1].offsetHeight && navs[0].offsetHeight >= 48,
+        navOneLine: navs.every(a => a.offsetHeight <= 48), // a second line of text makes the button taller than its 48 px minimum
+        feedbackTexts: feedback.map(b => b.textContent.trim()),
+        feedbackNames: feedback.map(b => b.getAttribute('aria-label')),
+        feedbackHeight: Math.min(...feedback.map(b => b.offsetHeight)),
+        navInView: navs.every(a => { const b = a.getBoundingClientRect(); return b.top >= sheet.top && b.bottom <= Math.min(sheet.bottom, window.innerHeight); }),
+        sheetHeight: Math.round(sheet.height), titleLines: parts[0] ? Math.round(parts[0].height / parseFloat(getComputedStyle(document.querySelector('#sidebar h2')).lineHeight)) : 0
+    };
+});
+
+check('the sheet: name, distance and address, filled navigate buttons, labelled feedback', async () => {
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, geolocation: { latitude: 32.08, longitude: 34.78, accuracy: 20 }, permissions: ['geolocation'] });
+    await tapLocate(page);
+    const s = await sheetLayout(page);
+    // the longest name in the data still shows the navigate row without scrolling
+    const longest = await page.evaluate(() => allLocations.reduce((a, b) => (b.name.length > a.name.length ? b : a)));
+    await page.evaluate(id => focusOnLocation(id), longest.id); await mapSettled(page); await page.waitForTimeout(400);
+    const long = await sheetLayout(page);
+    const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+    await context.close();
+    expect(s.inOrder, 'parts out of order: ' + JSON.stringify(s));
+    expect(s.distanceGap !== null && s.distanceGap >= 0 && s.distanceGap <= 16, 'gap from the name to the distance: ' + s.distanceGap);
+    expect(s.navTexts.join('|') === 'ניווט ב-Waze|ניווט ב-Google Maps' && s.navFilled && s.navSameSize, 'navigate buttons: ' + JSON.stringify(s));
+    expect(s.feedbackTexts.join('|') === 'הנקודה קיימת|דיווח על בעיה' && s.feedbackNames[0].startsWith('הנקודה קיימת') && s.feedbackNames[1] === 'דיווח על בעיה' && s.feedbackHeight >= 44,
+        'feedback buttons: ' + JSON.stringify(s));
+    expect(s.titleLines !== 1 || s.sheetHeight <= 300, `the sheet is ${s.sheetHeight}px high for a one-line name`);
+    expect(long.navInView, `"${longest.name}" (${longest.name.length} letters): navigate row not in view, ${JSON.stringify(long)}`);
+    expect(s.navOneLine, 'a navigate label wraps on the phone: ' + JSON.stringify(s));
+    expect(errors.length === 0, errors.join(' ; '));
+    // the desktop sidebar is narrower than a phone sheet: the labels must still fit on one line
+    const desk = await openApp({ viewport: { width: 1440, height: 900 }, geolocation: { latitude: 32.08, longitude: 34.78, accuracy: 20 }, permissions: ['geolocation'] });
+    await tapLocate(desk.page);
+    const d = await sheetLayout(desk.page);
+    await desk.context.close();
+    expect(d.inOrder && d.navFilled && d.navSameSize && d.navOneLine, 'desktop sidebar: ' + JSON.stringify(d));
+});
+
+check('pins: single pins at street level, larger hit areas, selected pin 1.4x, a shared coordinate still opens by spiderfy', async () => {
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 } });
+    // 1. zoom 16 over Tel Aviv: every point is its own pin
+    await page.evaluate(() => map.setView([32.08, 34.78], 16, { animate: false })); await mapSettled(page);
+    const clustersAt16 = await page.evaluate(() => [...document.querySelectorAll('.marker-cluster')].filter(el => {
+        const b = el.getBoundingClientRect(); return b.bottom > 0 && b.top < window.innerHeight && b.right > 0 && b.left < window.innerWidth; }).length);
+    // 2. a tap just outside a pin, and just outside a small cluster, still lands on it
+    const hit = kind => page.evaluate(kind => {
+        const sel = kind === 'pin' ? '.battery-marker:not(.selected)' : '.marker-cluster-small';
+        const others = [...document.querySelectorAll('.leaflet-marker-icon')];
+        for (const el of document.querySelectorAll(sel)) {
+            const b = el.getBoundingClientRect();
+            if (b.top < 80 || b.bottom > window.innerHeight - 120 || b.left < 20 || b.right > window.innerWidth - 20) continue;
+            const pad = kind === 'pin' ? 12 : 8;
+            const crowded = others.some(o => { if (o === el) return false; const c = o.getBoundingClientRect();
+                return c.right > b.left - pad && c.left < b.right + pad && c.bottom > b.top - pad && c.top < b.bottom + pad; });
+            const centre = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+            if (crowded || !centre || !el.contains(centre)) continue; // another marker or a map button is there
+            const x = kind === 'pin' ? b.left - 6 : b.right + 3, y = kind === 'pin' ? b.top + b.height / 2 : b.top + b.height / 2;
+            const at = document.elementFromPoint(x, y);
+            if (at && at.closest('.leaflet-control')) continue;
+            return { found: true, hit: !!at && el.contains(at), at: at ? at.className : null };
+        }
+        return { found: false };
+    }, kind);
+    const pinHit = await hit('pin');
+    await page.evaluate(() => map.setView([32.08, 34.78], 13, { animate: false })); await mapSettled(page);
+    const clusterHit = await hit('cluster');
+    // 3. the selected pin is drawn 1.4 times larger
+    await page.evaluate(() => showSidebar(allLocations[0])); await page.waitForTimeout(400);
+    const scale = await page.evaluate(() => { const svg = document.querySelector('.battery-marker.selected svg');
+        return svg ? new DOMMatrix(getComputedStyle(svg).transform).a : null; });
+    await page.evaluate(() => hideSidebar()); await page.waitForTimeout(400);
+    // 4. points on one exact coordinate: a tap on their bubble at the deepest zoom spreads them out
+    const group = await page.evaluate(() => {
+        const at = new Map();
+        allLocations.forEach(l => { const k = l.lat + ',' + l.lng; at.set(k, (at.get(k) || []).concat(l)); });
+        const g = [...at.values()].find(list => list.length >= 2 && list.length <= 4);
+        return g ? g.map(l => ({ id: l.id, name: l.name, lat: l.lat, lng: l.lng })) : null;
+    });
+    expect(group, 'data changed: no points that share one coordinate');
+    await page.evaluate(p => map.setView([p.lat, p.lng], map.getMaxZoom(), { animate: false }), group[0]); await mapSettled(page);
+    await page.evaluate(() => { const c = map.latLngToContainerPoint(map.getCenter()); const m = map.getContainer().getBoundingClientRect();
+        const el = document.elementFromPoint(m.left + c.x, m.top + c.y); const cluster = el && el.closest('.marker-cluster');
+        if (cluster) cluster.setAttribute('data-smoke-tap', '1'); });
+    await page.locator('[data-smoke-tap]').click(); await page.waitForTimeout(1000);
+    const legs = await page.evaluate(ids => [...document.querySelectorAll('.battery-marker:not(.selected)')].filter(el =>
+        allMarkers.some(item => ids.includes(item.location.id) && item.marker.getElement() === el)).length, group.map(p => p.id));
+    const legName = await page.evaluate(ids => { const item = allMarkers.find(i => ids.includes(i.location.id) && i.marker.getElement());
+        item.marker.getElement().setAttribute('data-smoke-leg', '1'); return item.location.name; }, group.map(p => p.id));
+    await page.locator('[data-smoke-leg]').click({ force: true }); await page.waitForTimeout(600);
+    const title = await page.evaluate(() => (document.querySelector('#sidebar h2') || {}).textContent);
+    const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+    await context.close();
+    expect(clustersAt16 === 0, `${clustersAt16} cluster bubbles on screen at zoom 16 over Tel Aviv`);
+    expect(pinHit.found && pinHit.hit, '6 px beside a pin: ' + JSON.stringify(pinHit));
+    expect(clusterHit.found && clusterHit.hit, '3 px outside a small cluster: ' + JSON.stringify(clusterHit));
+    expect(Math.abs(scale - 1.4) < 0.01, 'selected pin scale: ' + scale);
+    expect(legs === group.length && title === legName, `${group.length} points on one coordinate: ${legs} spread out, tapped "${legName}", details "${title}"`);
+    expect(errors.length === 0, errors.join(' ; '));
+});
+
+check('text and icons: empty state says what to type, or that MAI does not list the chain; placeholder fits; nothing under the clear button', async () => {
+    const NOT_LISTED = 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.';
+    const panel = page => page.evaluate(() => ({ shown: getComputedStyle(document.getElementById('empty-state')).display !== 'none',
+        title: document.querySelector('#empty-state h3').textContent, text: document.querySelector('#empty-state p').textContent,
+        button: document.getElementById('clear-filters').textContent.trim(), emoji: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(document.getElementById('empty-state').textContent) }));
+    for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 800 }]) {
+        const where = `${viewport.width}px`;
+        const { context, page, problems } = await openApp({ viewport, hasTouch: true, isMobile: true });
+        // the whole placeholder can be read in the box
+        const fit = await page.evaluate(async () => { await document.fonts.ready; const box = document.getElementById('search-input'); const cs = getComputedStyle(box);
+            const ctx = document.createElement('canvas').getContext('2d'); ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            return { placeholder: box.placeholder, text: Math.ceil(ctx.measureText(box.placeholder).width),
+                // clientWidth of a text input leaves out its padding in Chrome, so the room is measured from the box
+                room: Math.floor(box.getBoundingClientRect().width - ['borderLeftWidth', 'borderRightWidth', 'paddingLeft', 'paddingRight'].reduce((sum, k) => sum + parseFloat(cs[k]), 0)) }; });
+        expect(fit.placeholder === 'עיר, רחוב או חנות' && fit.text <= fit.room, `${where}: placeholder ${JSON.stringify(fit)}`);
+        // a long text never runs under the clear button (the grey disc is drawn 8 px inside the button)
+        await page.locator('#search-input').fill('אבגדהוזחטיכלמנסעפצקרשת אבגדהוזחטיכלמנסעפ');
+        const under = await page.evaluate(() => { const box = document.getElementById('search-input'); const b = box.getBoundingClientRect();
+            const disc = document.getElementById('search-clear').getBoundingClientRect();
+            return { textStarts: Math.round(b.left + parseFloat(getComputedStyle(box).paddingLeft)), discEnds: Math.round(disc.right - 8) }; });
+        expect(under.textStarts >= under.discEnds, `${where}: text area starts at ${under.textStarts}, the clear button ends at ${under.discEnds}`);
+        await clearSearch(page);
+        // suggestions carry drawn icons, no emoji
+        await page.locator('#search-input').fill('חיפה'); await settle(page);
+        const rows = await page.evaluate(() => [...document.querySelectorAll('.suggestion-item')].map(row => ({ type: row.dataset.type,
+            svg: !!row.querySelector('.suggestion-icon svg'), sub: row.querySelector('.suggestion-city').textContent,
+            emoji: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(row.textContent) })));
+        expect(rows.length > 1 && rows.every(r => r.svg && !r.emoji) && rows[0].type === 'city' && / נקודות איסוף$| נקודת איסוף אחת$|^נקודת איסוף אחת$/.test(rows[0].sub),
+            `${where}: suggestion rows ${JSON.stringify(rows.slice(0, 3))}`);
+        await clearSearch(page);
+        // the empty state: a chain MAI does not list, then anything else
+        await page.locator('#search-input').fill('סופר פארם'); await settle(page); await press(page, 'Escape');
+        const chain = await panel(page);
+        expect(chain.shown && chain.title === 'לא נמצאו נקודות איסוף' && chain.text === NOT_LISTED && chain.button === 'ניקוי החיפוש' && !chain.emoji, `${where}, "סופר פארם": ${JSON.stringify(chain)}`);
+        await clearSearch(page);
+        await page.locator('#search-input').fill('zzzzqqqq'); await settle(page); await press(page, 'Escape');
+        const other = await panel(page);
+        expect(other.shown && other.title === 'לא נמצאו נקודות איסוף' && other.text === 'אפשר לחפש עיר, רחוב או שם של חנות' && other.button === 'ניקוי החיפוש', `${where}, "zzzzqqqq": ${JSON.stringify(other)}`);
+        await page.click('#clear-filters'); await settle(page);
+        const after = await shown(page);
+        const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+        await context.close();
+        expect(after.box === '' && after.count === after.total, `${where}: after "ניקוי החיפוש": ${JSON.stringify(after)}`);
+        expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
     }
 });
 
@@ -730,13 +988,13 @@ check('a failed locations.json shows the error panel; retry brings the normal te
     const panel = () => page.evaluate(() => ({ title: document.querySelector('#empty-state h3').textContent, button: document.getElementById('clear-filters').textContent,
         shown: document.getElementById('empty-state').style.display === 'block', legend: getComputedStyle(document.querySelector('.map-legend')).display }));
     const failed = await panel();
-    expect(failed.title === 'שגיאה בטעינת הנתונים' && failed.button === 'נסה שוב' && failed.legend === 'none', 'after the failed load: ' + JSON.stringify(failed));
+    expect(failed.title === 'שגיאה בטעינת הנתונים' && failed.button === 'ניסיון נוסף' && failed.legend === 'none', 'after the failed load: ' + JSON.stringify(failed));
     await page.click('#clear-filters'); await dataLoaded(page);
     expect(!(await panel()).shown, 'the panel is still shown after a successful retry');
     await type(page, 'zzzzqqqq', 5); await settle(page);
     const empty = await panel();
     await context.close();
-    expect(empty.shown && empty.title === 'לא נמצאו תוצאות' && empty.button === 'נקה סינון', 'a search with no results after the retry shows: ' + JSON.stringify(empty));
+    expect(empty.shown && empty.title === 'לא נמצאו נקודות איסוף' && empty.button === 'ניקוי החיפוש', 'a search with no results after the retry shows: ' + JSON.stringify(empty));
 });
 
 check('a record with markup in its id (or text coordinates) is not loaded and injects nothing', async () => {
@@ -770,7 +1028,7 @@ check('if Leaflet does not arrive, an error panel with a reload button replaces 
     await page.goto(server.base); await page.waitForTimeout(1500);
     const panel = await page.evaluate(() => ({ title: document.querySelector('#empty-state h3').textContent, button: document.getElementById('clear-filters').textContent,
         panel: getComputedStyle(document.getElementById('empty-state')).display, loading: getComputedStyle(document.getElementById('loading-overlay')).display }));
-    expect(panel.title === 'שגיאה בטעינת המפה' && panel.button === 'טען מחדש' && panel.panel === 'block' && panel.loading === 'none', JSON.stringify(panel));
+    expect(panel.title === 'שגיאה בטעינת המפה' && panel.button === 'טעינה מחדש' && panel.panel === 'block' && panel.loading === 'none', JSON.stringify(panel));
     await page.unroute('**/vendor/leaflet/leaflet.js');
     await Promise.all([page.waitForNavigation(), page.click('#clear-filters')]);
     await dataLoaded(page);
@@ -801,8 +1059,11 @@ check('the service worker registers, and an offline reload still shows the marke
     await page.reload();
     const worked = await dataLoaded(page).then(() => true, () => false);
     const count = worked ? (await shown(page)).count : 0;
+    const wanted = expectedUpdated();
+    const dated = worked && await page.waitForFunction(w => document.querySelector('.leaflet-control-attribution').textContent.includes(w), wanted, { timeout: 5000 }).then(() => true, () => false);
     await context.close();
     expect(worked && count > 1000, `offline reload: page loaded ${worked}, ${count} markers`);
+    expect(dated, `offline reload: the credit line does not say "${wanted}"`);
 });
 
 check('a deploy with a missing precached file keeps the old service worker and its cache', async () => {
