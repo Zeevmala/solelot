@@ -1,5 +1,9 @@
 # Solelot - מפת מיחזור סוללות בישראל
 
+<img src="docs/screenshot.png" width="320" alt="The map on a phone over Tel Aviv: the nearest collection point is open in the bottom sheet, with its distance and the Waze and Google Maps buttons">
+
+<p dir="rtl">איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה.</p>
+
 [![Live Site](https://img.shields.io/badge/Live%20Site-zeevmala.github.io%2Fsolelot-00796B?style=flat-square)](https://zeevmala.github.io/solelot/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 

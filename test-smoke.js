@@ -1041,6 +1041,36 @@ check('if Leaflet does not arrive, an error panel with a reload button replaces 
     await context.close();
 });
 
+check('page hygiene: tight CSP with no violation on either basemap; the test pages are noindex', async () => {
+    const { context, page, problems } = await openPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await page.addInitScript(() => {
+        window.cspViolations = [];
+        document.addEventListener('securitypolicyviolation', e => window.cspViolations.push(e.violatedDirective + ' ' + e.blockedURI));
+    });
+    await page.goto(server.base);
+    await dataLoaded(page);
+    const tilesDone = () => page.waitForFunction(() => { const t = [...document.querySelectorAll('img.leaflet-tile')]; return t.length > 0 && t.every(i => i.complete && i.naturalWidth > 0); }, null, { timeout: 20000 });
+    await tilesDone();
+    await page.click('.basemap-toggle-btn');
+    await tilesDone();
+    await page.evaluate(() => showSidebar(allLocations[0])); // the details with the navigate and feedback links
+    await page.waitForTimeout(800);
+    const csp = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content);
+    const violations = await page.evaluate(() => window.cspViolations);
+    await context.close();
+    const directives = Object.fromEntries(csp.split(';').map(d => d.trim().split(/\s+/)).filter(d => d[0]).map(([name, ...values]) => [name, values.join(' ')]));
+    // every tile host the page or the worker uses, and nothing else
+    const tileHosts = [...new Set([...fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').matchAll(/'(https:\/\/[^/'{]+)\/\{z\}/g)].map(m => m[1]))];
+    expect(tileHosts.length > 0, 'no tile URL found in app.js');
+    expect(directives['img-src'] === ["'self'", 'data:', ...tileHosts].join(' '), `img-src "${directives['img-src']}", tile hosts ${tileHosts.join(' ')}`);
+    expect(directives['base-uri'] === "'self'" && directives['form-action'] === "'none'", `base-uri "${directives['base-uri']}", form-action "${directives['form-action']}"`);
+    expect(violations.length === 0, 'CSP violations: ' + violations.join(' ; '));
+    expect(problems.length === 0, problems.join(' ; '));
+    for (const file of ['test.html', 'test-map.html']) {
+        expect(/<meta name="robots" content="noindex">/.test(fs.readFileSync(path.join(ROOT, file), 'utf8')), file + ' has no robots noindex meta');
+    }
+});
+
 // PNG facts read from the file itself: size, colour type (2 = RGB, 3 = palette,
 // 4 and 6 have alpha) and whether a tRNS chunk adds transparency
 function pngInfo(file) {

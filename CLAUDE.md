@@ -27,11 +27,12 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - "הנקודה קיימת" opens the same Google Form marked "✔ הנקודה קיימת:" in the name field, so the owner receives a confirmation that the point exists
 - Empty state with clear/retry when search has no results: "לא נמצאו נקודות איסוף" / "אפשר לחפש עיר, רחוב או שם של חנות" / "ניקוי החיפוש". When the text names a chain MAI does not list (סופר פארם, אופיס דיפו, KSP, פלאפון, סלקום, also in English; `chainNotListedText()`), it says "הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י."
 - Search placeholder "עיר, רחוב או חנות"; suggestion rows carry drawn icons (the battery for a point, an outline pin for a city, "N נקודות איסוף")
-- PWA support (installable, offline via service worker)
+- PWA support (installable, offline via service worker). Icons: `purpose: any` set, one maskable 512 (`icons/icon-maskable-512.png`), an opaque `icons/apple-touch-icon.png`, `icons/icon.svg` as SVG favicon. The worker precaches with `cache: 'reload'` (not the HTTP cache); after a deploy, a page the old worker served reloads itself once when the new worker takes over, unless it has had a `pointerdown` or `keydown` (`app.js`, next to the registration)
 - The credit line (bottom right) reads "נתונים: תאגיד מ.א.י · עודכן <d.m.yyyy>, © OpenStreetMap". The date is `fetched_at` from `data_meta.json`, fetched after the points (`showDataDate()`, `formatUpdatedDate()`, Israel time); on any failure the date is left out. `data_meta.json` is an optional precached asset in `sw.js` and network-first like `locations.json`. The whole line is one attribution entry (`setMapCredits()`), so the date stays next to the MAI credit
 - Multiple basemap options (light, streets)
 - Accessibility (ARIA labels, keyboard navigation, skip links)
-- Open Graph + Twitter Card meta tags for social sharing
+- Open Graph + Twitter Card meta tags for social sharing: `icons/og-image.png` (1200×630, opaque, a map screenshot with the logo and title; not precached), `summary_large_image`
+- CSP in a meta tag: `img-src` names only the OSM tile host (both basemaps use it), plus `base-uri 'self'` and `form-action 'none'` (the Google Form is opened as a link, never posted)
 - XSS protection (HTML escaping on all location data)
 - Loading spinner overlay with error retry
 
@@ -197,7 +198,7 @@ Slightly under 44px touch target. Consider increasing to 44px.
 - **Search**: Full scan (7 string ops × ~4,200 markers) per debounce tick. Fine at 4K. At 10K+, pre-build a `Map<city, locations[]>` index.
 - **Markers**: ~4,200 markers × 2–3 event listeners each. Marker SVGs are flat (no per-marker gradients/filters). Fine at 4K. At 10K+, switch to virtual markers (create on `moveend` for visible bounds only).
 - **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 48 / 20 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
-- **Tiles**: 200-tile cache cap with cleanup every 20 puts. Adequate. At high zoom/pan frequency, reduce cleanup interval to 10.
+- **Tiles**: 200-tile cache cap, trimmed after every 50 new tiles (`tileCacheCount % 50` in `sw.js`). The counter lives in the worker's memory and starts again at 0 whenever the browser stops the worker, so a run of short visits with fewer than 50 new tiles each never trims; the cap is a target, not a guarantee.
 
 <!-- factory:start -->
 ## Factory
