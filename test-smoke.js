@@ -345,6 +345,45 @@ check('nearest: one tap opens the nearest point above the sheet; a second tap re
     }
 });
 
+// The locate button: where it is, how big, what it says (a touch phone and a desktop)
+const locateButtonState = page => page.evaluate(() => {
+    const btn = document.querySelector('.locate-btn');
+    const box = btn.getBoundingClientRect();
+    const label = btn.querySelector('.locate-label');
+    const credit = document.querySelector('.leaflet-control-attribution').getBoundingClientRect();
+    const probe = document.createElement('div'); probe.style.color = 'var(--cw-accent)'; document.body.appendChild(probe);
+    const accent = getComputedStyle(probe).color; probe.remove();
+    const overlaps = !(box.bottom <= credit.top || box.top >= credit.bottom || box.right <= credit.left || box.left >= credit.right);
+    return { top: box.top, bottom: box.bottom, left: box.left, right: box.right, width: box.width, height: box.height,
+        label: label && getComputedStyle(label).display !== 'none' ? label.textContent : '',
+        labelLines: label ? Math.round(label.getBoundingClientRect().height / parseFloat(getComputedStyle(label).lineHeight || 20)) : 0,
+        aria: btn.getAttribute('aria-label'), filled: getComputedStyle(btn).backgroundColor === accent,
+        overlapsCredit: overlaps, zoomShown: getComputedStyle(document.querySelector('.leaflet-control-zoom')).display !== 'none',
+        screen: [window.innerWidth, window.innerHeight] };
+});
+
+check('the locate button is a labelled pill in the bottom right; +/- hidden on touch phones only', async () => {
+    const LABEL = 'הנקודה הקרובה אליי';
+    for (const [viewport, touch] of [[{ width: 390, height: 844 }, true], [{ width: 360, height: 800 }, true], [{ width: 1440, height: 900 }, false]]) {
+        const where = `${viewport.width}x${viewport.height}`;
+        const { context, page, problems } = await openApp({ viewport, hasTouch: touch, isMobile: touch, geolocation: { latitude: 32.08, longitude: 34.78, accuracy: 20 }, permissions: ['geolocation'] });
+        const s = await locateButtonState(page);
+        expect(s.label === LABEL && s.aria === LABEL && s.height >= 48 && s.filled && !s.overlapsCredit,
+            `${where}: ${JSON.stringify(s)}`);
+        expect(s.right >= viewport.width - 24 && s.top >= viewport.height * 2 / 3, `${where}: not in the bottom right: ${JSON.stringify(s)}`);
+        expect(s.zoomShown === !touch, `${where}: +/- shown ${s.zoomShown} on a ${touch ? 'touch phone' : 'desktop'}`);
+        // after the first fix it is a round re-centre button with the same name
+        await tapLocate(page);
+        await page.evaluate(() => hideSidebar()); await page.waitForTimeout(500);
+        const after = await locateButtonState(page);
+        const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+        await context.close();
+        expect(after.label === '' && after.aria === LABEL && after.width >= 48 && after.width === after.height && after.filled,
+            `${where}, after the first fix: ${JSON.stringify(after)}`);
+        expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+    }
+});
+
 check('nearest fails well: denied and slow lead to the search box; nothing within 30 km flies nowhere', async () => {
     // 1. denied: the message, and the focus in the search box
     let { context, page } = await openApp({ viewport: PHONE });

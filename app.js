@@ -1206,7 +1206,7 @@ function focusOnLocation(locationId, fromHistory = false) {
 }
 
 // === GPS GEOLOCATION ===
-const locateIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+const locateIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/>
         <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
     </svg>`;
@@ -1246,12 +1246,17 @@ function showNearest(nearest) {
     });
 }
 
-const locateControl = L.control({ position: 'topright' });
+// The main action on a phone: a labelled button in the bottom right, where a thumb
+// reaches. After the first fix the label is hidden (style.css) and it is a round
+// re-centre button with the same name.
+const LOCATE_LABEL = 'הנקודה הקרובה אליי';
+const locateControl = L.control({ position: 'bottomright' });
 locateControl.onAdd = function() {
     const btn = L.DomUtil.create('button', 'locate-btn');
-    btn.innerHTML = locateIconSvg;
-    btn.title = 'מצא את מיקומי';
-    btn.setAttribute('aria-label', 'מצא את מיקומי');
+    btn.type = 'button';
+    btn.innerHTML = locateIconSvg + `<span class="locate-label">${LOCATE_LABEL}</span>`;
+    btn.title = LOCATE_LABEL;
+    btn.setAttribute('aria-label', LOCATE_LABEL);
 
     L.DomEvent.disableClickPropagation(btn);
 

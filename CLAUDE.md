@@ -21,7 +21,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Legend (bottom right) that also works as an on/off filter per type — shown only when the data has both types, so it is hidden while there are no facilities
 - Map opens framed on Israel (`fitBounds`) and cannot be panned far outside it (`maxBounds`)
 - Search with autocomplete suggestions (city + location)
-- GPS geolocation ("find my location" button: accuracy circle, frames you with the nearest collection point, shows distance in popups)
+- GPS geolocation: a filled pill "הנקודה הקרובה אליי" in the bottom right (thumb zone, 48px; a round re-centre button after the first fix). One tap opens the nearest collection point with its distance. The +/− zoom buttons are hidden on touch phones (`pointer: coarse`), kept on desktop
 - Navigation links (Google Maps / Waze) in popups and sidebar
 - Location detail sidebar
 - "Report a problem" link in popups/sidebar (Google Form)

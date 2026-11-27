@@ -307,41 +307,57 @@ body {
     outline-offset: 2px;
 }
 
-/* Locate Button */
+/* Locate Button: the main action on a phone. A filled pill with its label, bottom right
+   in the thumb zone; after the first fix (.active) a round re-centre button. */
+.leaflet-control.locate-btn {
+    margin: 0 12px 12px 0;
+}
+
 .locate-btn {
-    background: var(--cw-overlay);
-    border: 1px solid var(--cw-border);
-    border-radius: var(--cw-radius-md);
-    width: 44px;
-    height: 44px;
-    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--cw-text);
+    gap: var(--cw-space-2);
+    height: 48px;
+    min-width: 48px;
+    padding: 0 var(--cw-space-4);
+    border: none;
+    border-radius: var(--cw-radius-pill);
+    background: var(--cw-accent);
+    color: var(--cw-text-on-accent);
+    font-family: var(--cw-font-sans);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
     cursor: pointer;
-    box-shadow: var(--cw-shadow-1);
-    transition: all 0.2s;
+    box-shadow: var(--cw-shadow-2);
+    transition: background 0.2s;
+}
+
+.locate-btn svg {
+    flex-shrink: 0;
 }
 
 .locate-btn:hover {
-    background: var(--cw-surface-2);
-    border-color: var(--cw-accent);
+    background: var(--cw-accent-hover);
 }
 
-.locate-btn:focus {
+.locate-btn:focus-visible {
     outline: 2px solid var(--cw-focus);
     outline-offset: 2px;
 }
 
 .locate-btn.active {
-    background: var(--cw-accent);
-    color: var(--cw-text-on-accent);
-    border-color: var(--cw-accent);
+    width: 48px;
+    padding: 0;
+}
+
+.locate-btn.active .locate-label {
+    display: none;
 }
 
 .locate-btn.loading {
-    color: var(--cw-accent);
     animation: pulse 1s ease-in-out infinite;
     will-change: opacity;
 }
@@ -1004,6 +1020,13 @@ body {
     line-height: 44px !important;
     font-size: 22px !important;
     font-weight: 600; /* Leaflet sets bold (700); the design system stops at 600 */
+}
+
+/* Touch phones zoom with two fingers: the +/- buttons only take the thumb zone */
+@media (pointer: coarse) and (max-width: 768px) {
+    .leaflet-control-zoom {
+        display: none;
+    }
 }
 
 /* Mobile Responsive */
