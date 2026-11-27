@@ -1070,6 +1070,34 @@ check('share preview: a 1200x630 opaque image under 300 KB, a title that says wh
     expect(problems.length === 0, problems.join(' ; '));
 });
 
+check('install: maskable icon, opaque Apple touch icon, SVG favicon, manifest id, no installability errors', async () => {
+    const { context, page, problems } = await openPage({ serviceWorkers: 'allow' });
+    await page.goto(server.base);
+    await dataLoaded(page);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    const cdp = await context.newCDPSession(page);
+    const installability = (await cdp.send('Page.getInstallabilityErrors')).installabilityErrors;
+    const manifestErrors = (await cdp.send('Page.getAppManifest')).errors;
+    const links = await page.evaluate(() => [...document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')]
+        .map(l => ({ rel: l.getAttribute('rel'), type: l.getAttribute('type'), href: l.getAttribute('href') })));
+    await context.close();
+    const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+    expect(installability.length === 0, 'installability errors: ' + JSON.stringify(installability));
+    expect(manifestErrors.length === 0, 'manifest errors: ' + JSON.stringify(manifestErrors));
+    expect(manifest.id === './', 'manifest id: ' + manifest.id);
+    for (const key of ['description']) expect(!/(^|\s)מצא(\s|$)/.test(manifest[key]), `manifest ${key} uses the masculine imperative: ${manifest[key]}`);
+    const maskable = manifest.icons.filter(i => (i.purpose || '').split(' ').includes('maskable'));
+    expect(maskable.length === 1 && maskable[0].sizes === '512x512', 'maskable icons: ' + JSON.stringify(maskable));
+    const mask = pngInfo(maskable[0].src);
+    expect(mask.width === 512 && mask.height === 512 && mask.opaque, maskable[0].src + ': ' + JSON.stringify(mask));
+    const apple = links.find(l => l.rel === 'apple-touch-icon');
+    expect(apple && apple.href === 'icons/apple-touch-icon.png', 'apple-touch-icon link: ' + JSON.stringify(apple));
+    const appleInfo = pngInfo(apple.href);
+    expect(appleInfo.width === 180 && appleInfo.height === 180 && appleInfo.opaque, apple.href + ': ' + JSON.stringify(appleInfo));
+    expect(links.some(l => l.rel === 'icon' && l.type === 'image/svg+xml' && l.href === 'icons/icon.svg'), 'no SVG favicon link: ' + JSON.stringify(links));
+    expect(problems.length === 0, problems.join(' ; '));
+});
+
 // Waits until a service worker controls the page and its cache is filled
 async function openWithServiceWorker() {
     const opened = await openPage({ serviceWorkers: 'allow' });
