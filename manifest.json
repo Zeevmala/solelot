@@ -1,7 +1,8 @@
 {
+    "id": "./",
     "name": "מפת מיחזור סוללות",
     "short_name": "מיחזור סוללות",
-    "description": "מצא נקודות מיחזור סוללות בקרבתך בישראל",
+    "description": "איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת",
     "start_url": ".",
     "scope": ".",
     "display": "standalone",
@@ -58,14 +59,20 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any"
+        },
+        {
+            "src": "icons/icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
         }
     ],
     "categories": ["utilities", "lifestyle"],
     "shortcuts": [
         {
-            "name": "מצא הקרוב אליי",
+            "name": "הנקודה הקרובה אליי",
             "short_name": "הקרוב",
-            "description": "מצא את נקודת המיחזור הקרובה למיקומך",
+            "description": "נקודת האיסוף הקרובה למיקום הנוכחי",
             "url": "./?action=nearest",
             "icons": [
                 {

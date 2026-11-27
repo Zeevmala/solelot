@@ -47,9 +47,11 @@ const TEL_AVIV = { latitude: 32.0853, longitude: 34.7818, accuracy: 30 };
 // ---------- a small static web server for ROOT ----------
 // "faults" lets a check break a file on purpose: { '/style.css': 404 }
 // "swVersion" serves sw.js with another cache name, as a new deploy would.
+// "indexTitle" serves index.html with another <title>, so a check can tell the new page from the old.
+// "maxAge" sends Cache-Control: max-age=N instead of no-store, as GitHub Pages does (600 s).
 const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript', mjs: 'text/javascript', css: 'text/css',
     json: 'application/json', png: 'image/png', ico: 'image/x-icon', woff2: 'font/woff2', svg: 'image/svg+xml' };
-const server = { faults: {}, swVersion: null, base: '' };
+const server = { faults: {}, swVersion: null, indexTitle: null, maxAge: null, base: '' };
 function startServer() {
     const httpServer = http.createServer((req, res) => {
         const urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -60,7 +62,11 @@ function startServer() {
         if (urlPath === '/sw.js' && server.swVersion) {
             body = Buffer.from(body.toString('utf8').replace(/const STATIC_CACHE = '[^']+'/, `const STATIC_CACHE = '${server.swVersion}'`));
         }
-        res.writeHead(200, { 'Content-Type': TYPES[file.split('.').pop()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+        if (file === path.join(ROOT, 'index.html') && server.indexTitle) {
+            body = Buffer.from(body.toString('utf8').replace(/<title>[^<]*<\/title>/, `<title>${server.indexTitle}</title>`));
+        }
+        res.writeHead(200, { 'Content-Type': TYPES[file.split('.').pop()] || 'application/octet-stream',
+            'Cache-Control': server.maxAge ? `max-age=${server.maxAge}` : 'no-store' });
         res.end(body);
     });
     return new Promise(resolve => httpServer.listen(0, '127.0.0.1', () => {
@@ -1048,6 +1054,99 @@ check('if Leaflet does not arrive, an error panel with a reload button replaces 
     await context.close();
 });
 
+check('page hygiene: tight CSP with no violation on either basemap; the test pages are noindex', async () => {
+    const { context, page, problems } = await openPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await page.addInitScript(() => {
+        window.cspViolations = [];
+        document.addEventListener('securitypolicyviolation', e => window.cspViolations.push(e.violatedDirective + ' ' + e.blockedURI));
+    });
+    await page.goto(server.base);
+    await dataLoaded(page);
+    const tilesDone = () => page.waitForFunction(() => { const t = [...document.querySelectorAll('img.leaflet-tile')]; return t.length > 0 && t.every(i => i.complete && i.naturalWidth > 0); }, null, { timeout: 20000 });
+    await tilesDone();
+    await page.click('.basemap-toggle-btn');
+    await tilesDone();
+    await page.evaluate(() => showSidebar(allLocations[0])); // the details with the navigate and feedback links
+    await page.waitForTimeout(800);
+    const csp = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content);
+    const violations = await page.evaluate(() => window.cspViolations);
+    await context.close();
+    const directives = Object.fromEntries(csp.split(';').map(d => d.trim().split(/\s+/)).filter(d => d[0]).map(([name, ...values]) => [name, values.join(' ')]));
+    // every tile host the page or the worker uses, and nothing else
+    const tileHosts = [...new Set([...fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').matchAll(/'(https:\/\/[^/'{]+)\/\{z\}/g)].map(m => m[1]))];
+    expect(tileHosts.length > 0, 'no tile URL found in app.js');
+    expect(directives['img-src'] === ["'self'", 'data:', ...tileHosts].join(' '), `img-src "${directives['img-src']}", tile hosts ${tileHosts.join(' ')}`);
+    expect(directives['base-uri'] === "'self'" && directives['form-action'] === "'none'", `base-uri "${directives['base-uri']}", form-action "${directives['form-action']}"`);
+    expect(violations.length === 0, 'CSP violations: ' + violations.join(' ; '));
+    expect(problems.length === 0, problems.join(' ; '));
+    for (const file of ['test.html', 'test-map.html']) {
+        expect(/<meta name="robots" content="noindex">/.test(fs.readFileSync(path.join(ROOT, file), 'utf8')), file + ' has no robots noindex meta');
+    }
+});
+
+// PNG facts read from the file itself: size, colour type (2 = RGB, 3 = palette,
+// 4 and 6 have alpha) and whether a tRNS chunk adds transparency
+function pngInfo(file) {
+    const b = fs.readFileSync(path.join(ROOT, file));
+    const info = { bytes: b.length, width: b.readUInt32BE(16), height: b.readUInt32BE(20), colourType: b[25], tRNS: false };
+    for (let at = 8; at < b.length; at += 12 + b.readUInt32BE(at)) if (b.toString('latin1', at + 4, at + 8) === 'tRNS') info.tRNS = true;
+    info.opaque = (info.colourType === 2 || info.colourType === 3) && !info.tRNS;
+    return info;
+}
+const headMeta = page => page.evaluate(() => {
+    const out = { title: document.title };
+    for (const m of document.querySelectorAll('meta[property], meta[name]')) out[m.getAttribute('property') || m.getAttribute('name')] = m.getAttribute('content');
+    return out;
+});
+
+check('share preview: a 1200x630 opaque image under 300 KB, a title that says what the page is, neutral Hebrew', async () => {
+    const { context, page, problems } = await openApp();
+    const meta = await headMeta(page);
+    await context.close();
+    const image = 'https://zeevmala.github.io/solelot/icons/og-image.png';
+    expect(meta.title === 'מפת מיחזור סוללות - נקודות איסוף סוללות בישראל', 'title: ' + meta.title);
+    expect(meta['og:title'] === meta.title && meta['twitter:title'] === meta.title, `og/twitter title: ${meta['og:title']} / ${meta['twitter:title']}`);
+    expect(meta['og:image'] === image && meta['twitter:image'] === image, `share image: ${meta['og:image']} / ${meta['twitter:image']}`);
+    expect(meta['og:image:width'] === '1200' && meta['og:image:height'] === '630', `og:image size ${meta['og:image:width']}x${meta['og:image:height']}`);
+    expect(meta['og:image:alt'] && meta['og:site_name'], `og:image:alt "${meta['og:image:alt']}", og:site_name "${meta['og:site_name']}"`);
+    expect(meta['twitter:card'] === 'summary_large_image', 'twitter:card: ' + meta['twitter:card']);
+    for (const key of ['description', 'og:description', 'twitter:description']) {
+        expect(meta[key] && !/(^|\s)מצא(\s|$)/.test(meta[key]), `${key} is missing or uses the masculine imperative: ${meta[key]}`);
+    }
+    const png = pngInfo('icons/og-image.png');
+    expect(png.width === 1200 && png.height === 630 && png.opaque && png.bytes < 300 * 1024, 'icons/og-image.png: ' + JSON.stringify(png));
+    expect(!fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8').includes('og-image'), 'sw.js precaches the share image (only share previews use it)');
+    expect(problems.length === 0, problems.join(' ; '));
+});
+
+check('install: maskable icon, opaque Apple touch icon, SVG favicon, manifest id, no installability errors', async () => {
+    const { context, page, problems } = await openPage({ serviceWorkers: 'allow' });
+    await page.goto(server.base);
+    await dataLoaded(page);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    const cdp = await context.newCDPSession(page);
+    const installability = (await cdp.send('Page.getInstallabilityErrors')).installabilityErrors;
+    const manifestErrors = (await cdp.send('Page.getAppManifest')).errors;
+    const links = await page.evaluate(() => [...document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')]
+        .map(l => ({ rel: l.getAttribute('rel'), type: l.getAttribute('type'), href: l.getAttribute('href') })));
+    await context.close();
+    const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+    expect(installability.length === 0, 'installability errors: ' + JSON.stringify(installability));
+    expect(manifestErrors.length === 0, 'manifest errors: ' + JSON.stringify(manifestErrors));
+    expect(manifest.id === './', 'manifest id: ' + manifest.id);
+    for (const key of ['description']) expect(!/(^|\s)מצא(\s|$)/.test(manifest[key]), `manifest ${key} uses the masculine imperative: ${manifest[key]}`);
+    const maskable = manifest.icons.filter(i => (i.purpose || '').split(' ').includes('maskable'));
+    expect(maskable.length === 1 && maskable[0].sizes === '512x512', 'maskable icons: ' + JSON.stringify(maskable));
+    const mask = pngInfo(maskable[0].src);
+    expect(mask.width === 512 && mask.height === 512 && mask.opaque, maskable[0].src + ': ' + JSON.stringify(mask));
+    const apple = links.find(l => l.rel === 'apple-touch-icon');
+    expect(apple && apple.href === 'icons/apple-touch-icon.png', 'apple-touch-icon link: ' + JSON.stringify(apple));
+    const appleInfo = pngInfo(apple.href);
+    expect(appleInfo.width === 180 && appleInfo.height === 180 && appleInfo.opaque, apple.href + ': ' + JSON.stringify(appleInfo));
+    expect(links.some(l => l.rel === 'icon' && l.type === 'image/svg+xml' && l.href === 'icons/icon.svg'), 'no SVG favicon link: ' + JSON.stringify(links));
+    expect(problems.length === 0, problems.join(' ; '));
+});
+
 // Waits until a service worker controls the page and its cache is filled
 async function openWithServiceWorker() {
     const opened = await openPage({ serviceWorkers: 'allow' });
@@ -1077,6 +1176,56 @@ check('the service worker registers, and an offline reload still shows the marke
     await context.close();
     expect(worked && count > 1000, `offline reload: page loaded ${worked}, ${count} markers`);
     expect(dated, `offline reload: the credit line does not say "${wanted}"`);
+});
+
+// A deploy: the next sw.js has a new cache name and index.html a new title
+const deploy = title => { server.swVersion = 'static-smoke-deploy'; server.indexTitle = title; };
+const undeploy = () => { server.swVersion = null; server.indexTitle = null; server.maxAge = null; server.faults = {}; };
+
+check('a deploy reaches a returning visitor on the next load, unless the page was already touched; offline still works', async () => {
+    const NEW = 'גרסה חדשה מהשרת';
+    // 1. not touched: load, deploy, load again -> the new page within 10 s (the HTTP cache must not hand the old files to the new worker)
+    server.maxAge = 600;
+    let { context, page, problems } = await openWithServiceWorker();
+    try {
+        deploy(NEW);
+        await page.goto(server.base); // a plain visit, as from the home screen (a reload would revalidate the HTTP cache by itself)
+        const arrived = await page.waitForFunction(t => document.title === t, NEW, { timeout: 10000 }).then(() => true, () => false);
+        const title = await page.title();
+        expect(arrived, `the page still says "${title}" 10 s after loading it again following a deploy`);
+        await dataLoaded(page);
+        // 3. offline reload of the new version still shows the map and the points
+        await context.setOffline(true);
+        await page.reload();
+        const offline = await dataLoaded(page).then(() => true, () => false);
+        const count = offline ? (await shown(page)).count : 0;
+        expect(offline && count > 1000 && (await page.title()) === NEW, `offline reload after the update: loaded ${offline}, ${count} markers, title "${await page.title()}"`);
+        const own = problems.filter(p => !p.includes('Failed to load resource') && !p.includes('net::ERR_INTERNET_DISCONNECTED'));
+        expect(own.length === 0, own.join(' ; '));
+    } finally {
+        undeploy();
+        await context.close();
+    }
+    // 2. touched: a tap, then a deploy and the new worker taking over -> no reload under the user's finger
+    ({ context, page } = await openWithServiceWorker());
+    try {
+        await page.evaluate(() => { window.smokeSamePage = true; });
+        await page.mouse.click(60, 400); // a tap on the map
+        deploy(NEW);
+        const took = await page.evaluate(async () => {
+            const registration = await navigator.serviceWorker.getRegistration();
+            const changed = new Promise(done => navigator.serviceWorker.addEventListener('controllerchange', () => done(true), { once: true }));
+            await registration.update();
+            return Promise.race([changed, new Promise(done => setTimeout(() => done(false), 10000))]);
+        });
+        await page.waitForTimeout(1500);
+        const same = await page.evaluate(() => window.smokeSamePage === true).catch(() => false);
+        expect(took, 'the new worker did not take over the page, so nothing was tested');
+        expect(same && (await page.title()) !== NEW, 'the page reloaded although it had been tapped');
+    } finally {
+        undeploy();
+        await context.close();
+    }
 });
 
 check('a deploy with a missing precached file keeps the old service worker and its cache', async () => {

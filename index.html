@@ -3,35 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="מפת נקודות מיחזור סוללות בישראל - מצא את הנקודה הקרובה אליך">
+    <meta name="description" content="איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה">
     <meta name="theme-color" content="#ffffff"><!-- cw-allow-color: a meta tag cannot read CSS variables; this is --cw-surface-1 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self'; child-src 'none'; object-src 'none'">
-    <title>מפת מיחזור סוללות</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self'; child-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <title>מפת מיחזור סוללות - נקודות איסוף סוללות בישראל</title>
 
     <!-- Open Graph / Social Sharing -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://zeevmala.github.io/solelot/">
-    <meta property="og:title" content="מפת מיחזור סוללות">
-    <meta property="og:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-3,600 נקודות איסוף ברחבי ישראל">
-    <meta property="og:image" content="https://zeevmala.github.io/solelot/icons/icon-512.png">
-    <meta property="og:image:width" content="512">
-    <meta property="og:image:height" content="512">
+    <meta property="og:site_name" content="מפת מיחזור סוללות">
+    <meta property="og:title" content="מפת מיחזור סוללות - נקודות איסוף סוללות בישראל">
+    <meta property="og:description" content="איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה">
+    <meta property="og:image" content="https://zeevmala.github.io/solelot/icons/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:image:type" content="image/png">
+    <meta property="og:image:alt" content="מפה של תל אביב והסביבה עם נקודות איסוף סוללות, והכיתוב: מפת מיחזור סוללות, כ-3,600 נקודות איסוף בישראל">
     <meta property="og:locale" content="he_IL">
     <link rel="canonical" href="https://zeevmala.github.io/solelot/">
 
     <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="מפת מיחזור סוללות">
-    <meta name="twitter:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-3,600 נקודות איסוף ברחבי ישראל">
-    <meta name="twitter:image" content="https://zeevmala.github.io/solelot/icons/icon-512.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="מפת מיחזור סוללות - נקודות איסוף סוללות בישראל">
+    <meta name="twitter:description" content="איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה">
+    <meta name="twitter:image" content="https://zeevmala.github.io/solelot/icons/og-image.png">
+    <meta name="twitter:image:alt" content="מפה של תל אביב והסביבה עם נקודות איסוף סוללות, והכיתוב: מפת מיחזור סוללות, כ-3,600 נקודות איסוף בישראל">
 
     <!-- Preconnect to external origins (early connection setup) -->
     <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96.png">
 
