@@ -706,15 +706,17 @@ function loadOverrides(file) {
     return JSON.parse(fs.readFileSync(file, 'utf8')).overrides || {};
 }
 
-// The previous locations.json, or null when there is none yet
+// The previous locations.json: { locations } (null when there is none yet), or { error }
+// when the file is there but cannot be read. The 90 % and 5 % guards compare with it,
+// so an unreadable file must stop the run, not switch them off.
 function loadPrevious(file) {
-    if (!fs.existsSync(file)) return null;
+    if (!fs.existsSync(file)) return { locations: null };
     try {
         const previous = JSON.parse(fs.readFileSync(file, 'utf8')).locations;
-        return Array.isArray(previous) ? previous : null;
+        if (!Array.isArray(previous)) return { error: 'it has no "locations" list' };
+        return { locations: previous };
     } catch (e) {
-        console.warn('Could not read previous locations.json: ' + e.message);
-        return null;
+        return { error: e.message };
     }
 }
 
@@ -875,7 +877,8 @@ function writeJsonAtomic(file, data) {
  *   dir    folder with facilities.json, data_overrides.json and the output (default: this folder)
  *   input  path of a saved API response; without it the live API is fetched
  *   force  save even when the count fell under 90 % of the previous file, over 5 % of
- *          its points were removed or moved, or over 10 % of the overrides match nothing
+ *          its points were removed or moved, over 10 % of the overrides match nothing, or the
+ *          previous locations.json cannot be read
  * Returns the object written to data_meta.json.
  */
 async function run(options = {}) {
@@ -902,7 +905,7 @@ async function run(options = {}) {
     }
     console.log('Fetched ' + markers.length + ' markers');
 
-    const previous = loadPrevious(files.output);
+    const { locations: previous, error: previousError } = loadPrevious(files.output);
     const overrides = loadOverrides(files.overrides);
     const built = buildLocations(markers, overrides);
     const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched } = built;
@@ -939,6 +942,14 @@ async function run(options = {}) {
     // Refuse to overwrite good data with a broken response (e.g. API schema change)
     const previousStores = previous ? previous.filter(loc => loc.type === 'store') : null;
     let problem = checkCount(stores.length, previousStores && previousStores.length, options.force);
+    if (!problem && previousError) {
+        if (options.force) {
+            console.warn('The previous locations.json could not be read (' + previousError + '); saving anyway (--force).');
+        } else {
+            problem = 'The previous locations.json could not be read (' + previousError + '), so the count and ' +
+                'change guards have nothing to compare with. Check the file; to replace it anyway, run again with --force.';
+        }
+    }
     if (!problem) problem = checkOverrides(overridesUnmatched.length, Object.keys(overrides).length, options.force);
 
     // What changed since the previous file (null when there is none to compare with)

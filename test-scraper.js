@@ -1011,7 +1011,8 @@ test('run saves a small change and writes it to data_meta.json', async (t) => {
 
 test('run refuses to save when over 10 % of the overrides match no marker, unless forced', async (t) => {
     const dir = tempDir(t);
-    fs.writeFileSync(path.join(dir, 'locations.json'), 'OLD');
+    const previous = JSON.stringify({ locations: [] });                      // readable, so only the override guard speaks
+    fs.writeFileSync(path.join(dir, 'locations.json'), previous);
     const input = writeRaw(dir, manyMarkers(1200));
     const overrides = JSON.parse(fs.readFileSync(path.join(dir, 'data_overrides.json'), 'utf8')).overrides;
     delete overrides[400009];
@@ -1019,12 +1020,27 @@ test('run refuses to save when over 10 % of the overrides match no marker, unles
     fs.writeFileSync(path.join(dir, 'data_overrides.json'), JSON.stringify({ overrides }));
     await assert.rejects(run({ dir, input }),
         /2 of 10 overrides match no MAI marker - MAI may have renumbered its markers\..*NOT changed/);
-    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), 'OLD');
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), previous);
     assert.ok(!fs.existsSync(path.join(dir, 'data_meta.json')));
 
     fs.rmSync(path.join(dir, 'locations.json'));
     const meta = await run({ dir, input, force: true });
     assert.deepStrictEqual(meta.overrides_unmatched, [77, 78]);
+});
+
+test('run refuses to save when the previous locations.json cannot be read, unless forced', async (t) => {
+    // without the previous file the 90 % and 5 % guards have nothing to compare with
+    const dir = tempDir(t);
+    const input = writeRaw(dir, manyMarkers(1200));
+    for (const broken of ['OLD', JSON.stringify({ locations: 'none' })]) {
+        fs.writeFileSync(path.join(dir, 'locations.json'), broken);
+        await assert.rejects(run({ dir, input }), /previous locations\.json could not be read.*--force.*NOT changed/);
+        assert.strictEqual(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'), broken);
+        assert.ok(!fs.existsSync(path.join(dir, 'data_meta.json')));
+    }
+    const meta = await run({ dir, input, force: true });
+    assert.strictEqual(meta.kept, 1199);
+    assert.strictEqual(meta.changes, null);
 });
 
 test('command line: --input without a path is a usage error (exit 1)', () => {
