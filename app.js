@@ -599,8 +599,11 @@ const markerCluster = L.markerClusterGroup({
     chunkProgress: (processed, total) => {
         if (processed === total) queueMicrotask(markerBatchesDone);
     },
-    // Wider grouping when zoomed out keeps bubbles from piling on top of each other
-    maxClusterRadius: zoom => (zoom <= 9 ? 70 : zoom <= 13 ? 55 : 40),
+    // Wider grouping when zoomed out keeps bubbles from piling on top of each other.
+    // From zoom 16 (where a pick or "nearest" lands) only pins that touch are grouped,
+    // so every point near you is a pin of its own. Points on one exact coordinate stay
+    // grouped to the last zoom and spread out when tapped (spiderfy).
+    maxClusterRadius: zoom => (zoom <= 9 ? 70 : zoom <= 13 ? 55 : zoom <= 15 ? 48 : 20),
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
     iconCreateFunction: function(cluster) {

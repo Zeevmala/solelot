@@ -427,6 +427,68 @@ check('the sheet: name, distance and address, filled navigate buttons, labelled 
     expect(errors.length === 0, errors.join(' ; '));
 });
 
+check('pins: single pins at street level, larger hit areas, selected pin 1.4x, a shared coordinate still opens by spiderfy', async () => {
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 } });
+    // 1. zoom 16 over Tel Aviv: every point is its own pin
+    await page.evaluate(() => map.setView([32.08, 34.78], 16, { animate: false })); await mapSettled(page);
+    const clustersAt16 = await page.evaluate(() => [...document.querySelectorAll('.marker-cluster')].filter(el => {
+        const b = el.getBoundingClientRect(); return b.bottom > 0 && b.top < window.innerHeight && b.right > 0 && b.left < window.innerWidth; }).length);
+    // 2. a tap just outside a pin, and just outside a small cluster, still lands on it
+    const hit = kind => page.evaluate(kind => {
+        const sel = kind === 'pin' ? '.battery-marker:not(.selected)' : '.marker-cluster-small';
+        const others = [...document.querySelectorAll('.leaflet-marker-icon')];
+        for (const el of document.querySelectorAll(sel)) {
+            const b = el.getBoundingClientRect();
+            if (b.top < 80 || b.bottom > window.innerHeight - 120 || b.left < 20 || b.right > window.innerWidth - 20) continue;
+            const pad = kind === 'pin' ? 12 : 8;
+            const crowded = others.some(o => { if (o === el) return false; const c = o.getBoundingClientRect();
+                return c.right > b.left - pad && c.left < b.right + pad && c.bottom > b.top - pad && c.top < b.bottom + pad; });
+            const centre = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+            if (crowded || !centre || !el.contains(centre)) continue; // another marker or a map button is there
+            const x = kind === 'pin' ? b.left - 6 : b.right + 3, y = kind === 'pin' ? b.top + b.height / 2 : b.top + b.height / 2;
+            const at = document.elementFromPoint(x, y);
+            if (at && at.closest('.leaflet-control')) continue;
+            return { found: true, hit: !!at && el.contains(at), at: at ? at.className : null };
+        }
+        return { found: false };
+    }, kind);
+    const pinHit = await hit('pin');
+    await page.evaluate(() => map.setView([32.08, 34.78], 13, { animate: false })); await mapSettled(page);
+    const clusterHit = await hit('cluster');
+    // 3. the selected pin is drawn 1.4 times larger
+    await page.evaluate(() => showSidebar(allLocations[0])); await page.waitForTimeout(400);
+    const scale = await page.evaluate(() => { const svg = document.querySelector('.battery-marker.selected svg');
+        return svg ? new DOMMatrix(getComputedStyle(svg).transform).a : null; });
+    await page.evaluate(() => hideSidebar()); await page.waitForTimeout(400);
+    // 4. points on one exact coordinate: a tap on their bubble at the deepest zoom spreads them out
+    const group = await page.evaluate(() => {
+        const at = new Map();
+        allLocations.forEach(l => { const k = l.lat + ',' + l.lng; at.set(k, (at.get(k) || []).concat(l)); });
+        const g = [...at.values()].find(list => list.length >= 2 && list.length <= 4);
+        return g ? g.map(l => ({ id: l.id, name: l.name, lat: l.lat, lng: l.lng })) : null;
+    });
+    expect(group, 'data changed: no points that share one coordinate');
+    await page.evaluate(p => map.setView([p.lat, p.lng], map.getMaxZoom(), { animate: false }), group[0]); await mapSettled(page);
+    await page.evaluate(() => { const c = map.latLngToContainerPoint(map.getCenter()); const m = map.getContainer().getBoundingClientRect();
+        const el = document.elementFromPoint(m.left + c.x, m.top + c.y); const cluster = el && el.closest('.marker-cluster');
+        if (cluster) cluster.setAttribute('data-smoke-tap', '1'); });
+    await page.locator('[data-smoke-tap]').click(); await page.waitForTimeout(1000);
+    const legs = await page.evaluate(ids => [...document.querySelectorAll('.battery-marker:not(.selected)')].filter(el =>
+        allMarkers.some(item => ids.includes(item.location.id) && item.marker.getElement() === el)).length, group.map(p => p.id));
+    const legName = await page.evaluate(ids => { const item = allMarkers.find(i => ids.includes(i.location.id) && i.marker.getElement());
+        item.marker.getElement().setAttribute('data-smoke-leg', '1'); return item.location.name; }, group.map(p => p.id));
+    await page.locator('[data-smoke-leg]').click({ force: true }); await page.waitForTimeout(600);
+    const title = await page.evaluate(() => (document.querySelector('#sidebar h2') || {}).textContent);
+    const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+    await context.close();
+    expect(clustersAt16 === 0, `${clustersAt16} cluster bubbles on screen at zoom 16 over Tel Aviv`);
+    expect(pinHit.found && pinHit.hit, '6 px beside a pin: ' + JSON.stringify(pinHit));
+    expect(clusterHit.found && clusterHit.hit, '3 px outside a small cluster: ' + JSON.stringify(clusterHit));
+    expect(Math.abs(scale - 1.4) < 0.01, 'selected pin scale: ' + scale);
+    expect(legs === group.length && title === legName, `${group.length} points on one coordinate: ${legs} spread out, tapped "${legName}", details "${title}"`);
+    expect(errors.length === 0, errors.join(' ; '));
+});
+
 check('nearest fails well: denied and slow lead to the search box; nothing within 30 km flies nowhere', async () => {
     // 1. denied: the message, and the focus in the search box
     let { context, page } = await openApp({ viewport: PHONE });

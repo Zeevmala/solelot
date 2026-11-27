@@ -406,7 +406,23 @@ body {
 
 .battery-marker svg {
     display: block;
-    filter: drop-shadow(var(--cw-shadow-1));
+}
+
+/* Larger touch targets than the drawings: a pin is 30x40 and a small cluster 36x36.
+   The invisible ::after is part of the marker, so a tap on it opens the marker. */
+.battery-marker::after,
+.marker-cluster-small::after {
+    content: '';
+    position: absolute;
+}
+
+.battery-marker::after {
+    inset: -2px -7px;
+}
+
+.marker-cluster-small::after {
+    inset: -4px;
+    border-radius: 50%;
 }
 
 /* Pin colours. The SVGs in app.js use fill="currentColor", so the colour is set here:
@@ -440,7 +456,7 @@ body {
 
 /* The pin whose details are open (class set in app.js). Listed after :hover so it wins. */
 .battery-marker.selected svg {
-    transform: scale(1.3);
+    transform: scale(1.4);
     transform-origin: 50% 100%;
 }
 

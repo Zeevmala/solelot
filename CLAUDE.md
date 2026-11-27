@@ -17,7 +17,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 ## Current Features
 - Interactive Leaflet map centered on Israel (OSM tiles; light = CSS-desaturated default — CARTO now requires an API key)
 - Custom SVG pin markers: green battery pin = collection point, orange factory pin = recycling facility (different shape AND colour)
-- Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered
+- Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered. Cluster radius 70 / 55 / 48 / 20 px at zoom ≤ 9 / ≤ 13 / ≤ 15 / 16+, so a pick or "nearest" (zoom 16+) shows single pins; points on one exact coordinate still spread out when tapped (spiderfy). Pins and small clusters have invisible `::after` hit areas larger than the drawing; the selected pin is drawn 1.4×
 - Legend (bottom right) that also works as an on/off filter per type — shown only when the data has both types, so it is hidden while there are no facilities
 - Map opens framed on Israel (`fitBounds`) and cannot be panned far outside it (`maxBounds`)
 - Search with autocomplete suggestions (city + location)
@@ -191,7 +191,7 @@ Slightly under 44px touch target. Consider increasing to 44px.
 ### Performance Notes (at ~3,600 locations)
 - **Search**: Full scan (7 string ops × ~4,200 markers) per debounce tick. Fine at 4K. At 10K+, pre-build a `Map<city, locations[]>` index.
 - **Markers**: ~4,200 markers × 2–3 event listeners each. Marker SVGs are flat (no per-marker gradients/filters). Fine at 4K. At 10K+, switch to virtual markers (create on `moveend` for visible bounds only).
-- **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 40 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
+- **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 48 / 20 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
 - **Tiles**: 200-tile cache cap with cleanup every 20 puts. Adequate. At high zoom/pan frequency, reduce cleanup interval to 10.
 
 <!-- factory:start -->
