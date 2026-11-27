@@ -170,12 +170,17 @@ check('plain load: no console errors, tiles load with crossorigin, MAI credit sh
     await page.click('.basemap-toggle-btn'); // the second basemap is a separate tile layer
     const tiles2 = await tileState();
     const credit = await page.evaluate(() => [...document.querySelectorAll('.leaflet-control-attribution a')].map(a => a.textContent.trim() + '|' + a.href));
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300);
+    const attribution = await page.evaluate(() => { const el = document.querySelector('.leaflet-control-attribution');
+        return { text: el.textContent, links: el.querySelectorAll('a').length, width: Math.round(el.getBoundingClientRect().width) }; });
     await context.close();
     expect(problems.length === 0, 'problems on plain load: ' + problems.join(' ; '));
     expect(tiles.n > 0 && tiles.cors === tiles.n && tiles.loaded === tiles.n, 'tiles of the first basemap: ' + JSON.stringify(tiles));
     expect(tiles2.n > 0 && tiles2.cors === tiles2.n && tiles2.loaded === tiles2.n, 'tiles of the second basemap: ' + JSON.stringify(tiles2));
     expect(credit.includes('נתונים: תאגיד מ.א.י|https://mai.org.il/'), 'no MAI credit link in the attribution: ' + credit.join(', '));
     expect(credit.some(c => c.startsWith('OpenStreetMap|')), 'no OpenStreetMap credit');
+    expect(!/Leaflet/.test(attribution.text) && attribution.links === 2, 'the credit line has no Leaflet prefix, only the two data credits: ' + JSON.stringify(attribution));
+    expect(attribution.width <= 390 - 24, 'the credit line is wider than the phone: ' + JSON.stringify(attribution));
 });
 
 check('picking a city suggestion shows only that city', async () => {
@@ -487,6 +492,53 @@ check('pins: single pins at street level, larger hit areas, selected pin 1.4x, a
     expect(Math.abs(scale - 1.4) < 0.01, 'selected pin scale: ' + scale);
     expect(legs === group.length && title === legName, `${group.length} points on one coordinate: ${legs} spread out, tapped "${legName}", details "${title}"`);
     expect(errors.length === 0, errors.join(' ; '));
+});
+
+check('text and icons: empty state says what to type, or that MAI does not list the chain; placeholder fits; nothing under the clear button', async () => {
+    const NOT_LISTED = 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.';
+    const panel = page => page.evaluate(() => ({ shown: getComputedStyle(document.getElementById('empty-state')).display !== 'none',
+        title: document.querySelector('#empty-state h3').textContent, text: document.querySelector('#empty-state p').textContent,
+        button: document.getElementById('clear-filters').textContent.trim(), emoji: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(document.getElementById('empty-state').textContent) }));
+    for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 800 }]) {
+        const where = `${viewport.width}px`;
+        const { context, page, problems } = await openApp({ viewport, hasTouch: true, isMobile: true });
+        // the whole placeholder can be read in the box
+        const fit = await page.evaluate(async () => { await document.fonts.ready; const box = document.getElementById('search-input'); const cs = getComputedStyle(box);
+            const ctx = document.createElement('canvas').getContext('2d'); ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            return { placeholder: box.placeholder, text: Math.ceil(ctx.measureText(box.placeholder).width),
+                // clientWidth of a text input leaves out its padding in Chrome, so the room is measured from the box
+                room: Math.floor(box.getBoundingClientRect().width - ['borderLeftWidth', 'borderRightWidth', 'paddingLeft', 'paddingRight'].reduce((sum, k) => sum + parseFloat(cs[k]), 0)) }; });
+        expect(fit.placeholder === 'עיר, רחוב או חנות' && fit.text <= fit.room, `${where}: placeholder ${JSON.stringify(fit)}`);
+        // a long text never runs under the clear button (the grey disc is drawn 8 px inside the button)
+        await page.locator('#search-input').fill('אבגדהוזחטיכלמנסעפצקרשת אבגדהוזחטיכלמנסעפ');
+        const under = await page.evaluate(() => { const box = document.getElementById('search-input'); const b = box.getBoundingClientRect();
+            const disc = document.getElementById('search-clear').getBoundingClientRect();
+            return { textStarts: Math.round(b.left + parseFloat(getComputedStyle(box).paddingLeft)), discEnds: Math.round(disc.right - 8) }; });
+        expect(under.textStarts >= under.discEnds, `${where}: text area starts at ${under.textStarts}, the clear button ends at ${under.discEnds}`);
+        await clearSearch(page);
+        // suggestions carry drawn icons, no emoji
+        await page.locator('#search-input').fill('חיפה'); await settle(page);
+        const rows = await page.evaluate(() => [...document.querySelectorAll('.suggestion-item')].map(row => ({ type: row.dataset.type,
+            svg: !!row.querySelector('.suggestion-icon svg'), sub: row.querySelector('.suggestion-city').textContent,
+            emoji: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(row.textContent) })));
+        expect(rows.length > 1 && rows.every(r => r.svg && !r.emoji) && rows[0].type === 'city' && / נקודות איסוף$| נקודת איסוף אחת$|^נקודת איסוף אחת$/.test(rows[0].sub),
+            `${where}: suggestion rows ${JSON.stringify(rows.slice(0, 3))}`);
+        await clearSearch(page);
+        // the empty state: a chain MAI does not list, then anything else
+        await page.locator('#search-input').fill('סופר פארם'); await settle(page); await press(page, 'Escape');
+        const chain = await panel(page);
+        expect(chain.shown && chain.title === 'לא נמצאו נקודות איסוף' && chain.text === NOT_LISTED && chain.button === 'ניקוי החיפוש' && !chain.emoji, `${where}, "סופר פארם": ${JSON.stringify(chain)}`);
+        await clearSearch(page);
+        await page.locator('#search-input').fill('zzzzqqqq'); await settle(page); await press(page, 'Escape');
+        const other = await panel(page);
+        expect(other.shown && other.title === 'לא נמצאו נקודות איסוף' && other.text === 'אפשר לחפש עיר, רחוב או שם של חנות' && other.button === 'ניקוי החיפוש', `${where}, "zzzzqqqq": ${JSON.stringify(other)}`);
+        await page.click('#clear-filters'); await settle(page);
+        const after = await shown(page);
+        const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+        await context.close();
+        expect(after.box === '' && after.count === after.total, `${where}: after "ניקוי החיפוש": ${JSON.stringify(after)}`);
+        expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+    }
 });
 
 check('nearest fails well: denied and slow lead to the search box; nothing within 30 km flies nowhere', async () => {
@@ -874,13 +926,13 @@ check('a failed locations.json shows the error panel; retry brings the normal te
     const panel = () => page.evaluate(() => ({ title: document.querySelector('#empty-state h3').textContent, button: document.getElementById('clear-filters').textContent,
         shown: document.getElementById('empty-state').style.display === 'block', legend: getComputedStyle(document.querySelector('.map-legend')).display }));
     const failed = await panel();
-    expect(failed.title === 'שגיאה בטעינת הנתונים' && failed.button === 'נסה שוב' && failed.legend === 'none', 'after the failed load: ' + JSON.stringify(failed));
+    expect(failed.title === 'שגיאה בטעינת הנתונים' && failed.button === 'ניסיון נוסף' && failed.legend === 'none', 'after the failed load: ' + JSON.stringify(failed));
     await page.click('#clear-filters'); await dataLoaded(page);
     expect(!(await panel()).shown, 'the panel is still shown after a successful retry');
     await type(page, 'zzzzqqqq', 5); await settle(page);
     const empty = await panel();
     await context.close();
-    expect(empty.shown && empty.title === 'לא נמצאו תוצאות' && empty.button === 'נקה סינון', 'a search with no results after the retry shows: ' + JSON.stringify(empty));
+    expect(empty.shown && empty.title === 'לא נמצאו נקודות איסוף' && empty.button === 'ניקוי החיפוש', 'a search with no results after the retry shows: ' + JSON.stringify(empty));
 });
 
 check('a record with markup in its id (or text coordinates) is not loaded and injects nothing', async () => {
@@ -914,7 +966,7 @@ check('if Leaflet does not arrive, an error panel with a reload button replaces 
     await page.goto(server.base); await page.waitForTimeout(1500);
     const panel = await page.evaluate(() => ({ title: document.querySelector('#empty-state h3').textContent, button: document.getElementById('clear-filters').textContent,
         panel: getComputedStyle(document.getElementById('empty-state')).display, loading: getComputedStyle(document.getElementById('loading-overlay')).display }));
-    expect(panel.title === 'שגיאה בטעינת המפה' && panel.button === 'טען מחדש' && panel.panel === 'block' && panel.loading === 'none', JSON.stringify(panel));
+    expect(panel.title === 'שגיאה בטעינת המפה' && panel.button === 'טעינה מחדש' && panel.panel === 'block' && panel.loading === 'none', JSON.stringify(panel));
     await page.unroute('**/vendor/leaflet/leaflet.js');
     await Promise.all([page.waitForNavigation(), page.click('#clear-filters')]);
     await dataLoaded(page);

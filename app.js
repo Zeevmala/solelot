@@ -361,6 +361,22 @@ function isValidLocation(loc) {
 }
 
 // === EMPTY STATE TEXT ===
+const EMPTY_TITLE = 'לא נמצאו נקודות איסוף';
+const EMPTY_TEXT = 'אפשר לחפש עיר, רחוב או שם של חנות';
+const EMPTY_BUTTON = 'ניקוי החיפוש';
+
+// Chains people look for that are not in MAI's list of collection points (Nov 2026).
+// When a search finds nothing and its text names one of them, the empty state says
+// so instead of the usual text. Whole words only: "ksp" inside another word is not KSP.
+function chainNotListedText(query) {
+    const chains = ['סופר פארם', 'סופרפארם', 'super pharm', 'superpharm', 'אופיס דיפו', 'office depot', 'officedepot',
+        'ksp', 'פלאפון', 'pelephone', 'סלקום', 'cellcom'];
+    const text = ' ' + normalizeQuery(String(query || '').replace(/,/g, ' ')) + ' ';
+    if (text.trim() === '') return '';
+    const named = chains.some(chain => text.includes(' ' + normalizeText(chain) + ' '));
+    return named ? 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.' : '';
+}
+
 // The same panel says "no results" for a search and "error" when loading failed
 function setEmptyStateText(title, text, buttonText) {
     const emptyState = document.getElementById('empty-state');
@@ -376,7 +392,7 @@ function setEmptyStateText(title, text, buttonText) {
 // The map library is a separate file (vendor/leaflet). If it did not arrive, nothing
 // below can work: show the error panel instead of leaving the loading screen forever.
 if (typeof L === 'undefined' || typeof L.markerClusterGroup !== 'function') {
-    setEmptyStateText('שגיאה בטעינת המפה', 'בדוק את החיבור לאינטרנט ונסה שוב', 'טען מחדש');
+    setEmptyStateText('שגיאה בטעינת המפה', 'כדאי לבדוק את החיבור לאינטרנט ולנסות שוב', 'טעינה מחדש');
     const libraryErrorPanel = document.getElementById('empty-state');
     const reloadBtn = document.getElementById('clear-filters');
     if (reloadBtn) reloadBtn.addEventListener('click', () => window.location.reload());
@@ -401,7 +417,7 @@ map.fitBounds(ISRAEL_BOUNDS);
 
 // All map buttons sit on the right edge: the details panel opens on the left
 // (bottom on phones) and used to cover the zoom / locate / basemap buttons.
-L.control.zoom({ position: 'topright', zoomInTitle: 'התקרב', zoomOutTitle: 'התרחק' }).addTo(map);
+L.control.zoom({ position: 'topright', zoomInTitle: 'הגדלה', zoomOutTitle: 'הקטנה' }).addTo(map);
 
 // Define multiple basemap options
 // CARTO raster tiles now require an API key (keyless requests return
@@ -424,6 +440,8 @@ const baseMaps = {
     })
 };
 
+// The credit line names the data sources only; Leaflet is credited in README.md
+map.attributionControl.setPrefix(false);
 // Credit for the location data, shown next to the map credit
 map.attributionControl.addAttribution('<a href="https://mai.org.il" target="_blank" rel="noopener">נתונים: תאגיד מ.א.י</a>');
 
@@ -438,8 +456,8 @@ basemapToggle.onAdd = function() {
     btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
     </svg>`;
-    btn.title = 'החלף ל: רחובות';
-    btn.setAttribute('aria-label', 'החלף סגנון מפה');
+    btn.title = 'מעבר למפת רחובות';
+    btn.setAttribute('aria-label', 'החלפת סגנון המפה');
 
     L.DomEvent.disableClickPropagation(btn);
 
@@ -448,10 +466,10 @@ basemapToggle.onAdd = function() {
 
         if (currentBasemapName === 'בהיר') {
             currentBasemapName = 'רחובות';
-            btn.title = 'החלף ל: בהיר';
+            btn.title = 'מעבר למפה בהירה';
         } else {
             currentBasemapName = 'בהיר';
-            btn.title = 'החלף ל: רחובות';
+            btn.title = 'מעבר למפת רחובות';
         }
 
         baseMaps[currentBasemapName].addTo(map);
@@ -575,6 +593,9 @@ const popupBatterySvg = {
     </svg>`
 };
 
+// A place on the map (outline pin), for city rows in the suggestion list
+const cityIconSvg = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s-7-6.3-7-11.8a7 7 0 0 1 14 0c0 5.5-7 11.8-7 11.8z"/><circle cx="12" cy="9.7" r="2.6"/></svg>';
+
 // Inline SVG icons for like/dislike buttons (18×18, stroke-based)
 const thumbsUpSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3m7-2V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>';
 const thumbsDownSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17m-7 2v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/></svg>';
@@ -651,11 +672,12 @@ function getDistance(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-// A distance as people read it: metres (rounded to 10) under 1 km, km above
+// A distance as people read it: metres (rounded to 10) under 1 km, km above.
+// A no-break space keeps the number and its unit on one line.
 function formatDistance(km) {
     const metres = Math.round(km * 100) * 10;
-    if (metres < 1000) return `${metres} מ׳`;
-    return `${km.toFixed(1)} ק"מ`;
+    if (metres < 1000) return `${metres}\u00A0מ׳`;
+    return `${km.toFixed(1)}\u00A0ק"מ`;
 }
 
 // Build report URL with pre-filled location name, address, and city
@@ -669,11 +691,11 @@ function getReportUrl(location) {
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
-// Same form, for the thumbs-up button: the name field starts with "✔ הנקודה קיימת:"
-// so a confirmation is easy to tell from a problem report in the form's answers
+// Same form, for the thumbs-up button: the name field starts with a check mark (\u2714)
+// and "הנקודה קיימת:", so a confirmation is easy to tell from a problem report
 function getConfirmUrl(location) {
     const params = new URLSearchParams({
-        'entry.1466478113': '✔ הנקודה קיימת: ' + location.name,
+        'entry.1466478113': '\u2714 הנקודה קיימת: ' + location.name,
         'entry.1234054889': location.address,
         'entry.1388870063': location.city,
         'hl': 'he'
@@ -948,6 +970,7 @@ function updateEmptyState() {
     const listOpen = suggestions && suggestions.classList.contains('active') && suggestions.children.length > 0;
     const isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
     const isEmpty = visibleMarkerCount === 0 && isFiltered && allMarkers.length > 0;
+    if (isEmpty) setEmptyStateText(EMPTY_TITLE, chainNotListedText(currentSearch) || EMPTY_TEXT, EMPTY_BUTTON);
     emptyState.style.display = isEmpty && !listOpen ? 'block' : 'none';
 }
 
@@ -1040,22 +1063,22 @@ function setupAutocomplete() {
                          data-type="city"
                          data-value="${escapeHtml(match.name)}"
                          tabindex="-1">
-                        <span class="suggestion-icon">🏙️</span>
+                        <span class="suggestion-icon suggestion-icon-city" aria-hidden="true">${cityIconSvg}</span>
                         <div class="suggestion-text">
                             <div class="suggestion-name">${escapeHtml(match.name)}</div>
-                            <div class="suggestion-city">${match.count === 1 ? 'נקודה אחת' : `${match.count} נקודות`}</div>
+                            <div class="suggestion-city">${match.count === 1 ? 'נקודת איסוף אחת' : `${match.count} נקודות איסוף`}</div>
                         </div>
                     </div>
                 `;
             } else {
-                const icon = match.locationType === 'facility' ? '🏭' : '🟢';
+                const icon = popupBatterySvg[match.locationType] || popupBatterySvg.store;
                 return `
                     <div class="suggestion-item"
                          role="option"
                          data-type="location"
                          data-id="${match.id}"
                          tabindex="-1">
-                        <span class="suggestion-icon">${icon}</span>
+                        <span class="suggestion-icon" aria-hidden="true">${icon}</span>
                         <div class="suggestion-text">
                             <div class="suggestion-name">${escapeHtml(match.name)}</div>
                             <div class="suggestion-city">${escapeHtml(match.address)}</div>
@@ -1494,7 +1517,7 @@ function loadLocations() {
 
             // After a failed load the panel still holds the error texts: put the
             // "no results" texts back. updateMarkers() then shows or hides the panel.
-            setEmptyStateText('לא נמצאו תוצאות', 'נסה לשנות את הסינון או לחפש מונח אחר', 'נקה סינון');
+            setEmptyStateText(EMPTY_TITLE, EMPTY_TEXT, EMPTY_BUTTON);
             updateMarkers();
 
             // A shared link: ?id=<point> opens that point, ?city=<name> picks that city.
@@ -1528,7 +1551,7 @@ function loadLocations() {
             hideLoading();
 
             // Show empty state with retry option
-            setEmptyStateText('שגיאה בטעינת הנתונים', 'בדוק את החיבור לאינטרנט ונסה שוב', 'נסה שוב');
+            setEmptyStateText('שגיאה בטעינת הנתונים', 'כדאי לבדוק את החיבור לאינטרנט ולנסות שוב', 'ניסיון נוסף');
             const emptyState = document.getElementById('empty-state');
             if (emptyState) emptyState.style.display = 'block';
         });

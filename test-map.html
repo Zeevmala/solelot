@@ -246,8 +246,8 @@ function getDistance(lat1, lng1, lat2, lng2) {
 
 function formatDistance(km) {
     const metres = Math.round(km * 100) * 10;
-    if (metres < 1000) return `${metres} מ׳`;
-    return `${km.toFixed(1)} ק"מ`;
+    if (metres < 1000) return `${metres}\u00A0מ׳`;
+    return `${km.toFixed(1)}\u00A0ק"מ`;
 }
 
 function getReportUrl(location) {
@@ -262,7 +262,7 @@ function getReportUrl(location) {
 
 function getConfirmUrl(location) {
     const params = new URLSearchParams({
-        'entry.1466478113': '✔ הנקודה קיימת: ' + location.name,
+        'entry.1466478113': '\u2714 הנקודה קיימת: ' + location.name,
         'entry.1234054889': location.address,
         'entry.1388870063': location.city,
         'hl': 'he'
@@ -638,16 +638,16 @@ function createSidebarContent(location) {
             // Distance value is reasonable
             var expectedDist = getDistance(32.0853, 34.7818, 32.08, 34.78);
             assert(expectedDist < 1, 'GPS: distance to nearby point is < 1 km (got ' + expectedDist.toFixed(2) + ')');
-            assert(detailsWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 '), 'GPS: details show correct distance value');
+            assert(detailsWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + '\u00A0\u05DE\u05F3 '), 'GPS: details show correct distance value');
             var sidebarWithDist = createSidebarContent(testLoc);
-            assert(sidebarWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + ' \u05DE\u05F3 בקו אווירי<'), 'GPS: sidebar shows the same distance in metres, said to be straight-line');
+            assert(sidebarWithDist.includes('>' + Math.round(expectedDist * 100) * 10 + '\u00A0\u05DE\u05F3 בקו אווירי<'), 'GPS: sidebar shows the same distance in metres, said to be straight-line');
 
             // Distance to Jerusalem
             var jlmLoc = { id: 10, name: 'Test', address: 'Test', city: 'Test', lat: 31.7683, lng: 35.2137, type: 'store' };
             var detailsJlm = createSidebarContent(jlmLoc);
             var jlmDist = getDistance(32.0853, 34.7818, 31.7683, 35.2137);
             assert(jlmDist > 50 && jlmDist < 70, 'GPS: TLV to Jerusalem distance ~60km (got ' + jlmDist.toFixed(1) + ')');
-            assert(detailsJlm.includes(jlmDist.toFixed(1) + ' \u05E7"\u05DE בקו אווירי'), 'GPS: Jerusalem details show correct distance in km, said to be straight-line');
+            assert(detailsJlm.includes(jlmDist.toFixed(1) + '\u00A0\u05E7"\u05DE בקו אווירי'), 'GPS: Jerusalem details show correct distance in km, said to be straight-line');
 
             // Reset userLocation
             userLocation = null;

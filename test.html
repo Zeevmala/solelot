@@ -233,10 +233,18 @@ function getDistance(lat1, lng1, lat2, lng2) {
 
 function formatDistance(km) {
     const metres = Math.round(km * 100) * 10;
-    if (metres < 1000) return `${metres} מ׳`;
-    return `${km.toFixed(1)} ק"מ`;
+    if (metres < 1000) return `${metres}\u00A0מ׳`;
+    return `${km.toFixed(1)}\u00A0ק"מ`;
 }
-    // <<< END OF COPIES
+
+function chainNotListedText(query) {
+    const chains = ['סופר פארם', 'סופרפארם', 'super pharm', 'superpharm', 'אופיס דיפו', 'office depot', 'officedepot',
+        'ksp', 'פלאפון', 'pelephone', 'סלקום', 'cellcom'];
+    const text = ' ' + normalizeQuery(String(query || '').replace(/,/g, ' ')) + ' ';
+    if (text.trim() === '') return '';
+    const named = chains.some(chain => text.includes(' ' + normalizeText(chain) + ' '));
+    return named ? 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.' : '';
+}    // <<< END OF COPIES
 
     // === escapeHtml tests ===
     assert(escapeHtml('hello') === 'hello', 'escapeHtml: plain text unchanged');
@@ -480,14 +488,15 @@ function formatDistance(km) {
     assert(d3 > 30 && d3 < 50, 'getDistance: Beer Sheva to Arad ~40km (got ' + d3.toFixed(1) + ')');
 
     // === formatDistance tests ===
-    assert(formatDistance(0.35) === '350 \u05DE\u05F3', 'formatDistance: 0.35 km is shown as 350 metres');
-    assert(formatDistance(0.04) === '40 \u05DE\u05F3', 'formatDistance: 0.04 km is 40 metres, not "0.0 km"');
-    assert(formatDistance(0.3549) === '350 \u05DE\u05F3', 'formatDistance: metres are rounded to the nearest 10');
-    assert(formatDistance(0) === '0 \u05DE\u05F3', 'formatDistance: 0 is 0 metres');
-    assert(formatDistance(0.994) === '990 \u05DE\u05F3', 'formatDistance: 994 m stays in metres');
-    assert(formatDistance(0.996) === '1.0 \u05E7"\u05DE', 'formatDistance: 996 m rounds up to 1.0 km, never "1000 metres"');
-    assert(formatDistance(1) === '1.0 \u05E7"\u05DE', 'formatDistance: 1 km is shown in km');
-    assert(formatDistance(12.34) === '12.3 \u05E7"\u05DE', 'formatDistance: km keep one decimal');
+    assert(formatDistance(0.35) === '350\u00A0\u05DE\u05F3', 'formatDistance: 0.35 km is shown as 350 metres');
+    assert(formatDistance(0.04) === '40\u00A0\u05DE\u05F3', 'formatDistance: 0.04 km is 40 metres, not "0.0 km"');
+    assert(formatDistance(0.3549) === '350\u00A0\u05DE\u05F3', 'formatDistance: metres are rounded to the nearest 10');
+    assert(formatDistance(0) === '0\u00A0\u05DE\u05F3', 'formatDistance: 0 is 0 metres');
+    assert(formatDistance(0.994) === '990\u00A0\u05DE\u05F3', 'formatDistance: 994 m stays in metres');
+    assert(formatDistance(0.996) === '1.0\u00A0\u05E7"\u05DE', 'formatDistance: 996 m rounds up to 1.0 km, never "1000 metres"');
+    assert(formatDistance(1) === '1.0\u00A0\u05E7"\u05DE', 'formatDistance: 1 km is shown in km');
+    assert(formatDistance(12.34) === '12.3\u00A0\u05E7"\u05DE', 'formatDistance: km keep one decimal');
+    assert(!/ /.test(formatDistance(0.07)) && !/ /.test(formatDistance(12.34)), 'formatDistance: the number and its unit are joined by a no-break space, so they never wrap apart');
     assert(!formatDistance(0.04).includes('0.0'), 'formatDistance: never "0.0"');
 
     // Chain detection lives in scraper.js and is tested by test-scraper.js (node --test)
@@ -506,6 +515,15 @@ function formatDistance(km) {
     assert(!hoursFilter(''), 'hoursFilter: filters empty string');
     assert(!hoursFilter(null), 'hoursFilter: filters null');
     assert(!hoursFilter(undefined), 'hoursFilter: filters undefined');
+
+    // === Chains that MAI does not list: the empty state says so ===
+    const NOT_LISTED = 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.';
+    ['סופר פארם', 'super pharm', 'Super-Pharm', 'סופר-פארם', 'סופרפארם', 'אופיס דיפו', 'Office Depot', 'KSP', 'ksp', 'פלאפון', 'סלקום', '  סופר פארם  ', 'סופר פארם חיפה', 'פלאפון, תל אביב'].forEach(text => {
+        assert(chainNotListedText(text) === NOT_LISTED, 'chainNotListedText: "' + text + '" is a chain MAI does not list');
+    });
+    ['', '   ', 'סופר', 'פארם', 'שופרסל', 'מגה', 'חיפה', 'kspx', 'aksp', 'סלקומים', 'office'].forEach(text => {
+        assert(chainNotListedText(text) === '', 'chainNotListedText: "' + text + '" gets the usual empty-state text');
+    });
 
     // === Summary ===
     const summary = document.getElementById('summary');
