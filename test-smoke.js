@@ -204,6 +204,39 @@ check('light basemap keeps a hint of colour: the sea reads as sea', async () => 
     expect(problems.length === 0, problems.join(' ; '));
 });
 
+// "עודכן d.m.yyyy" as data_meta.json says, in Israel time (the same rule as formatUpdatedDate in app.js)
+const expectedUpdated = () => {
+    const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'data_meta.json'), 'utf8'));
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(new Date(meta.fetched_at));
+    const part = type => Number(parts.find(p => p.type === type).value); // en-GB writes 05, people write 5
+    return `עודכן ${part('day')}.${part('month')}.${part('year')}`;
+};
+const creditText = page => page.evaluate(() => document.querySelector('.leaflet-control-attribution').textContent);
+
+check('the credit line says when the data was updated; without data_meta.json it says nothing and logs nothing', async () => {
+    const wanted = expectedUpdated();
+    let { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 } });
+    await page.waitForFunction(w => document.querySelector('.leaflet-control-attribution').textContent.includes(w), wanted, { timeout: 5000 }).catch(() => {});
+    const text = await creditText(page);
+    const box = await page.evaluate(() => { const b = document.querySelector('.leaflet-control-attribution').getBoundingClientRect(); return { width: Math.round(b.width), height: Math.round(b.height) }; });
+    await context.close();
+    const mai = text.indexOf('נתונים: תאגיד מ.א.י'), date = text.indexOf(wanted), osm = text.indexOf('OpenStreetMap');
+    expect(mai >= 0 && date > mai && osm > date, `credit line "${text}", wanted "${wanted}" after the MAI credit`);
+    expect(box.width <= 390 - 24 && box.height <= 24, 'credit line box at 390 px: ' + JSON.stringify(box));
+    expect(problems.length === 0, problems.join(' ; '));
+    // the file missing, then broken: no date, no error from the page
+    for (const fault of [{ status: 404 }, { status: 200, body: 'not json' }, { status: 200, body: '{"fetched_at":"<b>x</b>"}' }]) {
+        ({ context, page, problems } = await openPage({ viewport: { width: 390, height: 844 } }));
+        await page.route('**/data_meta.json', route => route.fulfill({ status: fault.status, contentType: 'application/json', body: fault.body || 'missing' }));
+        await page.goto(server.base); await dataLoaded(page); await page.waitForTimeout(800);
+        const without = await creditText(page);
+        await context.close();
+        const own = problems.filter(p => p.startsWith('page error') || (p.startsWith('console error') && !p.includes('Failed to load resource')));
+        expect(!without.includes('עודכן') && without.includes('נתונים: תאגיד מ.א.י') && without.includes('OpenStreetMap'), `${JSON.stringify(fault)}: credit line "${without}"`);
+        expect(own.length === 0, `${JSON.stringify(fault)}: ${own.join(' ; ')}`);
+    }
+});
+
 check('picking a city suggestion shows only that city', async () => {
     const { context, page } = await openApp();
     const own = await inCity(page, CITY), byText = await containing(page, CITY);
@@ -1018,8 +1051,11 @@ check('the service worker registers, and an offline reload still shows the marke
     await page.reload();
     const worked = await dataLoaded(page).then(() => true, () => false);
     const count = worked ? (await shown(page)).count : 0;
+    const wanted = expectedUpdated();
+    const dated = worked && await page.waitForFunction(w => document.querySelector('.leaflet-control-attribution').textContent.includes(w), wanted, { timeout: 5000 }).then(() => true, () => false);
     await context.close();
     expect(worked && count > 1000, `offline reload: page loaded ${worked}, ${count} markers`);
+    expect(dated, `offline reload: the credit line does not say "${wanted}"`);
 });
 
 check('a deploy with a missing precached file keeps the old service worker and its cache', async () => {

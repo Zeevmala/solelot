@@ -28,6 +28,7 @@ const CRITICAL_ASSETS = [
 // Optional assets — best-effort caching (install continues if these fail)
 const OPTIONAL_ASSETS = [
     './locations.json',
+    './data_meta.json',
     './cartowolf/fonts/ibm-plex-mono-latin-400-normal.woff2',
     './cartowolf/fonts/ibm-plex-sans-hebrew-hebrew-400-normal.woff2',
     './cartowolf/fonts/ibm-plex-sans-hebrew-hebrew-500-normal.woff2',
@@ -103,8 +104,8 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Handle API/data requests (network first)
-    if (url.pathname.includes('locations.json')) {
+    // Handle API/data requests (network first): the points, and the date they were fetched
+    if (url.pathname.includes('locations.json') || url.pathname.endsWith('/data_meta.json')) {
         event.respondWith(handleDataRequest(event.request));
         return;
     }

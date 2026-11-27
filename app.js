@@ -426,24 +426,34 @@ L.control.zoom({ position: 'topright', zoomInTitle: 'הגדלה', zoomOutTitle: 
 // (.basemap-light in style.css). maxZoom 19 = OSM's max native zoom.
 const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+// Both basemaps are OpenStreetMap, so its credit is part of the one credit line below
+// (setMapCredits), not of each tile layer
 const baseMaps = {
     'רחובות': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
-        crossOrigin: true, // lets the service worker read and cache the tiles
-        attribution: OSM_ATTRIBUTION
+        crossOrigin: true // lets the service worker read and cache the tiles
     }),
     'בהיר': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
         className: 'basemap-light',
-        crossOrigin: true,
-        attribution: OSM_ATTRIBUTION
+        crossOrigin: true
     })
 };
 
-// The credit line names the data sources only; Leaflet is credited in README.md
+// The credit line names the data sources only; Leaflet is credited in README.md.
+// First the location data (and, once known, the date of its last refresh), then the map.
+// It is one entry, replaced as a whole: Leaflet keeps separate entries in the order they
+// were first added, so a date added later would land after the map credit.
+const MAI_CREDIT = '<a href="https://mai.org.il" target="_blank" rel="noopener">נתונים: תאגיד מ.א.י</a>';
+let mapCredits = '';
+function setMapCredits(updated) {
+    const credits = MAI_CREDIT + (updated ? ` · עודכן ${updated}` : '') + ', ' + OSM_ATTRIBUTION;
+    if (mapCredits) map.attributionControl.removeAttribution(mapCredits);
+    map.attributionControl.addAttribution(credits);
+    mapCredits = credits;
+}
 map.attributionControl.setPrefix(false);
-// Credit for the location data, shown next to the map credit
-map.attributionControl.addAttribution('<a href="https://mai.org.il" target="_blank" rel="noopener">נתונים: תאגיד מ.א.י</a>');
+setMapCredits('');
 
 // Track current basemap
 let currentBasemapName = 'בהיר';
@@ -678,6 +688,29 @@ function formatDistance(km) {
     const metres = Math.round(km * 100) * 10;
     if (metres < 1000) return `${metres}\u00A0מ׳`;
     return `${km.toFixed(1)}\u00A0ק"מ`;
+}
+
+// The date of a data refresh as people in Israel write it: d.m.yyyy in Israel time.
+// '' for anything that is not an ISO date and time (the text comes from data_meta.json).
+function formatUpdatedDate(isoText) {
+    if (typeof isoText !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(isoText)) return '';
+    const date = new Date(isoText);
+    if (isNaN(date.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
+    const part = type => Number(parts.find(p => p.type === type).value); // en-GB writes 05, people write 5
+    return `${part('day')}.${part('month')}.${part('year')}`;
+}
+
+// "עודכן <date>" in the credit line, from data_meta.json (written by scraper.js on every
+// refresh). Nice to have only: on any failure the line stays as it is and nothing is logged.
+function showDataDate() {
+    fetch('data_meta.json')
+        .then(response => (response.ok ? response.json() : null))
+        .then(meta => {
+            const updated = formatUpdatedDate(meta && meta.fetched_at);
+            if (updated) setMapCredits(updated);
+        })
+        .catch(() => {});
 }
 
 // Build report URL with pre-filled location name, address, and city
@@ -1514,6 +1547,7 @@ function loadLocations() {
 
             setupAutocomplete();
             updateLegendCounts();
+            showDataDate(); // after the points: they matter more on a slow connection
 
             // After a failed load the panel still holds the error texts: put the
             // "no results" texts back. updateMarkers() then shows or hides the panel.

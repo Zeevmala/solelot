@@ -244,7 +244,18 @@ function chainNotListedText(query) {
     if (text.trim() === '') return '';
     const named = chains.some(chain => text.includes(' ' + normalizeText(chain) + ' '));
     return named ? 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.' : '';
-}    // <<< END OF COPIES
+}
+
+function formatUpdatedDate(isoText) {
+    if (typeof isoText !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(isoText)) return '';
+    const date = new Date(isoText);
+    if (isNaN(date.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
+    const part = type => Number(parts.find(p => p.type === type).value); // en-GB writes 05, people write 5
+    return `${part('day')}.${part('month')}.${part('year')}`;
+}
+
+    // <<< END OF COPIES
 
     // === escapeHtml tests ===
     assert(escapeHtml('hello') === 'hello', 'escapeHtml: plain text unchanged');
@@ -523,6 +534,15 @@ function chainNotListedText(query) {
     });
     ['', '   ', 'סופר', 'פארם', 'שופרסל', 'מגה', 'חיפה', 'kspx', 'aksp', 'סלקומים', 'office'].forEach(text => {
         assert(chainNotListedText(text) === '', 'chainNotListedText: "' + text + '" gets the usual empty-state text');
+    });
+
+    // === "עודכן <date>" in the credit line, from data_meta.json ===
+    assert(formatUpdatedDate('2026-11-26T20:31:58.275Z') === '26.11.2026', 'formatUpdatedDate: d.m.yyyy, no leading zeros');
+    assert(formatUpdatedDate('2026-11-26T22:30:00Z') === '27.11.2026', 'formatUpdatedDate: the date in Israel, not in London (00:30 the next day)');
+    assert(formatUpdatedDate('2026-03-05T08:00:00Z') === '5.3.2026', 'formatUpdatedDate: one-digit day and month');
+    assert(formatUpdatedDate('2026-07-01T00:00:00+03:00') === '1.7.2026', 'formatUpdatedDate: an offset in the text is respected');
+    [undefined, null, '', 'yesterday', '2026', '2026-13-45T00:00:00Z', 12345, {}, '<img src=x>'].forEach(value => {
+        assert(formatUpdatedDate(value) === '', 'formatUpdatedDate: ' + JSON.stringify(value) + ' gives no date');
     });
 
     // === Summary ===
