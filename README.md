@@ -102,7 +102,7 @@ Schools are left off the map on purpose: a collection bin inside a school is not
       "address": "קיבוץ גלויות 106, תל אביב",
       "city": "תל אביב",
       "type": "store",
-      "chain": "other",
+      "kind": "shop",
       "lat": 32.047942,
       "lng": 34.777016,
       "hours": "בדוק באתר"
@@ -113,7 +113,7 @@ Schools are left off the map on purpose: a collection bin inside a school is not
 
 - `id` is the MAI marker id. It stays the same between refreshes. Ids 1–99 are reserved for `facilities.json`.
 - `type` is `store` (collection point) or `facility` (recycling plant).
-- `chain` is set by the scraper. The page does not use it.
+- `kind` is set by the scraper: `fuel` (petrol station), `shop` or `municipal` (council collection point or street bin). It is left out when MAI gives no business name, or only the address as the name (33 points, Nov 2026).
 - `hours` is the placeholder `"בדוק באתר"` on every record. The page hides it.
 - `description` is optional and is shown when present.
 

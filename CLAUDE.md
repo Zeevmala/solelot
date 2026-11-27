@@ -87,7 +87,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ### Architecture — Do NOT Change
 - No build tools. Plain HTML/CSS/JS. No npm, no bundler, no TypeScript. Keep it that way.
-- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, chain, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `description` is optional and shown in popup/sidebar.
+- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, kind?, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `kind` is `"fuel"`, `"shop"` or `"municipal"`, set by `pointKind()` in `scraper.js`, and missing when the point cannot be classified (no business name, or the name is only the address). `description` is optional and shown in popup/sidebar.
 - `type` must be exactly `"store"` or `"facility"`. Adding a third value requires updating `typeNames` in `app.js` AND adding a test.
 - All UI strings are Hebrew. Layout is RTL. Do not add English UI text.
 - `test.html` and `test-map.html` run in the browser (open the file) and in the gate (headless Chrome). Pure functions are copied verbatim from `app.js`; the gate fails if a copy differs from `app.js`. A green test page still does NOT prove the app works: also load the real page and check the browser console.
@@ -144,7 +144,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Do NOT add `<defs>`/gradients/filters with `id`s inside marker SVGs — the SVG is repeated per marker, which repeats the ids.
 
 ### Testing Notes
-- `CHAIN_PATTERNS` / `determineChain` live in `scraper.js` only (the app does not use `chain`). They are tested in `test-scraper.js`, which imports the real functions.
+- `pointKind` (the `kind` field) lives in `scraper.js` and is tested in `test-scraper.js`, which imports the real functions: each rule, the two electrical chains that stay shops, and the records that get no kind. `test-validate.js` covers validator checks 31 (`kind` is one of the three values) and 32 (at least 95% of collection points have one). `chain`, `CHAIN_PATTERNS` and `determineChain` were removed (2026-11-27); `shopChain` is a different thing, used only to find one shop listed twice.
 - XSS tests cover `<script>`, `<img>`, SVG `onload`, `javascript:` and `data:` strings.
 - `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance. Empty state and `?action=nearest` are covered by `test-smoke.js` on the real page.
 - `test-validate.js` runs the real `validate_data.js` on small fixtures and checks the exit code.
@@ -158,6 +158,8 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - The position checks cannot see errors under 5 km, or a single wrong pin that sits alone at a city centre.
 - **Stacked pins**: MAI's geocoder puts an address it cannot find at the centre of the city. The scraper drops every group of points that share one exact coordinate but name different streets (162 points in Nov 2026) — nobody can tell which, if any, is right. Same street spelled two ways (a shopping centre) is kept; so is a group with no street in one village.
 - **One shop listed twice**: the scraper keeps the lower id of two records with the same chain (first part of the name, the brand too for a fuel station; "רמי לוי - תקשורת" counts as "רמי לוי"), at most 50 m apart, on the same street or with one of them without a house number. Two different house numbers are never merged (אבי סופר at אלנבי 113, 122 and 124 are three shops within 23 m). Municipal points are not a chain. Validator check 25 fails on the same chain at the same address under 100 m; a pair 50–100 m apart goes in `data_overrides.json`.
+- **Point kind** (`kind`, 2026-11-27), from the raw MAI business name and categories: `fuel` = the name starts "תחנת דלק" or has אלונית / דור אלון; `municipal` = the name has רשות מקומית / חשמלית / מועצה / עיריית / מוקד איסוף / מרכז איסוף, or the categories include 14 and the name does not start מחסני חשמל or איידיגיטל; `shop` = the rest. Category 14 is only a sign of a municipal point; the map never says what else a point takes. No `kind` for 33 points (24 without a business name, 9 whose name is only the address). Counts at this date: municipal 1,268, shop 1,489, fuel 786. A seeded sample of 40 was all correct.
+- Points inside places the public cannot freely enter (an air force base, the police headquarters, a pre-army academy) are excluded by id in `data_overrides.json` (owner, 2026-11-27).
 - The scraper also refuses to save when the new count is under 90% of the previous file, unless run with `--force`.
 - The scraper refuses to save if fewer than 1,000 points parse (protects against another API change wiping the data).
 - Runtime bounds check (29–34°N, 34–36°E) in `app.js` is a safety net, not a substitute for clean source data.

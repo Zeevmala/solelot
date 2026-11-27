@@ -97,30 +97,21 @@ function isSchool(name) {
     return SCHOOL_PATTERN.test(name.replace(BRIGADE_STREET, ''));
 }
 
-// Order matters: the first match wins, so specific names come first.
-const CHAIN_PATTERNS = [
-    ['superpharm', ['סופר-פארם', 'סופר פארם', 'סופרפארם']],
-    ['shufersal', ['שופרסל']],
-    ['office_depot', ['אופיס דיפו']],
-    ['home_center', ['הום סנטר']],
-    ['pelephone', ['פלאפון']],
-    ['cellcom', ['סלקום']],
-    ['rami_levy', ['רמי לוי']],
-    ['big_electric', ['ביג אלקטריק']],
-    ['medton', ['מדטון']],
-    ['bug', ['באג']],
-    ['ikea', ['איקאה']],
-    ['mega', ['מגה']],
-    ['gas_station', ['תחנת דלק']],
-    ['school', ['בית ספר', 'ביה"ס', 'בי"ס']],
-    ['municipality', ['רשות מקומית', 'מוקד איסוף', 'מרכז איסוף', 'עיריית', 'מועצה']]
-];
-
-function determineChain(name) {
-    for (const [chain, keywords] of CHAIN_PATTERNS) {
-        if (keywords.some(k => name.includes(k))) return chain;
-    }
-    return 'other';
+// What kind of point this is, shown to users as one short line: "fuel" (a petrol station),
+// "municipal" (a council collection point or street e-waste bin) or "shop".
+// rawName is the business name as MAI wrote it, before the clean-up turns
+// "עיריית חיפה - מוקד איסוף" into "מוקד איסוף - ...". Category 14 (small electrical items)
+// is used only as a sign of a municipal point; the map does not say what else a point takes.
+// Checked by hand on a seeded sample of 40 (2026-11-27, see docs/brain/DECISIONS.md).
+const FUEL_NAME = /^תחנת דלק|אלונית|דור אלון/;
+const MUNICIPAL_NAME = /רשות מקומית|חשמלית|מועצה|עיריית|מוקד איסוף|מרכז איסוף/;
+const SHOPS_WITH_ELECTRICAL = /^(מחסני חשמל|איידיגיטל)/; // chains that also take category 14
+function pointKind(rawName, categories) {
+    if (!rawName) return undefined;
+    if (FUEL_NAME.test(rawName)) return 'fuel';
+    if (MUNICIPAL_NAME.test(rawName)) return 'municipal';
+    if (categories.includes('14') && !SHOPS_WITH_ELECTRICAL.test(rawName)) return 'municipal';
+    return 'shop';
 }
 
 // MAI and OpenStreetMap spell some cities differently. One spelling per city,
@@ -425,7 +416,8 @@ function transformMarker(marker, overrides = {}) {
     // ("ההשראה 2, שלומי"). The same text twice helps nobody, so such a point
     // gets the generic name that nameless points get.
     const withoutCommas = text => text.replace(/,/g, '');
-    if (withoutCommas(name) === withoutCommas(addressParts.join(', '))) {
+    const nameIsAddress = withoutCommas(name) === withoutCommas(addressParts.join(', '));
+    if (nameIsAddress) {
         name = 'נקודת איסוף - ' + (addressParts.slice(0, -1).join(', ') || city);
     }
 
@@ -440,7 +432,8 @@ function transformMarker(marker, overrides = {}) {
             address: addressParts.join(', ').substring(0, 300),
             city: city,
             type: 'store',
-            chain: determineChain(rawName),
+            // no kind when there is no business name, or the name is only the address: nothing to tell it by
+            ...(hasFields && !nameIsAddress ? { kind: pointKind(rawName, categories) } : {}),
             lat: lat,
             lng: lng,
             hours: 'בדוק באתר' // MAI does not publish opening hours
@@ -964,9 +957,9 @@ async function run(options = {}) {
     writeJsonAtomic(files.meta, meta);
     console.log('Saved ' + locations.length + ' locations (' + stores.length + ' collection points, ' + facilities.length + ' facilities)');
 
-    const chains = {};
-    locations.forEach(loc => { chains[loc.chain] = (chains[loc.chain] || 0) + 1; });
-    console.log('By chain:', chains);
+    const kinds = {};
+    stores.forEach(loc => { const kind = loc.kind || '(none)'; kinds[kind] = (kinds[kind] || 0) + 1; });
+    console.log('By kind:', kinds);
     return meta;
 }
 
@@ -982,7 +975,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-    transformMarker, buildLocations, determineChain, normalizeCity, municipalName, clean,
+    transformMarker, buildLocations, pointKind, normalizeCity, municipalName, clean,
     isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
     disambiguate, checkCount, parseArgs, run, changesSince, shopChain, houseNumber,
     withoutRepeatedParts, withoutBoilerplate, ARABIC_SCRIPT, PARCEL_NUMBER

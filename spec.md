@@ -24,7 +24,7 @@
 
 ### M2: Real Location Data ✅
 - [x] Create locations data file (JSON)
-- [x] Add all collection points the MAI map lists under batteries (shops, petrol stations, municipal points, schools)
+- [x] Add all collection points the MAI map lists under batteries (shops, petrol stations, municipal points; schools and closed sites such as army bases are left out)
 - [ ] Add recycling facilities (Batte-Re, RE-CAR, MILI) *(removed — plants are not public drop-off points and have no published street address; `facilities.json` is kept empty for future use)*
 - [x] Different marker icons by location type
 - [x] Location details in popups

@@ -24,7 +24,7 @@ test.after(() => fs.rmSync(TMP, { recursive: true, force: true }));
 function point(id, lat, lng, extra = {}) {
     return {
         id, name: 'נקודה ' + id, address: 'רחוב ' + id + ', תל אביב', city: 'תל אביב',
-        type: 'store', chain: 'x', lat, lng, hours: '', ...extra
+        type: 'store', kind: 'shop', lat, lng, hours: '', ...extra
     };
 }
 
@@ -354,4 +354,29 @@ test('checks 26-30 fail on a repeated name part, בע"מ, Arabic script or a par
     assert.match(result.block(28), /id=104/);
     assertFails(result, 29, /^\[X\].*: 1 issues\n    id=105/);
     assertFails(result, 30, /^\[X\].*: 1 issues\n    id=106/);
+});
+
+test('check 31 fails on a kind that is not fuel, shop or municipal; a point with no kind passes it', () => {
+    const result = validate([...cleanPoints(),
+        point(2001, 32.095, 34.79, { kind: 'gas_station' }), point(2002, 32.0951, 34.79, { kind: '' }),
+        point(2003, 32.0952, 34.79, { kind: 'fuel' }), point(2004, 32.0953, 34.79, { kind: 'municipal' }),
+        point(2005, 32.0954, 34.79, { kind: undefined })]);
+    assertFails(result, 31, /^\[X\].*: 2 issues/);
+    assert.match(result.block(31), /id=2001: kind="gas_station"/);
+    assert.match(result.block(31), /id=2002: kind=""/);
+});
+
+test('check 32 fails when under 95 % of collection points have a kind; a facility is not counted', () => {
+    const withoutKind = count => cleanPoints().map((p, i) => (i < count ? { ...p, kind: undefined } : p));
+    const facility = point(1, 32.5, 34.9, { type: 'facility', kind: undefined, name: 'מפעל', address: 'א 1, חדרה', city: 'חדרה' });
+    const ok = validate([...withoutKind(50), facility]);                // 950 of 1,000 = 95.0 %
+    assert.match(ok.block(32), /^\[\+\] 32\./);
+    const short = validate(withoutKind(51));                            // 949 of 1,000
+    assertFails(short, 32, /only 949 of 1000 collection points \(94\.9 %\) have a kind/);
+});
+
+test('check 9 no longer asks for chain', () => {
+    const result = validate(cleanPoints());
+    assert.ok(!('chain' in cleanPoints()[0]));
+    assert.match(result.block(9), /^\[\+\]/);
 });
