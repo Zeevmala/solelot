@@ -157,6 +157,23 @@ test('pointKind: fuel = name starts "תחנת דלק" or has אלונית / דו
     assert.strictEqual(pointKind('קפה ליד תחנת דלק', ['12']), 'shop');
 });
 
+test('pointKind: a name that starts "YELLOW" and says פז is a Paz fuel station', () => {
+    // real: 346651, copied unchanged from the MAI response of 2026-11-27
+    const raw = {
+        id: '346651', map_id: '5', category: '12', lat: '31.984975', lng: '34.915484', address: null,
+        title: 'YELLOW - ימל אירפורט סיטי-ניתוב- בטי אבויה - פז -משווק<br><span style="font-size: 16px;">צומת אל על, בדרך לשהם, שהם.</span>',
+        custom_field_data: [
+            { name: 'city', value: 'שהם' }, { name: 'street', value: 'צומת אל על' }, { name: 'house_number', value: '0' },
+            { name: 'neighborhood', value: 'בדרך לשהם' }, { name: 'business_name', value: 'YELLOW - ימל אירפורט סיטי-ניתוב- בטי אבויה - פז -משווק' }
+        ]
+    };
+    assert.strictEqual(transformMarker(raw).location.kind, 'fuel');
+    assert.strictEqual(pointKind('YELLOW - רמת דניה ירושלים - פז משווק', ['12']), 'fuel');
+    // YELLOW without פז, or פז only inside another word, is not enough
+    assert.strictEqual(pointKind('YELLOW - חנות נוחות', ['12']), 'shop');
+    assert.strictEqual(pointKind('YELLOW - פזית', ['12']), 'shop');
+});
+
 test('pointKind: municipal = a municipal word in the name, or category 14 except two electrical chains', () => {
     for (const name of ['רשות מקומית - מוקד איסוף', 'חשמלית - מקס שיין 9', 'מועצה אזורית גזר',
         'עיריית חולון - מתנ"ס', 'תל אביב - מוקד איסוף', 'מרכז איסוף עירוני']) {

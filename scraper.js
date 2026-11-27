@@ -104,7 +104,8 @@ function isSchool(name) {
 // "עיריית חיפה - מוקד איסוף" into "מוקד איסוף - ...". Category 14 (small electrical items)
 // is used only as a sign of a municipal point; the map does not say what else a point takes.
 // Checked by hand on a seeded sample of 40 (2026-11-27, see docs/brain/DECISIONS.md).
-const FUEL_NAME = /^תחנת דלק|אלונית|דור אלון/;
+// "YELLOW - חגור - פז - משווק": YELLOW is Paz's shop brand, and with the word פז the record is a Paz station
+const FUEL_NAME = /^תחנת דלק|אלונית|דור אלון|^YELLOW.*(^|[^א-ת])פז($|[^א-ת])/;
 const MUNICIPAL_NAME = /רשות מקומית|חשמלית|מועצה|עיריית|מוקד איסוף|מרכז איסוף/;
 const SHOPS_WITH_ELECTRICAL = /^(מחסני חשמל|איידיגיטל)/; // chains that also take category 14
 function pointKind(rawName, categories) {
