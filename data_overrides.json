@@ -24,6 +24,7 @@
     "Added 2026-11-27: 5 second entries of one shop under another city, which the scraper merged by chain and distance until it learned that two cities are never one shop. Each pair checked with Nominatim (reverse geocode of the pin, forward geocode of the places); the entry whose label does not fit its pin is left out. 343950 (אייס, \"מרכז ביג, קרית אתא\") is 36 m from 344152 (צומת וולקן, חיפה); its pin is at הסולל, רובע מפרץ חיפה, חיפה. 346211 (דור אלון, \"גבעת השלושה\") is 9 m from 345318 (כביש 40, כניסה למושב נווה ירק); the pin is 841 m from נווה ירק and 4.4 km from גבעת השלושה. 346441 (דלק מנטה, \"בית לחם הגלילית\") is 2 m from 343849 (כביש 77, מחלף זרזיר); the pin is on road 7626, 114 m from צומת זרזיר and 1.9 km from the village. 347313 (קולומביה, \"צומת כח\") is 12 m from 347314 (\"שבילים, צומת זרזיר\"); the pin is 136 m from צומת זרזיר, and צומת כ\"ח is in the Upper Galilee, 55 km away. 346634 (קרביץ, \"צומת פוריה א.ת\", city פוריה) is 1 m from 344231 (טבריה by override); the pin is on המברג, אזור תעשייה טבריה עלית, טבריה.",
     "Removed 2026-11-27: 7 overrides that did nothing, found by the new \"overrides without effect\" report of scraper.js. Their records are skipped as schools (owner decision, settled), so the city fixes 344824 (עוספייה), 345329 (תל אביב), 345596 and 345597 (אלעד), 346048 (שפרעם), 347289 (אום אל פחם) and the exclude 345588 change nothing. Corrected 2026-11-27: this line first called 345148 and 345913 dead as well, which was wrong. Each city fix is what lets its record merge with its twin in the same city: 345148 (חיפה) is then the same shop as 344152, and 345913 (שפרעם) the same point as 345903; without them a second pin appears under \"חוצות\" or \"אבטליון\". Both stay.",
     "Removed 2026-11-27: the exclude 344803 (רמי לוי, \"היוצרים 7, כרמיאל\", pin in תל אביב). Its record shares one exact coordinate (32.071749, 34.794428) with 343446 (יגאל אלון 108, תל אביב) and 346433 (צומת גילת), three different streets, so the stacked rule drops it anyway (settled: the scraper drops every such group). The scraper's \"overrides without effect\" report listed it, and a build without the exclude gives the same locations.json.",
+    "Added 2026-11-27: 347314 (קולומביה, \"שבילים, צומת זרזיר\") had the junction as its city, so a search for a town did not find it. Nominatim reverse geocode of the pin: road 7626 in מועצה אזורית עמק יזרעאל, inside no town; forward geocode: זרזיר is 891 m from the pin, רמת ישי 5.4 km. The pin is 46 m from 343849 (דלק מנטה, \"כביש 77, מחלף זרזיר\"), which MAI lists under רמת ישי although its own label names זרזיר; the nearest town and the junction's name both say זרזיר, a spelling already in the data (344335).",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -446,6 +447,9 @@
     },
     "347313": {
       "exclude": true
+    },
+    "347314": {
+      "city": "זרזיר"
     },
     "347324": {
       "city": "עין בוקק"

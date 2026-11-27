@@ -775,6 +775,16 @@ test('an override is without effect exactly when the map is the same without it'
         [{ id: 31, reason: 'the record is the same without it' }]);
 });
 
+test('data_overrides.json: 347314 at צומת זרזיר is found under the town זרזיר', () => {
+    // copied unchanged from the MAI response of 2026-11-27; the pin is 891 m from זרזיר (Nominatim)
+    const columbia = { id: '347314', map_id: '5', category: '12', lat: '32.73462033005835', lng: '35.209153256102844', address: null,
+        title: 'קולומביה<br><span style="font-size: 16px;">שבילים, צומת זרזיר.</span>',
+        custom_field_data: [{ name: 'city', value: 'צומת זרזיר' }, { name: 'street', value: 'שבילים' }, { name: 'business_name', value: 'קולומביה' }] };
+    const overrides = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_overrides.json'), 'utf8')).overrides;
+    const { location } = transformMarker(columbia, overrides);
+    assert.deepStrictEqual([location.city, location.address], ['זרזיר', 'שבילים, זרזיר']);
+});
+
 test('checkCount: under 1,000 never saves; under 90 % of the previous file needs --force', () => {
     assert.match(checkCount(999, null, false), /Only 999/);
     assert.match(checkCount(999, 900, true), /Only 999/);          // --force does not switch this guard off
