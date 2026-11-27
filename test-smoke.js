@@ -423,6 +423,73 @@ check('nearest: one tap opens the nearest point above the sheet; a second tap re
     }
 });
 
+// With a point open: what is at the centre of each map control and of the selected pin.
+// Returns the ones covered by something else, with what covers them.
+const coveredControls = page => page.evaluate(() => {
+    const nameOf = t => (t ? (t.id || (typeof t.className === 'string' ? t.className : t.className.baseVal) || t.tagName) : 'nothing');
+    const out = [];
+    const probe = (label, el) => {
+        if (!el) { out.push(label + ': missing'); return; }
+        const b = el.getBoundingClientRect();
+        if (b.width === 0) { out.push(label + ': not drawn'); return; }
+        const x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2;
+        const t = document.elementFromPoint(x, y);
+        if (!t || !(t === el || el.contains(t))) out.push(`${label} at ${Math.round(x)},${Math.round(y)}: covered by ${nameOf(t)}`);
+    };
+    probe('locate button', document.querySelector('.locate-btn'));
+    probe('basemap button', document.querySelector('.basemap-toggle-btn'));
+    probe('credit link', document.querySelector('.leaflet-control-attribution a'));
+    probe('selected pin', selectedPin.getElement());
+    return out;
+});
+
+check('with a point open, the details never cover the map buttons, the credits or the selected pin (phones, both ways round)', async () => {
+    const phones = [[568, 320], [667, 375], [740, 360], [320, 568], [360, 740], [390, 844], [768, 1024]];
+    for (const [width, height] of phones) {
+        const where = `${width}x${height}`;
+        const { context, page, problems } = await openApp({ viewport: { width, height }, hasTouch: true, isMobile: true,
+            geolocation: { latitude: TEL_AVIV.latitude, longitude: TEL_AVIV.longitude, accuracy: 30 }, permissions: ['geolocation'] });
+        // 1. a point picked (as from a suggestion)
+        const id = await page.evaluate(c => allLocations.find(l => l.city === c).id, CITY);
+        await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page); await page.waitForTimeout(400);
+        try {
+            const picked = await coveredControls(page);
+            expect(picked.length === 0, `${where}, a picked point: ${picked.join(' ; ')}`);
+            // 2. the nearest point, asked for with a real tap on the locate button
+            await tapLocate(page);
+            const nearest = await coveredControls(page);
+            expect(nearest.length === 0, `${where}, the nearest point: ${nearest.join(' ; ')}`);
+            const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+            expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+        } finally {
+            await context.close();
+        }
+    }
+});
+
+check('a message shown over the open sheet sits above it and lets taps through to the navigate buttons', async () => {
+    for (const [width, height] of [[390, 844], [360, 740], [320, 568], [667, 375]]) {
+        const where = `${width}x${height}`;
+        const { context, page } = await openApp({ viewport: { width, height }, hasTouch: true, isMobile: true });
+        try {
+            const id = await page.evaluate(c => allLocations.find(l => l.city === c).id, CITY);
+            await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page);
+            await page.evaluate(() => showNotification('לא הצלחנו לאתר מיקום. חפשו עיר או רחוב', 5000)); await page.waitForTimeout(500);
+            const s = await page.evaluate(() => {
+                const hit = el => { const b = el.getBoundingClientRect(); const t = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2); return t && el.contains(t) ? 'ok' : (t ? t.id || t.className || t.tagName : 'nothing'); };
+                const toast = document.getElementById('notification').getBoundingClientRect();
+                const sheet = document.getElementById('sidebar').getBoundingClientRect();
+                const isSheet = sheet.width >= window.innerWidth;
+                return { waze: hit(document.querySelector('#sidebar .sidebar-nav-btn.waze')), google: hit(document.querySelector('#sidebar .sidebar-nav-btn.google')),
+                    shown: toast.height > 0, aboveSheet: !isSheet || toast.bottom <= sheet.top };
+            });
+            expect(s.waze === 'ok' && s.google === 'ok' && s.shown && s.aboveSheet, `${where}, a message with the sheet open: ${JSON.stringify(s)}`);
+        } finally {
+            await context.close();
+        }
+    }
+});
+
 // The locate button: where it is, how big, what it says (a touch phone and a desktop)
 const locateButtonState = page => page.evaluate(() => {
     const btn = document.querySelector('.locate-btn');
@@ -866,6 +933,29 @@ check('a point and a city have a URL; Back closes the details and stays; reload 
     }
 });
 
+check('reloading with a point open adds no history step; Back closes it, the next Back leaves', async () => {
+    const LINKED = 343455; // "AM.PM - אבן גבירול 91" in תל אביב
+    const { context, page } = await openApp({ viewport: PHONE }, '?id=' + LINKED);
+    try {
+        await mapSettled(page);
+        const first = await pageState(page);
+        expect(first.open && first.search === '?id=' + LINKED, 'first open: ' + JSON.stringify(first));
+        for (let i = 1; i <= 3; i++) {
+            await page.reload(); await dataLoaded(page); await mapSettled(page);
+            const s = await pageState(page);
+            expect(s.open && s.search === '?id=' + LINKED && s.length === first.length,
+                `reload ${i}: history ${s.length} (was ${first.length} on first open), ${JSON.stringify(s)}`);
+        }
+        await page.goBack(); await page.waitForTimeout(600);
+        const back = await pageState(page);
+        expect(!back.open && back.search === '' && back.path === '/', 'first Back after the reloads: ' + JSON.stringify(back));
+        await page.goBack(); await page.waitForTimeout(600);
+        expect(!page.url().startsWith(server.base), 'the second Back stayed on the page: ' + page.url());
+    } finally {
+        await context.close();
+    }
+});
+
 check('a search change while pins are still being added ends with the pins of the final text', async () => {
     // 1. On a slow phone the first typed letter starts adding thousands of pins;
     //    the rest of the word and Enter arrive before that has finished.
@@ -971,6 +1061,53 @@ check('a second pick right after the first ends at the second place', async () =
     const errors = problems.filter(p => p.startsWith('page error'));
     await context.close();
     expect(errors.length === 0, 'page errors: ' + errors[0]);
+});
+
+check('picking a city while a point is open closes the point; the map ends on the city', async () => {
+    const HAIFA = 'חיפה';
+    const where = '390x844';
+    const { context, page, problems } = await openApp({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    try {
+        const cityState = city => page.evaluate(city => {
+            const bounds = map.getBounds();
+            const own = allLocations.filter(l => l.city === city);
+            const sheet = document.getElementById('sidebar');
+            return { inView: own.filter(l => bounds.contains([l.lat, l.lng])).length, total: own.length, selected: selectedLocationId,
+                open: sheet.style.display !== 'none' && !sheet.classList.contains('hidden'), search: window.location.search,
+                pins: document.querySelectorAll('.battery-marker.selected').length };
+        }, city);
+        // 1. a shop picked, then 150 ms later a city typed and Enter, while the map still flies to the shop
+        await type(page, SHOP_TEXT, 20);
+        await page.waitForSelector('.suggestion-item[data-type=location]');
+        await page.click('.suggestion-item[data-type=location] >> nth=0');
+        await page.waitForTimeout(150);
+        await page.locator('#search-input').fill(HAIFA); await press(page, 'Enter');
+        await mapSettled(page); await page.waitForTimeout(400);
+        let s = await cityState(HAIFA);
+        expect(s.inView > s.total / 2 && s.selected === null && !s.open && s.pins === 0 && s.search === '?city=' + encodeURIComponent(HAIFA),
+            `${where}, a shop picked then Enter on ${HAIFA}: ${JSON.stringify(s)}`);
+        // 2. a point open and at rest, then a city suggestion picked
+        await clearSearch(page);
+        const id = await page.evaluate(c => allLocations.find(l => l.city === c).id, HAIFA);
+        await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page);
+        await type(page, CITY, 20);
+        await page.waitForSelector('.suggestion-item[data-type=city]');
+        await page.click('.suggestion-item[data-type=city] >> nth=0');
+        await mapSettled(page); await page.waitForTimeout(400);
+        s = await cityState(CITY);
+        expect(s.inView > s.total / 2 && s.selected === null && !s.open && s.pins === 0 && s.search === '?city=' + encodeURIComponent(CITY),
+            `${where}, a point open then the ${CITY} suggestion: ${JSON.stringify(s)}`);
+        // 3. a point open, then text that is not a city: the point stays open
+        await clearSearch(page);
+        await page.evaluate(id => focusOnLocation(id), id); await mapSettled(page);
+        await type(page, SHOP_TEXT, 20); await settle(page);
+        s = await cityState(HAIFA);
+        expect(s.selected === id && s.open && s.search === '?id=' + id, `${where}, a point open then "${SHOP_TEXT}" typed: ${JSON.stringify(s)}`);
+        const errors = problems.filter(p => p.startsWith('page error') || p.startsWith('console error'));
+        expect(errors.length === 0, `${where}: ${errors.join(' ; ')}`);
+    } finally {
+        await context.close();
+    }
 });
 
 check('a search while the map is zooming to a picked place leaves no broken listener behind', async () => {
@@ -1222,6 +1359,54 @@ check('a deploy reaches a returning visitor on the next load, unless the page wa
         const same = await page.evaluate(() => window.smokeSamePage === true).catch(() => false);
         expect(took, 'the new worker did not take over the page, so nothing was tested');
         expect(same && (await page.title()) !== NEW, 'the page reloaded although it had been tapped');
+    } finally {
+        undeploy();
+        await context.close();
+    }
+    // 3. scrolled: a mouse wheel over the map counts as touched too (it fires no pointerdown)
+    ({ context, page } = await openWithServiceWorker());
+    try {
+        await page.evaluate(() => { window.smokeSamePage = true; });
+        await page.mouse.move(60, 400); await page.mouse.wheel(0, -200); // zoom the map in with the wheel
+        await page.waitForTimeout(300);
+        deploy(NEW);
+        const took = await page.evaluate(async () => {
+            const registration = await navigator.serviceWorker.getRegistration();
+            const changed = new Promise(done => navigator.serviceWorker.addEventListener('controllerchange', () => done(true), { once: true }));
+            await registration.update();
+            return Promise.race([changed, new Promise(done => setTimeout(() => done(false), 10000))]);
+        });
+        await page.waitForTimeout(1500);
+        const same = await page.evaluate(() => window.smokeSamePage === true).catch(() => false);
+        expect(took, 'the new worker did not take over the page after a wheel, so nothing was tested');
+        expect(same && (await page.title()) !== NEW, 'the page reloaded although the map had been zoomed with the wheel');
+    } finally {
+        undeploy();
+        await context.close();
+    }
+});
+
+check('the automatic reload after a deploy, with a point open, adds no history step', async () => {
+    const LINKED = 343455;
+    const NEW = 'גרסה חדשה מהשרת';
+    const { context, page } = await openPage({ serviceWorkers: 'allow', viewport: PHONE });
+    try {
+        await page.goto(server.base + '?id=' + LINKED); await dataLoaded(page);
+        await page.evaluate(() => navigator.serviceWorker.ready);
+        await page.reload(); await dataLoaded(page); // now controlled by the worker
+        await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 });
+        const before = await pageState(page);
+        deploy(NEW);
+        await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+        const reloaded = await page.waitForFunction(t => document.title === t, NEW, { timeout: 15000 }).then(() => true, () => false);
+        expect(reloaded, 'the page did not reload itself after the deploy, so nothing was tested');
+        await dataLoaded(page); await mapSettled(page);
+        const after = await pageState(page);
+        expect(after.open && after.search === '?id=' + LINKED && after.length === before.length,
+            `after the automatic reload: history ${after.length} (was ${before.length}), ${JSON.stringify(after)}`);
+        await page.goBack(); await page.waitForTimeout(600);
+        const back = await pageState(page);
+        expect(!back.open && back.search === '' && back.path === '/', 'Back after the automatic reload: ' + JSON.stringify(back));
     } finally {
         undeploy();
         await context.close();

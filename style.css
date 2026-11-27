@@ -1003,7 +1003,8 @@ body {
 /* Notification Toast */
 .notification {
     position: fixed;
-    bottom: 80px;
+    bottom: calc(80px + var(--sheet-h, 0px)); /* above the open sheet on a phone (--sheet-h is set in app.js) */
+    pointer-events: none; /* a message never catches a tap meant for what is under it */
     left: 50%;
     transform: translateX(-50%) translateY(100px);
     background: var(--cw-text);
@@ -1202,6 +1203,7 @@ body {
         border-radius: 0;
         width: 50%;
         left: 0;
+        right: auto; /* the <=768px sheet rule sets right: 0, which put the panel over the map buttons */
         bottom: 0;
         top: 48px;
         height: calc(100% - 48px);

@@ -42,14 +42,17 @@ document.querySelectorAll('link[data-deferred]').forEach(link => { link.media = 
 // Register Service Worker
 if ('serviceWorker' in navigator) {
     // After a deploy, the new worker takes over a page the old one served. Reload once
-    // to show the new version, but only if nobody has tapped or typed yet: a reload
-    // under someone's finger would throw away what they were doing. A page with no
+    // to show the new version, but only if nobody has tapped, typed, scrolled or
+    // touched the screen yet (a mouse wheel fires no pointerdown): a reload under
+    // someone's finger would throw away what they were doing. A page with no
     // worker at load (the first visit) does not reload.
     if (navigator.serviceWorker.controller) {
         let touched = false;
         const markTouched = () => { touched = true; };
         window.addEventListener('pointerdown', markTouched, { once: true, capture: true });
         window.addEventListener('keydown', markTouched, { once: true, capture: true });
+        window.addEventListener('wheel', markTouched, { once: true, capture: true, passive: true });
+        window.addEventListener('touchstart', markTouched, { once: true, capture: true, passive: true });
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!touched) location.reload();
         }, { once: true });
@@ -853,12 +856,22 @@ function liftCornerAboveSheet() {
     document.documentElement.style.setProperty('--sheet-h', sheetHeight() + 'px');
 }
 
-// Move the map just enough for the pin to stay visible above the sheet.
+// On a desktop, and on a phone held sideways, the details are a panel over the map's
+// left side instead. sidePanelWidth() is how much of the map's width it covers (0 for the sheet).
+function sidePanelWidth() {
+    if (!cachedSidebar || cachedSidebar.style.display === 'none') return 0;
+    const width = cachedSidebar.offsetWidth;
+    return width < map.getSize().x ? width : 0;
+}
+
+// Move the map just enough for the pin to stay visible above the sheet,
+// or to the right of the side panel.
 function keepPinAboveSheet(location) {
     const covered = sheetHeight();
-    if (covered === 0) return;
+    const side = sidePanelWidth();
+    if (covered === 0 && side === 0) return;
     map.panInside([location.lat, location.lng], {
-        paddingTopLeft: [20, 60], // room for the pin itself, which is drawn above its point
+        paddingTopLeft: [20 + side, 60], // room for the pin itself, which is drawn above its point
         paddingBottomRight: [20, covered + 20]
     });
 }
@@ -1046,6 +1059,10 @@ function closeSuggestions() {
 }
 
 // Auto-zoom to visible markers
+// Every flight the app starts counts here. A "moveend" handler of an older flight
+// sees a newer number and does nothing, so it cannot pan back to an old place.
+let mapMoveCount = 0;
+
 function zoomToVisibleMarkers(visibleMarkers) {
     if (visibleMarkers.length === 0) return;
 
@@ -1055,6 +1072,7 @@ function zoomToVisibleMarkers(visibleMarkers) {
         if (only) focusOnLocation(only.location.id);
     } else {
         const group = L.featureGroup(visibleMarkers);
+        mapMoveCount++;
         map.flyToBounds(group.getBounds(), {
             padding: [50, 50],
             duration: 0.8,
@@ -1249,8 +1267,11 @@ function setupAutocomplete() {
     });
 }
 
-// Show exactly one city on the map, with its name in the search box
+// Show exactly one city on the map, with its name in the search box.
+// An open point is closed first: the address then carries the city, and the
+// map is not taken back to the point when its flight ends.
 function showCity(city) {
+    if (selectedLocationId !== null) hideSidebar();
     const searchInput = document.getElementById('search-input');
     const clearBtn = document.getElementById('search-clear');
     if (searchInput) searchInput.value = city;
@@ -1267,18 +1288,21 @@ function focusOnLocation(locationId, fromHistory = false) {
     // Details first: the flight below needs to know how high the sheet is
     showSidebar(location, fromHistory);
 
-    // On a phone the sheet covers the bottom of the map, so aim for the middle of
-    // the part that stays visible: the map centre goes half a sheet below the point.
+    // The details cover part of the map, so aim for the middle of the part that stays
+    // visible: on a phone the map centre goes half a sheet below the point; with the
+    // side panel (desktop, or a phone held sideways) half a panel to its left.
     const zoom = Math.max(map.getZoom(), 16);
-    const centre = map.unproject(map.project([location.lat, location.lng], zoom).add([0, sheetHeight() / 2]), zoom);
+    const centre = map.unproject(map.project([location.lat, location.lng], zoom).add([-sidePanelWidth() / 2, sheetHeight() / 2]), zoom);
 
     // flyTo ends a flight or pan that is still running, and ending a pan fires
     // "moveend" at once. So the listener is added after flyTo: the next "moveend"
     // is then the end of this flight.
+    const move = ++mapMoveCount;
     map.flyTo(centre, zoom, { duration: 0.8 });
     map.once('moveend', () => {
-        // The details may be closed or show another place by now: then do nothing
-        if (selectedLocationId === locationId) keepPinAboveSheet(location);
+        // The details may be closed or show another place, or a newer flight
+        // may have started, by now: then do nothing
+        if (move === mapMoveCount && selectedLocationId === locationId) keepPinAboveSheet(location);
     });
 }
 
@@ -1310,8 +1334,9 @@ function showNearest(nearest) {
     const location = nearest.location;
     showSidebar(location); // first: the framing below needs the height of the sheet
     const view = L.latLngBounds([[userLocation.lat, userLocation.lng], [location.lat, location.lng]]);
-    // On a desktop the details panel covers the map's left side
-    const panel = sheetHeight() === 0 && cachedSidebar && window.innerWidth > MOBILE_BREAKPOINT ? cachedSidebar.offsetWidth : 0;
+    // On a desktop, and on a phone held sideways, the details panel covers the map's left side
+    const panel = sidePanelWidth();
+    const move = ++mapMoveCount;
     map.flyToBounds(view, {
         paddingTopLeft: [40 + panel, 80], // room above for the pin, which is drawn above its point
         paddingBottomRight: [40, sheetHeight() + 40],
@@ -1319,7 +1344,7 @@ function showNearest(nearest) {
         duration: 0.8
     });
     map.once('moveend', () => {
-        if (selectedLocationId === location.id) keepPinAboveSheet(location);
+        if (move === mapMoveCount && selectedLocationId === location.id) keepPinAboveSheet(location);
     });
 }
 
@@ -1588,9 +1613,16 @@ function loadLocations() {
             const linkedId = /^[1-9][0-9]{0,9}$/.test(params.get('id') || '') ? Number(params.get('id')) : null;
             const linkedCity = params.get('city');
             if (linkedId !== null && allLocations.some(l => l.id === linkedId)) {
-                // The plain page becomes the step before the point, so Back closes it and stays here
-                history.replaceState(null, '', window.location.pathname);
-                focusOnLocation(linkedId);
+                if (history.state && history.state.id === linkedId) {
+                    // A reload (by hand, or the automatic one after a deploy) of a page with
+                    // this point open: the plain step before it is already in the history
+                    focusOnLocation(linkedId, true);
+                } else {
+                    // A shared link: the plain page becomes the step before the point,
+                    // so Back closes it and stays here
+                    history.replaceState(null, '', window.location.pathname);
+                    focusOnLocation(linkedId);
+                }
             } else if (linkedCity && cityCounts.has(linkedCity)) {
                 showCity(linkedCity);
             } else if (params.has('id') || params.has('city')) {
