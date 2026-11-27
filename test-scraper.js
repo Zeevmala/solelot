@@ -11,7 +11,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const scraper = require('./scraper.js');
-const { transformMarker, buildLocations, determineChain, normalizeCity, municipalName } = scraper;
+const { transformMarker, buildLocations, pointKind, normalizeCity, municipalName } = scraper;
 const {
     clean, isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters,
     streetKey, sameStreet, checkCount, parseArgs, run, changesSince, shopChain
@@ -43,7 +43,7 @@ test('transformMarker builds a clean location from structured fields', () => {
         address: 'הרצל 10, חיפה',
         city: 'חיפה',
         type: 'store',
-        chain: 'bug',
+        kind: 'shop',
         lat: 32.8,
         lng: 35.0,
         hours: 'בדוק באתר'
@@ -77,7 +77,7 @@ test('generic municipal names become "מוקד איסוף - <place>"', () => {
         neighborhood: 'מתנ"ס רעות'
     }));
     assert.strictEqual(location.name, 'מוקד איסוף - מתנ"ס רעות');
-    assert.strictEqual(location.chain, 'municipality');
+    assert.strictEqual(location.kind, 'municipal');
     // the name already ends with the place, so the address does not repeat it ("good to great" audit)
     assert.strictEqual(location.address, 'הרצל 10, חיפה');
 });
@@ -114,7 +114,7 @@ test('the previous locations.json does not change what is built', async (t) => {
     const input = writeRaw(dir, [...manyMarkers(1200), bare]);
     // a previous file that knows a city for the coordinate of the city-less marker
     const previous = { locations: [{ id: 400500, name: 'נקודת איסוף - ויצמן 20', address: 'ויצמן 20, חיפה', city: 'חיפה',
-        type: 'store', chain: 'other', lat: 31.5, lng: 34.9, hours: 'בדוק באתר' }] };
+        type: 'store', lat: 31.5, lng: 34.9, hours: 'בדוק באתר' }] };
     fs.writeFileSync(path.join(dir, 'locations.json'), JSON.stringify(previous));
     const meta = await run({ dir, input, force: true });
     assert.strictEqual(meta.skipped['no city'], 1);
@@ -147,15 +147,57 @@ test('buildLocations removes repeats and tells same-name branches apart', () => 
     assert.strictEqual(new Set(keys).size, keys.length);
 });
 
-test('determineChain recognises the main chains', () => {
-    assert.strictEqual(determineChain('סופר-פארם'), 'superpharm');
-    assert.strictEqual(determineChain('שופרסל דיל'), 'shufersal');
-    assert.strictEqual(determineChain('רמי לוי - תקשורת'), 'rami_levy');
-    assert.strictEqual(determineChain('הום סנטר'), 'home_center');
-    assert.strictEqual(determineChain('ביג אלקטריק'), 'big_electric');
-    assert.strictEqual(determineChain('תחנת דלק - פז YELLOW'), 'gas_station');
-    assert.strictEqual(determineChain('רשות מקומית - מוקד איסוף'), 'municipality');
-    assert.strictEqual(determineChain('קרביץ'), 'other');
+test('pointKind: fuel = name starts "תחנת דלק" or has אלונית / דור אלון', () => {
+    assert.strictEqual(pointKind('תחנת דלק - פז YELLOW', ['12']), 'fuel');
+    assert.strictEqual(pointKind('סופר אלונית - רמת השרון', ['12']), 'fuel');
+    assert.strictEqual(pointKind('דור אלון - צומת גולני', ['12']), 'fuel');
+    // fuel wins over category 14
+    assert.strictEqual(pointKind('תחנת דלק - סונול', ['12', '14']), 'fuel');
+    // "תחנת דלק" in the middle of a name is not enough
+    assert.strictEqual(pointKind('קפה ליד תחנת דלק', ['12']), 'shop');
+});
+
+test('pointKind: municipal = a municipal word in the name, or category 14 except two electrical chains', () => {
+    for (const name of ['רשות מקומית - מוקד איסוף', 'חשמלית - מקס שיין 9', 'מועצה אזורית גזר',
+        'עיריית חולון - מתנ"ס', 'תל אביב - מוקד איסוף', 'מרכז איסוף עירוני']) {
+        assert.strictEqual(pointKind(name, ['12']), 'municipal', name);
+    }
+    assert.strictEqual(pointKind('מתנ"ס רעות', ['12', '14']), 'municipal');
+    assert.strictEqual(pointKind('מתנ"ס רעות', ['12', '14', '15']), 'municipal');
+    // the two shop chains that also take small electrical items stay shops
+    assert.strictEqual(pointKind('מחסני חשמל - חולון', ['12', '14']), 'shop');
+    assert.strictEqual(pointKind('איידיגיטל - קניון רמת אביב', ['12', '14', '15']), 'shop');
+});
+
+test('pointKind: shop = the rest; no name, no kind', () => {
+    assert.strictEqual(pointKind('באג', ['12']), 'shop');
+    assert.strictEqual(pointKind('רמי לוי - תקשורת', ['12']), 'shop');
+    assert.strictEqual(pointKind('', ['12', '14']), undefined);
+});
+
+test('transformMarker sets kind from the raw business name, before the name is cleaned', () => {
+    // the cleaned name no longer says "רשות מקומית", the raw one does
+    const city = transformMarker(marker({}, { business_name: 'רשות מקומית - חשמלית', neighborhood: 'מתנ"ס רעות' })).location;
+    assert.strictEqual(city.name, 'מוקד איסוף - חשמלית');
+    assert.strictEqual(city.kind, 'municipal');
+    // a business name that is only the address (real: 343467 "ההשראה 2, שלומי") says nothing about the point:
+    // it gets the generic name that nameless points get, and no kind, like them
+    const typed = transformMarker(marker({}, { business_name: 'הרצל 10, חיפה' })).location;
+    assert.strictEqual(typed.name, 'נקודת איסוף - הרצל 10');
+    assert.ok(!('kind' in typed));
+    assert.strictEqual(transformMarker(marker({ category: '12,14' }, { business_name: 'מתנ"ס רעות' })).location.kind, 'municipal');
+    assert.strictEqual(transformMarker(marker({ category: '12,14' }, { business_name: 'מחסני חשמל' })).location.kind, 'shop');
+    assert.strictEqual(transformMarker(marker({}, { business_name: 'תחנת דלק - דלק' })).location.kind, 'fuel');
+    assert.strictEqual(transformMarker(marker()).location.kind, 'shop');
+});
+
+test('a marker with no business name has no kind key and no chain key', () => {
+    // real: 343977, only street and house number, title "אבן גבירול 73"
+    const bare = marker({ title: 'אבן גבירול 73' }, { business_name: undefined, city: 'תל אביב', street: 'אבן גבירול', house_number: '73' });
+    const { location } = transformMarker(bare);
+    assert.strictEqual(location.name, 'נקודת איסוף - אבן גבירול 73');
+    assert.ok(!('kind' in location));
+    assert.ok(!('chain' in location));
 });
 
 // ---------------------------------------------------------------------------
@@ -266,7 +308,7 @@ test('address cleanup inside transformMarker', () => {
 test('the chain-internal branch code is removed from the name', () => {
     const { location } = transformMarker(marker({}, { business_name: 'מגה קניון חדרה - חוויה ואיכות בעיר-3570/90' }));
     assert.strictEqual(location.name, 'מגה קניון חדרה');
-    assert.strictEqual(location.chain, 'mega');
+    assert.strictEqual(location.kind, 'shop');
 });
 
 test('a business name that is only the address becomes "נקודת איסוף - <street>"', () => {
@@ -597,7 +639,7 @@ test('בע"מ is removed from a shop name', () => {
     // real: 343665, 344167, 346599
     const name = business => transformMarker(marker({}, { business_name: business })).location;
     assert.strictEqual(name('שופרסל סטוק בע"מ').name, 'שופרסל סטוק');
-    assert.strictEqual(name('שופרסל סטוק בע"מ').chain, 'shufersal');
+    assert.strictEqual(name('שופרסל סטוק בע"מ').kind, 'shop');
     assert.strictEqual(name('שופרסל סטוק בע"מ - סניף חולון').name, 'שופרסל סטוק - סניף חולון');
     assert.strictEqual(name('קבוצת גולף א.ק. בע"מ - מודיעין מרכז מגה אור').name, 'קבוצת גולף א.ק. - מודיעין מרכז מגה אור');
 });
@@ -743,11 +785,16 @@ test('fixture: every kind of real marker ends up where it should', () => {
     // normal structured record; HTML from the title never leaks
     assert.deepStrictEqual(byId.get(346168), {
         id: 346168, name: 'רמי לוי', address: 'גוש עציון, כביש 367, גוש עציון, אבטליון', city: 'אבטליון',
-        type: 'store', chain: 'rami_levy', lat: 31.645457, lng: 35.129984, hours: 'בדוק באתר'
+        type: 'store', kind: 'shop', lat: 31.645457, lng: 35.129984, hours: 'בדוק באתר'
     });
     for (const loc of locations) {
         assert.ok(!/[<>]|&\w+;/.test(loc.name + loc.address + loc.city), 'markup in ' + loc.id);
     }
+    // every kept fixture record has a business name, so every one has a kind
+    assert.strictEqual(byId.get(344878).kind, 'fuel');      // תחנת דלק - דלק מנטה
+    assert.strictEqual(byId.get(345539).kind, 'municipal'); // a recycling centre, categories 12,14,15
+    assert.strictEqual(byId.get(343312).kind, 'shop');      // איידיגיטל
+    assert.deepStrictEqual(locations.filter(l => !l.kind).map(l => l.id), []);
     // schools are left off the map: 343396 (school in the title), 345844 and 345846 (school in the place field)
     for (const id of [343396, 345844, 345846]) assert.ok(!byId.has(id), id + ' is a school and must be skipped');
 
@@ -832,7 +879,7 @@ test('run writes locations.json and data_meta.json, with no .tmp file left', asy
     const saved = JSON.parse(fs.readFileSync(path.join(dir, 'locations.json'), 'utf8'));
     assert.deepStrictEqual(Object.keys(saved), ['locations']);
     assert.strictEqual(saved.locations.length, 1199);
-    assert.deepStrictEqual(Object.keys(saved.locations[0]), ['id', 'name', 'address', 'city', 'type', 'chain', 'lat', 'lng', 'hours']);
+    assert.deepStrictEqual(Object.keys(saved.locations[0]), ['id', 'name', 'address', 'city', 'type', 'kind', 'lat', 'lng', 'hours']);
 
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'data_meta.json'), 'utf8')), meta);
     assert.deepStrictEqual(meta, {

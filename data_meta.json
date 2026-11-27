@@ -1,6 +1,6 @@
 {
   "source": "https://mai.org.il/wp-json/wpgmza/v1/markers",
-  "fetched_at": "2026-11-27T09:12:47.545Z",
+  "fetched_at": "2026-11-27T09:18:30.172Z",
   "raw_markers": 8603,
   "kept": 3576,
   "skipped": {
@@ -18,17 +18,13 @@
   "changes": {
     "counts": {
       "added": 0,
-      "removed": 3,
+      "removed": 0,
       "moved": 0,
       "renamed": 0,
       "cityChanged": 0
     },
     "added": [],
-    "removed": [
-      343333,
-      344808,
-      345833
-    ],
+    "removed": [],
     "moved": [],
     "renamed": [],
     "cityChanged": []

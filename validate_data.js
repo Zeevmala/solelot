@@ -180,7 +180,7 @@ function main() {
         .map(l => ({ id: l.id, reason: `type="${l.type}"` })));
 
     // 9. All required fields present
-    const required = ['id', 'name', 'address', 'city', 'type', 'chain', 'lat', 'lng'];
+    const required = ['id', 'name', 'address', 'city', 'type', 'lat', 'lng'];
     const missingFields = [];
     for (const loc of locations) {
         for (const field of required) {
@@ -485,6 +485,19 @@ function main() {
     check('30. No boilerplate after the מוקד איסוף prefix', locations
         .filter(l => nameOf(l).startsWith(PREFIX) && withoutBoilerplate(nameOf(l).slice(PREFIX.length)) !== nameOf(l).slice(PREFIX.length))
         .map(l => ({ id: l.id, reason: `"${l.name}"` })));
+
+    // 31. kind, when present, is one of the three the page knows. A point the scraper cannot classify
+    // (no business name) has no kind key at all.
+    const KINDS = ['fuel', 'shop', 'municipal'];
+    check('31. Valid kind values', locations
+        .filter(l => 'kind' in l && !KINDS.includes(l.kind))
+        .map(l => ({ id: l.id, reason: `kind="${l.kind}"` })));
+    // 32. At least 95 % of collection points have a kind (99.3 % on 2026-11-27). Fewer means MAI changed
+    // its business names or categories and the scraper rules in pointKind no longer fit.
+    const stores = locations.filter(l => l.type === 'store');
+    const withKind = stores.filter(l => KINDS.includes(l.kind)).length;
+    check('32. At least 95 % of points have a kind', withKind >= 0.95 * stores.length ? []
+        : [{ id: '-', reason: `only ${withKind} of ${stores.length} collection points (${(100 * withKind / stores.length).toFixed(1)} %) have a kind` }]);
 
     // Summary
     console.log(`\n--- ${totalFails === 0 ? 'ALL CHECKS PASSED' : totalFails + ' TOTAL ISSUES'} (${locations.length} locations) ---`);
