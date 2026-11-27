@@ -910,6 +910,29 @@ check('a point and a city have a URL; Back closes the details and stays; reload 
     }
 });
 
+check('reloading with a point open adds no history step; Back closes it, the next Back leaves', async () => {
+    const LINKED = 343455; // "AM.PM - אבן גבירול 91" in תל אביב
+    const { context, page } = await openApp({ viewport: PHONE }, '?id=' + LINKED);
+    try {
+        await mapSettled(page);
+        const first = await pageState(page);
+        expect(first.open && first.search === '?id=' + LINKED, 'first open: ' + JSON.stringify(first));
+        for (let i = 1; i <= 3; i++) {
+            await page.reload(); await dataLoaded(page); await mapSettled(page);
+            const s = await pageState(page);
+            expect(s.open && s.search === '?id=' + LINKED && s.length === first.length,
+                `reload ${i}: history ${s.length} (was ${first.length} on first open), ${JSON.stringify(s)}`);
+        }
+        await page.goBack(); await page.waitForTimeout(600);
+        const back = await pageState(page);
+        expect(!back.open && back.search === '' && back.path === '/', 'first Back after the reloads: ' + JSON.stringify(back));
+        await page.goBack(); await page.waitForTimeout(600);
+        expect(!page.url().startsWith(server.base), 'the second Back stayed on the page: ' + page.url());
+    } finally {
+        await context.close();
+    }
+});
+
 check('a search change while pins are still being added ends with the pins of the final text', async () => {
     // 1. On a slow phone the first typed letter starts adding thousands of pins;
     //    the rest of the word and Enter arrive before that has finished.
@@ -1266,6 +1289,33 @@ check('a deploy reaches a returning visitor on the next load, unless the page wa
         const same = await page.evaluate(() => window.smokeSamePage === true).catch(() => false);
         expect(took, 'the new worker did not take over the page, so nothing was tested');
         expect(same && (await page.title()) !== NEW, 'the page reloaded although it had been tapped');
+    } finally {
+        undeploy();
+        await context.close();
+    }
+});
+
+check('the automatic reload after a deploy, with a point open, adds no history step', async () => {
+    const LINKED = 343455;
+    const NEW = 'גרסה חדשה מהשרת';
+    const { context, page } = await openPage({ serviceWorkers: 'allow', viewport: PHONE });
+    try {
+        await page.goto(server.base + '?id=' + LINKED); await dataLoaded(page);
+        await page.evaluate(() => navigator.serviceWorker.ready);
+        await page.reload(); await dataLoaded(page); // now controlled by the worker
+        await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 });
+        const before = await pageState(page);
+        deploy(NEW);
+        await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+        const reloaded = await page.waitForFunction(t => document.title === t, NEW, { timeout: 15000 }).then(() => true, () => false);
+        expect(reloaded, 'the page did not reload itself after the deploy, so nothing was tested');
+        await dataLoaded(page); await mapSettled(page);
+        const after = await pageState(page);
+        expect(after.open && after.search === '?id=' + LINKED && after.length === before.length,
+            `after the automatic reload: history ${after.length} (was ${before.length}), ${JSON.stringify(after)}`);
+        await page.goBack(); await page.waitForTimeout(600);
+        const back = await pageState(page);
+        expect(!back.open && back.search === '' && back.path === '/', 'Back after the automatic reload: ' + JSON.stringify(back));
     } finally {
         undeploy();
         await context.close();

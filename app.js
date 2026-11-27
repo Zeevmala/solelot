@@ -1599,9 +1599,16 @@ function loadLocations() {
             const linkedId = /^[1-9][0-9]{0,9}$/.test(params.get('id') || '') ? Number(params.get('id')) : null;
             const linkedCity = params.get('city');
             if (linkedId !== null && allLocations.some(l => l.id === linkedId)) {
-                // The plain page becomes the step before the point, so Back closes it and stays here
-                history.replaceState(null, '', window.location.pathname);
-                focusOnLocation(linkedId);
+                if (history.state && history.state.id === linkedId) {
+                    // A reload (by hand, or the automatic one after a deploy) of a page with
+                    // this point open: the plain step before it is already in the history
+                    focusOnLocation(linkedId, true);
+                } else {
+                    // A shared link: the plain page becomes the step before the point,
+                    // so Back closes it and stays here
+                    history.replaceState(null, '', window.location.pathname);
+                    focusOnLocation(linkedId);
+                }
             } else if (linkedCity && cityCounts.has(linkedCity)) {
                 showCity(linkedCity);
             } else if (params.has('id') || params.has('city')) {
