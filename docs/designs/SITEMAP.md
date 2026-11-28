@@ -6,3 +6,4 @@ Unattended runs read this file to find the design a ticket refers to.
 | Document | Covers | Status |
 | --- | --- | --- |
 | [launch-readiness.md](launch-readiness.md) | What blocks launch, and the slices that fix it: search, pin accuracy, credits, update safety, the gate | approved 2026-11-25 (owner asked for launch readiness; slices are open) |
+| [great-map.md](great-map.md) | From good to great: nearest in two taps, address search, shareable links, wrong pins, refresh safety, share image | approved 2026-11-26 (owner asked to go from 80 to 100; slices are open) |

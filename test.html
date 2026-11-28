@@ -2,6 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <meta name="robots" content="noindex">
     <title>Unit Tests - Battery Recycling Map</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f5f5f5; direction: ltr; }
@@ -78,15 +79,13 @@ function fuzzyMatch(text, query, maxDist = 2) {
     return false;
 }
 
-function normalizeText(text) {
-    return String(text || '')
+function normalizeText(text, keepDoubled = false) {
+    let result = String(text || '')
         .toLowerCase()
         .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
-        .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/י+/g, 'י')
-        .replace(/ו+/g, 'ו')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .replace(/[-\u05BE\u2013]/g, ' ');
+    if (!keepDoubled) result = result.replace(/י+/g, 'י').replace(/ו+/g, 'ו');
+    return result.replace(/\s+/g, ' ').trim();
 }
 
 const QUERY_ALIASES = {
@@ -109,16 +108,56 @@ const QUERY_ALIASES = {
     'שוהם': 'שהם',
     'יהוד מונוסון': 'יהוד',
     'מודיעין מכבים רעות': 'מודיעין',
-    'פרדס חנה כרכור': 'פרדס חנה'
+    'פרדס חנה כרכור': 'פרדס חנה',
+    'כ"ס': 'כפר סבא',
+    // English names of the large cities
+    'jerusalem': 'ירושלים',
+    'haifa': 'חיפה',
+    'beer sheva': 'באר שבע',
+    'petah tikva': 'פתח תקווה',
+    'rishon lezion': 'ראשון לציון',
+    'netanya': 'נתניה',
+    'ashdod': 'אשדוד',
+    'holon': 'חולון',
+    'ramat gan': 'רמת גן',
+    'bnei brak': 'בני ברק',
+    'eilat': 'אילת',
+    // Chains, as people type them
+    'bug': 'באג',
+    'ikea': 'איקאה',
+    'ace': 'אייס',
+    'אם פם': 'am.pm',
+    'ampm': 'am.pm',
+    'am:pm': 'am.pm'
 };
 
-function normalizeQuery(text) {
+function normalizeQuery(text, keepDoubled = false) {
     const query = normalizeText(text);
     const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
     const alias = Object.keys(QUERY_ALIASES).find(name =>
         normalizeText(name) === query && (typedQuote || !name.includes('"')));
-    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
+    return normalizeText(alias ? QUERY_ALIASES[alias] : text, keepDoubled);
 }
+
+function locationSearchText(location) {
+    const text = [location.name, location.address, location.city].join(' ').replace(/,/g, ' ');
+    return { folded: normalizeText(text), asTyped: normalizeText(text, true) };
+}
+
+
+function findContaining(locations, query) {
+    const texts = locations.map(location => location.searchText || locationSearchText(location));
+    const withAll = (words, kind) => locations.filter((location, i) => words.every(word => texts[i][kind].includes(word)));
+    const typed = String(query || '').replace(/,/g, ' '); // an address pasted as written
+    const asTyped = normalizeQuery(typed, true);
+    const folded = normalizeQuery(typed);
+    if (asTyped !== folded) {
+        const found = withAll(asTyped.split(' '), 'asTyped');
+        if (found.length > 0) return found;
+    }
+    return withAll(folded.split(' '), 'folded');
+}
+
 
 function fuzzyTolerance(queryLength) {
     if (queryLength < 5) return 0;
@@ -132,31 +171,35 @@ function searchLocations(locations, query, cityFilter) {
     const q = normalizeQuery(query);
     if (q === '') return locations.slice();
 
+    const exact = findContaining(locations, query);
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
     const fields = locations.map(location => [
         normalizeText(location.name),
         normalizeText(location.address),
         normalizeText(location.city)
     ]);
-    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
-    if (exact.length > 0) return exact;
-
-    const maxDist = fuzzyTolerance(q.length);
-    if (maxDist === 0) return [];
     return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
 }
 
-function matchCities(cityCounts, text) {
+function matchCities(cityCounts, text, exactLocationCount = 0) {
     const query = normalizeQuery(text);
     const maxDist = fuzzyTolerance(query.length);
     const matches = [];
     if (query === '') return matches;
     cityCounts.forEach((count, name) => {
         const city = normalizeText(name);
-        const exact = city.includes(query);
-        if (exact || (maxDist > 0 && fuzzyMatch(city, query, maxDist))) {
-            matches.push({ type: 'city', name, count, exact, same: city === query });
-        }
+        if (city.includes(query)) matches.push({ type: 'city', name, count, exact: true, same: city === query });
     });
+    if (matches.length === 0 && exactLocationCount === 0 && maxDist > 0) {
+        cityCounts.forEach((count, name) => {
+            if (fuzzyMatch(normalizeText(name), query, maxDist)) {
+                matches.push({ type: 'city', name, count, exact: false, same: false });
+            }
+        });
+    }
     // The city that is the typed text first, then cities containing it, then near
     // matches; inside each group the city with more locations first
     matches.sort((a, b) => {
@@ -191,9 +234,32 @@ function getDistance(lat1, lng1, lat2, lng2) {
 
 function formatDistance(km) {
     const metres = Math.round(km * 100) * 10;
-    if (metres < 1000) return `${metres} מ׳`;
-    return `${km.toFixed(1)} ק"מ`;
+    if (metres < 1000) return `${metres}\u00A0מ׳`;
+    return `${km.toFixed(1)}\u00A0ק"מ`;
 }
+
+function chainNotListedText(query) {
+    const chains = ['סופר פארם', 'סופרפארם', 'super pharm', 'superpharm', 'אופיס דיפו', 'office depot', 'officedepot',
+        'ksp', 'פלאפון', 'pelephone', 'סלקום', 'cellcom'];
+    const text = ' ' + normalizeQuery(String(query || '').replace(/,/g, ' ')) + ' ';
+    if (text.trim() === '') return '';
+    const named = chains.some(chain => text.includes(' ' + normalizeText(chain) + ' '));
+    return named ? 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.' : '';
+}
+
+function formatUpdatedDate(isoText) {
+    if (typeof isoText !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(isoText)) return '';
+    const date = new Date(isoText);
+    if (isNaN(date.getTime())) return '';
+    // JavaScript rolls 30 February over to 2 March instead of refusing it: refuse it here
+    const [y, m, d] = isoText.slice(0, 10).split('-').map(Number);
+    const asWritten = new Date(Date.UTC(y, m - 1, d));
+    if (asWritten.getUTCMonth() !== m - 1 || asWritten.getUTCDate() !== d) return '';
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
+    const part = type => Number(parts.find(p => p.type === type).value); // en-GB writes 05, people write 5
+    return `${part('day')}.${part('month')}.${part('year')}`;
+}
+
     // <<< END OF COPIES
 
     // === escapeHtml tests ===
@@ -344,6 +410,56 @@ function formatDistance(km) {
     assert(cityPoints('תל-אביב', 'תל אביב') === '2/2', 'spelling: "תל-אביב" finds תל אביב');
     assert(cityPoints('tel aviv', 'תל אביב') === '2/2', 'spelling: "tel aviv" finds תל אביב');
 
+    // === Words in any order, across name, address and city (great-map A3) ===
+    const streets = [
+        { id: 1, name: 'AM.PM - אבן גבירול 91', address: 'אבן גבירול 91, תל אביב', city: 'תל אביב' },
+        { id: 2, name: 'מוקד איסוף', address: 'הרצל 3, חיפה', city: 'חיפה' },
+        { id: 3, name: 'מוקד איסוף', address: 'הרצל 8, ראשון לציון', city: 'ראשון לציון' },
+        { id: 4, name: 'אייס קנה ובנה', address: 'החרש 1, רמת השרון', city: 'רמת השרון' },
+        { id: 5, name: 'מוקד איסוף', address: 'סוקולוב 2, רמת השרון', city: 'רמת השרון' },
+        { id: 6, name: 'איילת השחר', address: 'הדקל 4, אילת', city: 'אילת' },
+        { id: 7, name: 'באג', address: 'דרך השלום 7, תל אביב', city: 'תל אביב' },
+        { id: 8, name: 'איקאה', address: 'הנפח 1, ראשון לציון', city: 'ראשון לציון' },
+        { id: 9, name: 'מכולת', address: 'העצמאות 7, קריית אתא', city: 'קריית אתא' },
+        { id: 10, name: 'ספריה עירונית', address: 'הנשיא 1, נתניה', city: 'נתניה' },
+        { id: 11, name: 'דואר', address: 'התמרים 2, אילת', city: 'אילת' },
+        { id: 12, name: 'מוקד איסוף', address: 'יפו 20, ירושלים', city: 'ירושלים' }
+    ];
+    const found = text => searchLocations(streets, text, null).map(l => l.id).join(',');
+    assert(found('אבן גבירול תל אביב') === '1', 'words: "אבן גבירול תל אביב" (street then city) finds the point (got ' + found('אבן גבירול תל אביב') + ')');
+    assert(found('תל אביב אבן גבירול') === '1', 'words: in any order (got ' + found('תל אביב אבן גבירול') + ')');
+    assert(found('הרצל חיפה') === '2', 'words: "הרצל חיפה" finds only הרצל in חיפה, not הרצל in ראשון לציון (got ' + found('הרצל חיפה') + ')');
+    assert(found('החרש רמת השרון') === '4', 'words: the comma in "החרש 1, רמת השרון" does not stop a match (got ' + found('החרש רמת השרון') + ')');
+    assert(found('החרש 1, רמת השרון') === '4', 'words: the address typed as written, with its comma (got ' + found('החרש 1, רמת השרון') + ')');
+    assert(found('אייס קנה') === '4' && found('מוקד רמת השרון') === '5', 'words: name words, and a name word with the city');
+    assert(found('אייס') === '4', 'doubled letters: "אייס" finds only records containing אייס, not every מוקד איסוף (got ' + found('אייס') + ')');
+    assert(found('איילת') === '6', 'doubled letters: "איילת" does not find the city אילת (got ' + found('איילת') + ')');
+    assert(found('קרית אתא') === '9' && found('קריית אתא') === '9', 'doubled letters: "קרית אתא" and "קריית אתא" both find קריית אתא');
+    assert(searchLocations(places, 'קריית אתא', null).map(l => l.id).join(',') === '9', 'doubled letters: typed קריית still finds a record spelled קרית (nothing as typed, then folded)');
+    assert(cityPoints('פתח תקוה', 'פתח תקווה') === '2/3' && cityPoints('ירושליים', 'ירושלים') === '2/2', 'doubled letters: "פתח תקוה" and "ירושליים" still find their city');
+    assert(found('ירושלם') === '12', 'words: the near-match fallback is unchanged (ירושלם -> ירושלים)');
+    assert(found('אבן גבירול חיפה') === '', 'words: every word must be found (no אבן גבירול in חיפה)');
+
+    // === English and chain names (aliases) ===
+    [['jerusalem', 'ירושלים'], ['Haifa', 'חיפה'], ['beer sheva', 'באר שבע'], ['Petah Tikva', 'פתח תקווה'], ['rishon lezion', 'ראשון לציון'],
+     ['netanya', 'נתניה'], ['ashdod', 'אשדוד'], ['holon', 'חולון'], ['ramat gan', 'רמת גן'], ['bnei brak', 'בני ברק'], ['eilat', 'אילת'],
+     ['כ"ס', 'כפר סבא'], ['כ״ס', 'כפר סבא'], ['bug', 'באג'], ['ikea', 'איקאה'], ['ace', 'אייס'], ['אם פם', 'am.pm'], ['ampm', 'am.pm'], ['AM:PM', 'am.pm']
+    ].forEach(([typed, meant]) => assert(normalizeQuery(typed) === normalizeText(meant), 'alias: "' + typed + '" means ' + meant + ' (got ' + normalizeQuery(typed) + ')'));
+    assert(normalizeQuery('כס') === 'כס', 'alias: bare "כס" (no quote mark) is not כפר סבא');
+    assert(found('ace') === '4', 'alias: "ace" finds אייס, not every מוקד איסוף (got ' + found('ace') + ')');
+    assert(found('bug') === '7' && found('ikea') === '8' && found('haifa') === '2' && found('eilat') === '6,11', 'alias: bug, ikea, haifa, eilat find their records');
+    assert(found('אם פם') === '1' && found('ampm') === '1' && found('am:pm') === '1' && found('AM.PM') === '1', 'alias: אם פם / ampm / am:pm find AM.PM');
+
+    // === Near-spelling city rows (matchCities with the count of locations that contain the text) ===
+    const near = new Map([['סתריה', 3], ['קיסריה', 12], ['קריית אתא', 30], ['קריית ים', 20], ['קריית ביאליק', 25], ['בת ים', 40], ['עזריאל', 2]]);
+    const rows = (text, n) => matchCities(near, text, n).map(c => c.name + (c.same ? '=' : c.exact ? '' : '~')).join(',');
+    assert(rows('ספריה', 11) === '', 'matchCities: no near-spelling cities when 11 locations contain "ספריה" (got ' + rows('ספריה', 11) + ')');
+    assert(rows('ספריה', 0) === 'קיסריה~,סתריה~', 'matchCities: near-spelling cities still offered when nothing contains the text (got ' + rows('ספריה', 0) + ')');
+    assert(rows('קרית אתא', 0) === 'קריית אתא=', 'matchCities: "קרית אתא" offers exactly one city (got ' + rows('קרית אתא', 0) + ')');
+    assert(rows('בת ים', 0) === 'בת ים=', 'matchCities: "בת ים" does not add קריית ים (got ' + rows('בת ים', 0) + ')');
+    assert(rows('עזריאלי', 3) === '', 'matchCities: "עזריאלי" with 3 locations offers no city עזריאל (got ' + rows('עזריאלי', 3) + ')');
+    assert(found('ספריה') === '10', 'search: "ספריה" finds the library');
+
     // === matchCities tests (the cities in the suggestion list; Enter picks only a "same" city) ===
     const counts = new Map([['רמלה', 31], ['חדרה', 42], ['גדרה', 9], ['תל אביב', 375], ['שאג\'ור', 3], ['מגדל', 4], ['מגדל העמק', 20], ['אליפז', 1], ['נוף הגליל', 16], ['רגבה', 2], ['פתח תקווה', 140], ['תקומה', 1], ['לוד', 11], ['לוט', 1], ['ירושלים', 178]]);
     const cityList = text => matchCities(counts, text).map(c => c.name + (c.same ? '=' : c.exact ? '' : '~')).join(',');
@@ -388,14 +504,15 @@ function formatDistance(km) {
     assert(d3 > 30 && d3 < 50, 'getDistance: Beer Sheva to Arad ~40km (got ' + d3.toFixed(1) + ')');
 
     // === formatDistance tests ===
-    assert(formatDistance(0.35) === '350 \u05DE\u05F3', 'formatDistance: 0.35 km is shown as 350 metres');
-    assert(formatDistance(0.04) === '40 \u05DE\u05F3', 'formatDistance: 0.04 km is 40 metres, not "0.0 km"');
-    assert(formatDistance(0.3549) === '350 \u05DE\u05F3', 'formatDistance: metres are rounded to the nearest 10');
-    assert(formatDistance(0) === '0 \u05DE\u05F3', 'formatDistance: 0 is 0 metres');
-    assert(formatDistance(0.994) === '990 \u05DE\u05F3', 'formatDistance: 994 m stays in metres');
-    assert(formatDistance(0.996) === '1.0 \u05E7"\u05DE', 'formatDistance: 996 m rounds up to 1.0 km, never "1000 metres"');
-    assert(formatDistance(1) === '1.0 \u05E7"\u05DE', 'formatDistance: 1 km is shown in km');
-    assert(formatDistance(12.34) === '12.3 \u05E7"\u05DE', 'formatDistance: km keep one decimal');
+    assert(formatDistance(0.35) === '350\u00A0\u05DE\u05F3', 'formatDistance: 0.35 km is shown as 350 metres');
+    assert(formatDistance(0.04) === '40\u00A0\u05DE\u05F3', 'formatDistance: 0.04 km is 40 metres, not "0.0 km"');
+    assert(formatDistance(0.3549) === '350\u00A0\u05DE\u05F3', 'formatDistance: metres are rounded to the nearest 10');
+    assert(formatDistance(0) === '0\u00A0\u05DE\u05F3', 'formatDistance: 0 is 0 metres');
+    assert(formatDistance(0.994) === '990\u00A0\u05DE\u05F3', 'formatDistance: 994 m stays in metres');
+    assert(formatDistance(0.996) === '1.0\u00A0\u05E7"\u05DE', 'formatDistance: 996 m rounds up to 1.0 km, never "1000 metres"');
+    assert(formatDistance(1) === '1.0\u00A0\u05E7"\u05DE', 'formatDistance: 1 km is shown in km');
+    assert(formatDistance(12.34) === '12.3\u00A0\u05E7"\u05DE', 'formatDistance: km keep one decimal');
+    assert(!/ /.test(formatDistance(0.07)) && !/ /.test(formatDistance(12.34)), 'formatDistance: the number and its unit are joined by a no-break space, so they never wrap apart');
     assert(!formatDistance(0.04).includes('0.0'), 'formatDistance: never "0.0"');
 
     // Chain detection lives in scraper.js and is tested by test-scraper.js (node --test)
@@ -414,6 +531,25 @@ function formatDistance(km) {
     assert(!hoursFilter(''), 'hoursFilter: filters empty string');
     assert(!hoursFilter(null), 'hoursFilter: filters null');
     assert(!hoursFilter(undefined), 'hoursFilter: filters undefined');
+
+    // === Chains that MAI does not list: the empty state says so ===
+    const NOT_LISTED = 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.';
+    ['סופר פארם', 'super pharm', 'Super-Pharm', 'סופר-פארם', 'סופרפארם', 'אופיס דיפו', 'Office Depot', 'KSP', 'ksp', 'פלאפון', 'סלקום', '  סופר פארם  ', 'סופר פארם חיפה', 'פלאפון, תל אביב'].forEach(text => {
+        assert(chainNotListedText(text) === NOT_LISTED, 'chainNotListedText: "' + text + '" is a chain MAI does not list');
+    });
+    ['', '   ', 'סופר', 'פארם', 'שופרסל', 'מגה', 'חיפה', 'kspx', 'aksp', 'סלקומים', 'office'].forEach(text => {
+        assert(chainNotListedText(text) === '', 'chainNotListedText: "' + text + '" gets the usual empty-state text');
+    });
+
+    // === "עודכן <date>" in the credit line, from data_meta.json ===
+    assert(formatUpdatedDate('2026-11-26T20:31:58.275Z') === '26.11.2026', 'formatUpdatedDate: d.m.yyyy, no leading zeros');
+    assert(formatUpdatedDate('2026-11-26T22:30:00Z') === '27.11.2026', 'formatUpdatedDate: the date in Israel, not in London (00:30 the next day)');
+    assert(formatUpdatedDate('2026-03-05T08:00:00Z') === '5.3.2026', 'formatUpdatedDate: one-digit day and month');
+    assert(formatUpdatedDate('2026-07-01T00:00:00+03:00') === '1.7.2026', 'formatUpdatedDate: an offset in the text is respected');
+    assert(formatUpdatedDate('2026-02-30T00:00:00Z') === '' && formatUpdatedDate('2026-13-01T00:00:00Z') === '', 'formatUpdatedDate: an impossible date (30 February, month 13) gives nothing, not a rolled-over date');
+    [undefined, null, '', 'yesterday', '2026', '2026-13-45T00:00:00Z', 12345, {}, '<img src=x>'].forEach(value => {
+        assert(formatUpdatedDate(value) === '', 'formatUpdatedDate: ' + JSON.stringify(value) + ' gives no date');
+    });
 
     // === Summary ===
     const summary = document.getElementById('summary');

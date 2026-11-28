@@ -3,35 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="מפת נקודות מיחזור סוללות בישראל - מצא את הנקודה הקרובה אליך">
+    <meta name="description" content="איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה">
     <meta name="theme-color" content="#ffffff"><!-- cw-allow-color: a meta tag cannot read CSS variables; this is --cw-surface-1 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self'; child-src 'none'; object-src 'none'">
-    <title>מפת מיחזור סוללות</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self'; child-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <title>מפת מיחזור סוללות - נקודות איסוף סוללות בישראל</title>
 
     <!-- Open Graph / Social Sharing -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://zeevmala.github.io/solelot/">
-    <meta property="og:title" content="מפת מיחזור סוללות">
-    <meta property="og:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-3,600 נקודות איסוף ברחבי ישראל">
-    <meta property="og:image" content="https://zeevmala.github.io/solelot/icons/icon-512.png">
-    <meta property="og:image:width" content="512">
-    <meta property="og:image:height" content="512">
+    <meta property="og:site_name" content="מפת מיחזור סוללות">
+    <meta property="og:title" content="מפת מיחזור סוללות - נקודות איסוף סוללות בישראל">
+    <meta property="og:description" content="איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה">
+    <meta property="og:image" content="https://zeevmala.github.io/solelot/icons/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:image:type" content="image/png">
+    <meta property="og:image:alt" content="מפה של תל אביב והסביבה עם נקודות איסוף סוללות, והכיתוב: מפת מיחזור סוללות, כ-3,600 נקודות איסוף בישראל">
     <meta property="og:locale" content="he_IL">
     <link rel="canonical" href="https://zeevmala.github.io/solelot/">
 
     <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="מפת מיחזור סוללות">
-    <meta name="twitter:description" content="מצא נקודות מיחזור סוללות בקרבתך - כ-3,600 נקודות איסוף ברחבי ישראל">
-    <meta name="twitter:image" content="https://zeevmala.github.io/solelot/icons/icon-512.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="מפת מיחזור סוללות - נקודות איסוף סוללות בישראל">
+    <meta name="twitter:description" content="איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה">
+    <meta name="twitter:image" content="https://zeevmala.github.io/solelot/icons/og-image.png">
+    <meta name="twitter:image:alt" content="מפה של תל אביב והסביבה עם נקודות איסוף סוללות, והכיתוב: מפת מיחזור סוללות, כ-3,600 נקודות איסוף בישראל">
 
     <!-- Preconnect to external origins (early connection setup) -->
     <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96.png">
 
@@ -54,12 +58,12 @@
 <body>
     <noscript>
         <p style="text-align:center; padding:2rem; font-size:18px; direction:rtl;">
-            אנא הפעל JavaScript כדי להשתמש במפת מיחזור הסוללות.
+            כדי להשתמש במפת מיחזור הסוללות צריך להפעיל JavaScript.
         </p>
     </noscript>
 
     <!-- Skip to main content link for accessibility -->
-    <a href="#map" class="skip-link" aria-label="דלג לתוכן המפה">דלג למפה</a>
+    <a href="#map" class="skip-link">דילוג למפה</a>
 
     <!-- App Header -->
     <header class="app-header" role="banner">
@@ -73,8 +77,8 @@
         </div>
         <div class="header-search">
             <div class="map-search-container">
-                <input type="text" id="search-input" class="map-search-input" placeholder="חיפוש נקודה..." aria-label="חיפוש נקודה" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-owns="search-suggestions" autocomplete="off">
-                <button id="search-clear" class="search-clear-btn" aria-label="נקה חיפוש" type="button">&#10005;</button>
+                <input type="text" id="search-input" class="map-search-input" placeholder="עיר, רחוב או חנות" aria-label="חיפוש לפי עיר, רחוב או חנות" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-owns="search-suggestions" autocomplete="off">
+                <button id="search-clear" class="search-clear-btn" aria-label="ניקוי החיפוש" type="button"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
                 <div id="search-suggestions" class="search-suggestions" role="listbox"></div>
             </div>
         </div>
@@ -98,10 +102,9 @@
     <!-- Empty State Message -->
     <div id="empty-state" class="empty-state" style="display: none;" role="alert">
         <div class="empty-state-content">
-            <span class="empty-icon" aria-hidden="true">🔍</span>
-            <h3>לא נמצאו תוצאות</h3>
-            <p>נסה לשנות את הסינון או לחפש מונח אחר</p>
-            <button id="clear-filters" class="clear-filters-btn" aria-label="נקה את כל הסינונים">נקה סינון</button>
+            <h3>לא נמצאו נקודות איסוף</h3>
+            <p>אפשר לחפש עיר, רחוב או שם של חנות</p>
+            <button id="clear-filters" class="clear-filters-btn" type="button">ניקוי החיפוש</button>
         </div>
     </div>
 
@@ -112,7 +115,7 @@
 
         <!-- Location Sidebar -->
         <aside id="sidebar" class="sidebar" aria-label="פרטי נקודה נבחרת" style="display: none;">
-            <button id="sidebar-close" class="sidebar-close" aria-label="סגור פרטי נקודה">✕</button>
+            <button id="sidebar-close" class="sidebar-close" type="button" aria-label="סגירת פרטי הנקודה"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
             <div class="sidebar-drag-zone" aria-hidden="true"></div>
             <div id="sidebar-content" class="sidebar-content"></div>
         </aside>

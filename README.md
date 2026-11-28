@@ -1,5 +1,9 @@
 # Solelot - מפת מיחזור סוללות בישראל
 
+<img src="docs/screenshot.png" width="320" alt="The map on a phone over Tel Aviv: the nearest collection point is open in the bottom sheet, with its distance and the Waze and Google Maps buttons">
+
+<p dir="rtl">איפה ממחזרים סוללות? כ-3,600 נקודות איסוף ברחבי ישראל על מפה אחת: חיפוש לפי עיר או רחוב, הנקודה הקרובה וניווט אליה.</p>
+
 [![Live Site](https://img.shields.io/badge/Live%20Site-zeevmala.github.io%2Fsolelot-00796B?style=flat-square)](https://zeevmala.github.io/solelot/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
@@ -102,7 +106,7 @@ Schools are left off the map on purpose: a collection bin inside a school is not
       "address": "קיבוץ גלויות 106, תל אביב",
       "city": "תל אביב",
       "type": "store",
-      "chain": "other",
+      "kind": "shop",
       "lat": 32.047942,
       "lng": 34.777016,
       "hours": "בדוק באתר"
@@ -113,7 +117,7 @@ Schools are left off the map on purpose: a collection bin inside a school is not
 
 - `id` is the MAI marker id. It stays the same between refreshes. Ids 1–99 are reserved for `facilities.json`.
 - `type` is `store` (collection point) or `facility` (recycling plant).
-- `chain` is set by the scraper. The page does not use it.
+- `kind` is set by the scraper: `fuel` (petrol station), `shop` or `municipal` (council collection point or street bin). It is left out when MAI gives no business name, or only the address as the name (33 points, Nov 2026).
 - `hours` is the placeholder `"בדוק באתר"` on every record. The page hides it.
 - `description` is optional and is shown when present.
 
@@ -132,7 +136,7 @@ node validate_data.js  # must end with ALL CHECKS PASSED
 
 - **Location data**: the public map of the MAI corporation ([mai.org.il](https://mai.org.il)). The data is not covered by this repository's MIT licence.
 - **Map data and tiles**: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
-- **Map library**: [Leaflet](https://leafletjs.com/) and [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster).
+- **Map library**: [Leaflet](https://leafletjs.com/) and [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster). They are credited here rather than on the map, so the map's credit line keeps the room for the data sources.
 - **Fonts**: IBM Plex Sans, IBM Plex Sans Hebrew and IBM Plex Mono, under the SIL Open Font License 1.1 (`cartowolf/fonts/LICENSE.txt`).
 
 ## License

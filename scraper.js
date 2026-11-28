@@ -9,7 +9,8 @@
  * Usage:
  *   node scraper.js                     fetch live data from MAI
  *   node scraper.js --input raw.json    rebuild from a saved API response
- *   node scraper.js --force             save even if many points disappeared
+ *   node scraper.js --force             save even if many points disappeared or moved,
+ *                                       or many overrides match no marker
  *
  * It writes locations.json and data_meta.json (where the data came from, when,
  * and how many markers were kept, skipped and dropped).
@@ -53,6 +54,14 @@ const MIN_POINTS = 1000;
 const MIN_SHARE_OF_PREVIOUS = 0.9;
 // Two records with the same name, city and street closer than this are one point listed twice
 const SAME_PLACE_METERS = 100;
+// Two records of one chain closer than this, on one street, are one shop listed twice (see dropSameShop)
+const SAME_SHOP_METERS = 50;
+// A point whose pin is further than this from where it was in the previous file has "moved"
+const MOVED_METERS = 100;
+// Refuse to save when more than this share of the previous points was removed or moved
+const MAX_SHARE_REMOVED_OR_MOVED = 0.05;
+// Refuse to save when more than this share of the overrides matches no marker
+const MAX_SHARE_OVERRIDES_UNMATCHED = 0.1;
 
 // Israel bounding box (same numbers as app.js and validate_data.js)
 const BOUNDS = { minLat: 29, maxLat: 34, minLng: 34, maxLng: 36 };
@@ -74,41 +83,37 @@ function isMarkedInactive(name) {
 // Each pattern must match a whole word, so "אלישיב" (a moshav) is not a "ישיבה"
 // and "התיכונים" (a street) is not a "תיכון".
 const SCHOOL_WORDS = [
-    'בית ה?ספר', 'בתי[ -]ה?ספר', 'בי"ס', 'ביה"ס', 'ה?תיכון', 'חט"ב', 'חטיבת', 'ישיבה', 'ישיבת',
-    'אולפנה', 'אולפנת', 'ממ"ד', 'תלמוד תורה', 'גני ילדים', 'בית חינוך', 'קרי?ית ה?חינוך'
+    'בית ה?ספר', 'בתי[ -]ה?ספר', 'בי"ס', 'ביה"ס', 'ה?תיכון', 'תיכונט', 'חט"ב', 'חטיבת', 'ישיבה', 'ישיבת',
+    'אולפנה', 'אולפנת', 'ממ"ד', 'חמ"ד', 'תלמוד תורה', 'גני ילדים', 'בית חינוך', 'קרי?ית ה?חינוך'
 ];
-const SCHOOL_PATTERN = new RegExp('(^|[^א-ת])(' + SCHOOL_WORDS.join('|') + ')($|[^א-ת])');
+// "מול בית הספר" / "ליד התיכון": opposite or next to a school is not inside it
+const SCHOOL_PATTERN = new RegExp('(^|[^א-ת])(?<!(?:מול|ליד) )(' + SCHOOL_WORDS.join('|') + ')($|[^א-ת])');
+// "חטיבת אלכסנדרוני 2": a brigade name followed by a house number is a street address.
+// "חטיבת ביניים 6" / "חטיבת הביניים 2" is a junior high with a number, not a street.
+const BRIGADE_STREET = /חטיבת (?!ה?ביניים )[א-ת"']+ \d+/g;
 
 function isSchool(name) {
     // "חטיבת הנח"ל 30" is a street; petrol stations are named after the street they are on
     if (name.startsWith('תחנת דלק')) return false;
-    return SCHOOL_PATTERN.test(name);
+    return SCHOOL_PATTERN.test(name.replace(BRIGADE_STREET, ''));
 }
 
-// Order matters: the first match wins, so specific names come first.
-const CHAIN_PATTERNS = [
-    ['superpharm', ['סופר-פארם', 'סופר פארם', 'סופרפארם']],
-    ['shufersal', ['שופרסל']],
-    ['office_depot', ['אופיס דיפו']],
-    ['home_center', ['הום סנטר']],
-    ['pelephone', ['פלאפון']],
-    ['cellcom', ['סלקום']],
-    ['rami_levy', ['רמי לוי']],
-    ['big_electric', ['ביג אלקטריק']],
-    ['medton', ['מדטון']],
-    ['bug', ['באג']],
-    ['ikea', ['איקאה']],
-    ['mega', ['מגה']],
-    ['gas_station', ['תחנת דלק']],
-    ['school', ['בית ספר', 'ביה"ס', 'בי"ס']],
-    ['municipality', ['רשות מקומית', 'מוקד איסוף', 'מרכז איסוף', 'עיריית', 'מועצה']]
-];
-
-function determineChain(name) {
-    for (const [chain, keywords] of CHAIN_PATTERNS) {
-        if (keywords.some(k => name.includes(k))) return chain;
-    }
-    return 'other';
+// What kind of point this is, shown to users as one short line: "fuel" (a petrol station),
+// "municipal" (a council collection point or street e-waste bin) or "shop".
+// rawName is the business name as MAI wrote it, before the clean-up turns
+// "עיריית חיפה - מוקד איסוף" into "מוקד איסוף - ...". Category 14 (small electrical items)
+// is used only as a sign of a municipal point; the map does not say what else a point takes.
+// Checked by hand on a seeded sample of 40 (2026-11-27, see docs/brain/DECISIONS.md).
+// "YELLOW - חגור - פז - משווק": YELLOW is Paz's shop brand, and with the word פז the record is a Paz station
+const FUEL_NAME = /^תחנת דלק|אלונית|דור אלון|^YELLOW.*(^|[^א-ת])פז($|[^א-ת])/;
+const MUNICIPAL_NAME = /רשות מקומית|חשמלית|מועצה|עיריית|מוקד איסוף|מרכז איסוף/;
+const SHOPS_WITH_ELECTRICAL = /^(מחסני חשמל|איידיגיטל)/; // chains that also take category 14
+function pointKind(rawName, categories) {
+    if (!rawName) return undefined;
+    if (FUEL_NAME.test(rawName)) return 'fuel';
+    if (MUNICIPAL_NAME.test(rawName)) return 'municipal';
+    if (categories.includes('14') && !SHOPS_WITH_ELECTRICAL.test(rawName)) return 'municipal';
+    return 'shop';
 }
 
 // MAI and OpenStreetMap spell some cities differently. One spelling per city,
@@ -151,7 +156,25 @@ const CITY_ALIASES = {
     'כמכמורת': 'מכמורת',
     'שדה עוזיה': 'שדה עוזיהו',
     'פרדס חנה-כרכור': 'פרדס חנה',
-    'פרדס חנה כרכור': 'פרדס חנה'
+    'פרדס חנה כרכור': 'פרדס חנה',
+    // Found in the "good to great" audit (26 November 2026)
+    'ביתר עלית': 'ביתר עילית',
+    'באקה אל גארבייה': 'באקה אל-גרבייה',
+    'כפר תמרה': 'טמרה',
+    'כפר טורעאן': 'טורעאן',
+    'כוכב יאיר': 'כוכב יאיר צור יגאל',
+    'מועצה אזורית משגב': 'משגב',
+    "גוש חלב ג'ש": 'גוש חלב',
+    'נוה מבטח': 'נווה מבטח',
+    'סילבר': 'כפר סילבר',
+    'פעמי תשז': 'פעמי תש"ז',
+    'דגניה א': "דגניה א'",
+    'הילה': 'מצפה הילה',
+    'גרנות': 'גרנות הגליל',
+    'שדה תרומות': 'שדי תרומות',
+    'צ.צלמון': 'צומת צלמון',
+    'א.ת.עמק חפר': 'עמק חפר',
+    'מחלף M הדרך': 'מחלף אם הדרך'
 };
 
 function normalizeCity(city) {
@@ -168,7 +191,8 @@ function normalizeCity(city) {
     tidy = tidy
         .replace(/^(מועצה מקומית|מ\.מ\.)\s+/, '')
         .replace(/^(קיבוץ|מושב)\s+/, '') // "קיבוץ שפיים" and "שפיים" are one place
-        .replace(/^קרית /, 'קריית '); // official spelling has two yods
+        .replace(/^קרית /, 'קריית ') // official spelling has two yods
+        .replace(/\s*\([^()]*\)$/, ''); // "עובדה (שיכון משפחות)" -> "עובדה"
     return CITY_ALIASES[tidy] || tidy;
 }
 
@@ -178,7 +202,7 @@ const HYPHEN_SEPARATOR = /\s+-\s*|\s*-\s+/;
 
 // "תל אביב - רשות מקומית - מרכז איסוף - תחנת תברואה" -> "מוקד איסוף - תחנת תברואה"
 // The boilerplate parts say nothing about the place, so only the rest is kept.
-const MUNICIPAL_BOILERPLATE = ['רשות מקומית', 'מוקד איסוף', 'מרכז איסוף', 'אחראי לפינוי פסולת'];
+const MUNICIPAL_BOILERPLATE = ['רשות מקומית', 'מוקד איסוף', 'מרכז איסוף', 'אחראי לפינוי פסולת', 'מוקד איסוף עירוני'];
 function municipalName(rawName, city, fallback) {
     const parts = [];
     for (const part of rawName.split(HYPHEN_SEPARATOR).map(clean)) {
@@ -200,22 +224,68 @@ function decodeEntities(text) {
     });
 }
 
-// Decode HTML entities, remove tags, collapse whitespace and drop stray separators at the ends
+// Decode HTML entities, remove tags, collapse whitespace and drop stray separators at the ends.
+// A hyphen at the end after a number is a floor below ground typed right to left ("קומה 1-" = floor -1):
+// it is written "(1-)", as MAI writes it elsewhere, so the text does not end in a separator.
 function clean(value) {
     return decodeEntities(String(value == null ? '' : value))
         .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
         .replace(/^[\s,.\-]+|[\s,.]+$/g, '')
+        .replace(/(\d+)-$/, '($1-)')
+        .replace(/[\s\-]+$/, '')
         .trim();
 }
+
+// The street names of שפרעם come with a cut-off Arabic copy ("זאהר עומר א - זידאני ظاهر العم") and a
+// land-registry parcel instead of a house number ("10262/31", "10301/10302/23/2"). The page is Hebrew
+// and a parcel number does not help anyone find the place, so both are removed.
+const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+/g;
+const PARCEL_NUMBER = /\d{4,}(\/\d+)+/g;
+function withoutForeignText(text) {
+    return clean(clean(text).replace(ARABIC_SCRIPT, ' '));
+}
+
+// "חשמלית - חשמלית - מקס שיין 9" -> "חשמלית - מקס שיין 9". A name without a repeat is returned unchanged.
+function withoutRepeatedParts(name) {
+    const parts = name.split(HYPHEN_SEPARATOR).map(clean);
+    const unique = parts.filter((part, index) => part && parts.indexOf(part) === index);
+    return unique.length < parts.length ? unique.join(' - ') : name;
+}
+
+// "מוקד איסוף - חשמלית" -> "חשמלית": municipal boilerplate in a place field says nothing about the place
+function withoutBoilerplate(text) {
+    const parts = text.split(HYPHEN_SEPARATOR).map(clean);
+    const kept = parts.filter(part => part && !MUNICIPAL_BOILERPLATE.includes(part));
+    return kept.length < parts.length ? kept.join(' - ') : text;
+}
+
+// "רחוב הטייסים" -> "הטייסים", at the start of a street, of a comma part or of a name part ("מגה - רחוב דרך הים 26")
+const STREET_PREFIX = /(^|,\s*|\s-\s)(רחוב|רח['׳.])\s+(?=\S)/g;
+function withoutStreetPrefix(text) {
+    return text.replace(STREET_PREFIX, '$1');
+}
+
+// Shop names do not need the company form: "שופרסל סטוק בע"מ" -> "שופרסל סטוק"
+const COMPANY_SUFFIX = /\s+בע["'״]{1,2}מ(?=$|[\s,])/g;
+
+// True when text ends with part as a whole part of it ("מוקד איסוף - מרכז הטייסים" ends with "מרכז הטייסים")
+function endsWithPart(text, part) {
+    if (!part || !text.endsWith(part)) return false;
+    return text === part || /[\s\-]$/.test(text.slice(0, -part.length));
+}
+
+// A name part that is a street with a house number ("סמטת רוזמרין 17"), used when the address has no street
+const STREET_WITH_NUMBER = /[א-ת"'׳״] \d{1,3}$/;
 
 // custom_field_data is [{ name, value }, ...] -> { city, street, ... }
 function customFields(marker) {
     const fields = {};
     const list = Array.isArray(marker.custom_field_data) ? marker.custom_field_data : [];
     for (const field of list) {
-        if (field && field.name) fields[field.name] = clean(field.value);
+        if (field && field.name) fields[field.name] = withoutForeignText(field.value);
     }
+    if (fields.house_number) fields.house_number = clean(fields.house_number.replace(PARCEL_NUMBER, ' '));
     return fields;
 }
 
@@ -270,10 +340,9 @@ async function fetchMarkers() {
  * Turn one MAI marker into our location format.
  * Returns { location } on success or { skip: 'reason' } so the caller can
  * count why markers were dropped (nothing is dropped silently).
- * cityByCoord: Map of coordKey -> city, used when MAI has no city field.
- * overrides:   manual corrections from data_overrides.json, keyed by marker id.
+ * overrides: manual corrections from data_overrides.json, keyed by marker id.
  */
-function transformMarker(marker, cityByCoord, overrides = {}) {
+function transformMarker(marker, overrides = {}) {
     if (!marker || typeof marker !== 'object') return { skip: 'not an object' };
     if (!/^\d+$/.test(String(marker.id))) return { skip: 'bad id' };
     if (String(marker.map_id) !== LIVE_MAP_ID) return { skip: 'old map' };
@@ -294,7 +363,7 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
 
     const fields = customFields(marker);
     const titleParts = String(marker.title || '').split(/<br\s*\/?>/i);
-    const rawName = clean((fields.business_name || clean(titleParts[0])).replace(CHAIN_CODE_SUFFIX, ''));
+    const rawName = clean((fields.business_name || clean(titleParts[0])).replace(CHAIN_CODE_SUFFIX, '').replace(COMPANY_SUFFIX, ''));
     if (!rawName) return { skip: 'no name' };
     if (isMarkedInactive(rawName)) return { skip: 'marked inactive by MAI' };
 
@@ -304,18 +373,22 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
     const titleCity = !hasFields && titleBits.length > 1 ? titleBits[titleBits.length - 1] : '';
     titleBits = titleBits.filter(bit => bit !== titleCity);
 
-    const rawCity = clean(override.city || fields.city || titleCity || cityByCoord.get(coordKey(lat, lng)) || '');
+    const rawCity = clean(override.city || fields.city || titleCity || '');
     const city = normalizeCity(rawCity);
     if (!city) return { skip: 'no city' };
 
-    let street = hasFields
+    let street = withoutStreetPrefix(hasFields
         ? joinStreet(fields.street || '', fields.house_number || '')
-        : titleBits.join(', ');
-    let place = fields.neighborhood || '';
-    // The city is added once at the end, so a street or place that is only
-    // the city again says nothing ("המלאכה 2, רעננה, רעננה")
-    if (street === city || street === rawCity) street = '';
-    if (place === city || place === rawCity) place = '';
+        : titleBits.join(', '));
+    let place = withoutStreetPrefix(withoutBoilerplate(fields.neighborhood || ''));
+    // The city is added once at the end, so a part of the street or place that is only the city again
+    // says nothing ("המלאכה 2, רעננה, רעננה", "מרכז ביג, כרמיאל", "מודיעין-עילית")
+    const isTheCity = text => text === city || text === rawCity || text.replace(/-/g, ' ') === city || CITY_ALIASES[text] === city;
+    const withoutCity = text => (text.split(',').some(part => isTheCity(clean(part)))
+        ? text.split(',').map(clean).filter(part => part && !isTheCity(part)).join(', ')
+        : text);
+    street = withoutCity(street);
+    place = withoutCity(place);
 
     let name;
     if (!hasFields) {
@@ -325,22 +398,34 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
     } else {
         name = rawName;
     }
+    name = withoutRepeatedParts(withoutStreetPrefix(name));
 
-    // Leave out address parts that only repeat the name
+    // Leave out address parts that only repeat the name, and the place when the name ends with it
+    // (unless the place is all the address has besides the city)
     const addressParts = [];
     if (street && street !== name) addressParts.push(street);
-    if (place && place !== name && !street.includes(place)) addressParts.push(place);
+    const placeInName = endsWithPart(name, place) && addressParts.length > 0;
+    if (place && place !== name && !street.includes(place) && !placeInName) addressParts.push(place);
+    // An address that is only the city, for a name that ends with a street and number
+    // ("חשמלית - סמטת רוזמרין 17" | "חולון"): the street goes in the address too
+    const nameParts = name.split(HYPHEN_SEPARATOR).map(clean);
+    if (addressParts.length === 0 && nameParts.length > 1 && STREET_WITH_NUMBER.test(nameParts[nameParts.length - 1])) {
+        addressParts.push(nameParts[nameParts.length - 1]);
+    }
     addressParts.push(city);
 
     // Some records have the address typed in as the business name
     // ("ההשראה 2, שלומי"). The same text twice helps nobody, so such a point
     // gets the generic name that nameless points get.
     const withoutCommas = text => text.replace(/,/g, '');
-    if (withoutCommas(name) === withoutCommas(addressParts.join(', '))) {
+    const nameIsAddress = withoutCommas(name) === withoutCommas(addressParts.join(', '));
+    if (nameIsAddress) {
         name = 'נקודת איסוף - ' + (addressParts.slice(0, -1).join(', ') || city);
     }
 
-    if (isSchool(name) || isSchool(rawName) || isSchool(place)) return { skip: 'school (not open to the public)' };
+    // A petrol station's place field names the junction or street it is on ("צומת גולני-בית ספר כדורי")
+    const placeIsSchool = !rawName.startsWith('תחנת דלק') && isSchool(place);
+    if (isSchool(name) || isSchool(rawName) || placeIsSchool) return { skip: 'school (not open to the public)' };
 
     return {
         location: {
@@ -349,13 +434,15 @@ function transformMarker(marker, cityByCoord, overrides = {}) {
             address: addressParts.join(', ').substring(0, 300),
             city: city,
             type: 'store',
-            chain: determineChain(rawName),
+            // no kind when there is no business name, or the name is only the address: nothing to tell it by
+            ...(hasFields && !nameIsAddress ? { kind: pointKind(rawName, categories) } : {}),
             lat: lat,
             lng: lng,
             hours: 'בדוק באתר' // MAI does not publish opening hours
         },
         // Kept only while building; removed before saving
         detail: place || street,
+        addressParts,
         street: addressParts.length > 1 ? addressParts[0].split(',')[0].trim() : '', // '' = the address is only the city
         // false when "street" above is really a place name (MAI's neighbourhood field)
         hasStreetField: Boolean(street) && addressParts[0] === street
@@ -394,6 +481,11 @@ function disambiguate(entries) {
             if (entry.detail && !loc.name.includes(entry.detail)) {
                 loc.name = (loc.name + ' - ' + entry.detail).substring(0, 200);
                 renamed++;
+                // the name now says the place, so the address need not say it again
+                const parts = entry.addressParts || [];
+                if (parts.length > 2 && parts.includes(entry.detail)) {
+                    loc.address = parts.filter(part => part !== entry.detail).join(', ').substring(0, 300);
+                }
             }
             if (!keptByName.has(loc.name)) keptByName.set(loc.name, []);
             const twins = keptByName.get(loc.name);
@@ -537,6 +629,85 @@ function dropStacked(entries) {
     return { entries: kept, groups };
 }
 
+// Names this scraper gives to points without a shop name of their own. They are not a chain:
+// two municipal points 50 m apart are usually two buildings (a library and a community centre).
+const GENERIC_NAMES = ['מוקד איסוף', 'נקודת איסוף'];
+
+// The chain of a shop: the first part of its name ("רמי לוי - תקשורת - קניון עטרות" -> "רמי לוי"),
+// and for a fuel station the brand too ("תחנת דלק - פז YELLOW"). '' for a generic name.
+const chainByName = new Map(); // shopChain depends on the name only, and runs once per override
+function shopChain(name) {
+    if (chainByName.has(name)) return chainByName.get(name);
+    const parts = name.split(HYPHEN_SEPARATOR).map(clean);
+    const chain = parts[0] === 'תחנת דלק' ? parts.slice(0, 2).join(' - ') : parts[0];
+    chainByName.set(name, GENERIC_NAMES.includes(chain) ? '' : chain);
+    return chainByName.get(name);
+}
+
+// The house number in a street ("הרצל 10" -> "10"). A road number ("כביש 40") is not a house number.
+function houseNumber(street) {
+    return (street.replace(/כביש \d+/g, '').match(/\d+/g) || []).join(' ');
+}
+
+// MAI lists some shops twice: "רמי לוי" and "רמי לוי - תקשורת" (the phone counter inside it), or one
+// branch under two names. Two entries are one shop when they have the same shopChain and the same city,
+// are at most SAME_SHOP_METERS apart, and have the same street (streetKey) or one of them has no house
+// number. Two cities are never one shop: one shop listed under two cities needs an override that says
+// which label fits the pin (אייס 343950 "קריית אתא" and 344152 "חיפה", 36 m apart).
+// Two different house numbers are never one shop: אבי סופר at אלנבי 113, 122 and 124 are three shops
+// within 23 m. So a record without a house number that sits within SAME_SHOP_METERS of numbered shops
+// of its chain at two or more different addresses (street and number) could be any of them: it is
+// merged with none.
+// The lower id stays. Returns the entries that stay and the dropped ids ({ id, sameAs }).
+function dropSameShop(entries) {
+    // each chain is worked out once: the report of overrides without effect runs this step once per override
+    const chainOf = new Map(entries.map(entry => [entry, shopChain(entry.location.name)]));
+    const byChainCity = new Map(); // chain + city -> entries
+    for (const entry of entries) {
+        const key = chainOf.get(entry) + '\0' + entry.location.city;
+        if (!byChainCity.has(key)) byChainCity.set(key, []);
+        byChainCity.get(key).push(entry);
+    }
+    // the addresses with a house number around each record without one (same chain, same city, within
+    // SAME_SHOP_METERS): street and number, since הרצל 10 and ויצמן 10 are two shops
+    const numbersAround = new Map();
+    for (const entry of entries) {
+        if (houseNumber(entry.street) || !chainOf.get(entry)) continue;
+        const sameChainCity = byChainCity.get(chainOf.get(entry) + '\0' + entry.location.city);
+        numbersAround.set(entry, new Set(sameChainCity
+            .filter(other => other !== entry && distanceMeters(entry.location, other.location) <= SAME_SHOP_METERS)
+            .filter(other => houseNumber(other.street))
+            .map(other => streetKey(other.street) + ' ' + houseNumber(other.street))));
+    }
+    const between = entry => numbersAround.has(entry) && numbersAround.get(entry).size > 1;
+
+    const byChain = new Map(); // chain + city -> entries kept so far
+    const dropped = [];
+    const gone = new Set();
+    for (const entry of [...entries].sort((a, b) => a.location.id - b.location.id)) {
+        const chain = chainOf.get(entry);
+        if (!chain) continue;
+        const key = chain + '\0' + entry.location.city;
+        if (!byChain.has(key)) byChain.set(key, []);
+        const number = houseNumber(entry.street);
+        const twin = byChain.get(key).find(other => {
+            if (other.location.city !== entry.location.city) return false;
+            const otherNumber = houseNumber(other.street);
+            if (number && otherNumber && number !== otherNumber) return false;
+            if (number && otherNumber && streetKey(entry.street) !== streetKey(other.street)) return false;
+            if ((number && between(other)) || (otherNumber && between(entry))) return false;
+            return distanceMeters(entry.location, other.location) <= SAME_SHOP_METERS;
+        });
+        if (twin) {
+            dropped.push({ id: entry.location.id, sameAs: twin.location.id });
+            gone.add(entry);
+        } else {
+            byChain.get(key).push(entry);
+        }
+    }
+    return { entries: entries.filter(entry => !gone.has(entry)), dropped };
+}
+
 function loadFacilities(file) {
     if (!fs.existsSync(file)) {
         console.warn('facilities.json not found - no facilities will be added');
@@ -551,27 +722,18 @@ function loadOverrides(file) {
     return JSON.parse(fs.readFileSync(file, 'utf8')).overrides || {};
 }
 
-// The previous locations.json, or null when there is none yet
+// The previous locations.json: { locations } (null when there is none yet), or { error }
+// when the file is there but cannot be read. The 90 % and 5 % guards compare with it,
+// so an unreadable file must stop the run, not switch them off.
 function loadPrevious(file) {
-    if (!fs.existsSync(file)) return null;
+    if (!fs.existsSync(file)) return { locations: null };
     try {
         const previous = JSON.parse(fs.readFileSync(file, 'utf8')).locations;
-        return Array.isArray(previous) ? previous : null;
+        if (!Array.isArray(previous)) return { error: 'it has no "locations" list' };
+        return { locations: previous };
     } catch (e) {
-        console.warn('Could not read previous locations.json: ' + e.message);
-        return null;
+        return { error: e.message };
     }
-}
-
-// Cities from the previous run, for the few markers MAI publishes without one
-function cityCache(previous) {
-    const cache = new Map();
-    for (const loc of previous || []) {
-        if (loc.city && loc.city !== 'Unknown' && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
-            cache.set(coordKey(loc.lat, loc.lng), loc.city);
-        }
-    }
-    return cache;
 }
 
 // Markers without a usable id go last; transformMarker skips them anyway
@@ -579,26 +741,9 @@ function numericId(marker) {
     return marker && /^\d+$/.test(String(marker.id)) ? Number(marker.id) : Infinity;
 }
 
-function buildLocations(markers, cityByCoord, overrides = {}) {
-    // MAI does not promise an order. Sorting first means the same markers always
-    // give the same file, whichever order they arrive in.
-    const sorted = [...markers].sort((a, b) => {
-        const idA = numericId(a);
-        const idB = numericId(b);
-        return idA === idB ? 0 : (idA < idB ? -1 : 1);
-    });
-
-    const skipped = {};
-    const entries = [];
-    for (const marker of sorted) {
-        const result = transformMarker(marker, cityByCoord, overrides);
-        if (result.skip) {
-            skipped[result.skip] = (skipped[result.skip] || 0) + 1;
-        } else {
-            entries.push(result);
-        }
-    }
-
+// The steps after transformMarker: stacked groups, repeats, one shop listed twice, then names told
+// apart. Takes the entries in id order; changes their location objects (disambiguate renames them).
+function placeEntries(entries) {
     // Stacked groups go first: "same name, same coordinate" is only a repeat
     // when the addresses agree, and after this step they do.
     const { entries: placed, groups: stacked } = dropStacked(entries);
@@ -617,12 +762,81 @@ function buildLocations(markers, cityByCoord, overrides = {}) {
         return true;
     });
 
-    const { entries: named, renamed, dropped: sameName, farTwins } = disambiguate(unique);
+    // One shop under two names ("רמי לוי" and "רמי לוי - תקשורת"), before names are told apart
+    const { entries: shops, dropped: sameShop } = dropSameShop(unique);
+
+    const { entries: named, renamed, dropped: sameName, farTwins } = disambiguate(shops);
     const locations = named.map(entry => entry.location).sort((a, b) => a.id - b.id);
+
+    // why each record that is not on the map went (id -> reason)
+    const mergedAway = new Map([
+        ...sameSpot.map(d => [d.id, 'same point as ' + d.sameAs]),
+        ...sameShop.map(d => [d.id, 'same shop as ' + d.sameAs]),
+        ...sameName.map(d => [d.id, 'same name and place as ' + d.sameAs]),
+        ...stacked.flatMap(group => group.ids.map(id => [id, 'stacked on one coordinate with other streets']))
+    ]);
+    return { locations, stacked, sameSpot, sameShop, sameName, renamed, farTwins, mergedAway };
+}
+
+// A copy that placeEntries may change without touching the original
+function copyEntry(entry) {
+    return { ...entry, location: { ...entry.location } };
+}
+
+function buildLocations(markers, overrides = {}) {
+    // MAI does not promise an order. Sorting first means the same markers always
+    // give the same file, whichever order they arrive in.
+    const sorted = [...markers].sort((a, b) => {
+        const idA = numericId(a);
+        const idB = numericId(b);
+        return idA === idB ? 0 : (idA < idB ? -1 : 1);
+    });
+
+    const skipped = {};
+    const results = sorted.map(marker => transformMarker(marker, overrides));
+    for (const result of results) {
+        if (result.skip) skipped[result.skip] = (skipped[result.skip] || 0) + 1;
+    }
+    const place = list => placeEntries(list.filter(result => !result.skip).map(copyEntry));
+    const built = place(results);
+    const { locations, stacked, sameSpot, sameShop, sameName, renamed, farTwins } = built;
 
     // An override whose id is not in the MAI response does nothing any more
     const markerIds = new Set(markers.filter(m => m && typeof m === 'object').map(m => String(m.id)));
     const overridesUnmatched = Object.keys(overrides).filter(id => !markerIds.has(id)).sort((a, b) => a - b);
+
+    // Nor does one that leaves the map the same as without it. transformMarker reads only its own
+    // marker's override, so "without it" is that marker transformed with none, everything else the same.
+    // When that gives the same record (or a skip again), the rest of the build cannot change; otherwise
+    // the build after transformMarker is run again and the locations are compared.
+    const fate = (build, result, id) => result.skip ? 'skipped: ' + result.skip
+        : (build.mergedAway.get(Number(id)) || 'the record is the same without it');
+    const sameLocations = list => list.length === locations.length &&
+        list.every((loc, i) => JSON.stringify(loc) === JSON.stringify(locations[i]));
+    const overridesWithoutEffect = [];
+    const indexesOf = new Map(); // marker id -> its places in sorted
+    sorted.forEach((marker, i) => {
+        if (!marker || typeof marker !== 'object') return;
+        const id = String(marker.id);
+        if (!indexesOf.has(id)) indexesOf.set(id, []);
+        indexesOf.get(id).push(i);
+    });
+    for (const id of Object.keys(overrides).filter(id => markerIds.has(id)).sort((a, b) => a - b)) {
+        const indexes = indexesOf.get(id);
+        const without = results.slice();
+        for (const i of indexes) without[i] = transformMarker(sorted[i], {});
+        const same = indexes.every(i => (results[i].skip && without[i].skip) ||
+            (!results[i].skip && !without[i].skip && JSON.stringify(results[i]) === JSON.stringify(without[i])));
+        const last = without[indexes[indexes.length - 1]];
+        if (same) {
+            overridesWithoutEffect.push({ id: Number(id), reason: fate(built, last, id) });
+            continue;
+        }
+        const rebuilt = place(without);
+        if (sameLocations(rebuilt.locations)) {
+            overridesWithoutEffect.push({ id: Number(id), reason: fate(rebuilt, last, id) });
+        }
+    }
 
     return {
         locations,
@@ -631,12 +845,14 @@ function buildLocations(markers, cityByCoord, overrides = {}) {
             sameSpot: sameSpot.length,
             renamed,
             dropped: sameName.length,
+            sameShop: sameShop.length,
             stackedGroups: stacked.length,
             stackedPoints: stacked.reduce((sum, group) => sum + group.ids.length, 0)
         },
-        dropped: { sameSpot, sameName, stacked },
+        dropped: { sameSpot, sameName, sameShop, stacked },
         farTwins,
-        overridesUnmatched
+        overridesUnmatched,
+        overridesWithoutEffect
     };
 }
 
@@ -650,6 +866,52 @@ function checkCount(newCount, previousCount, force) {
         return 'Only ' + newCount + ' points, under 90 % of the ' + previousCount +
             ' in the current locations.json. Check the Skipped and dropped lines above; ' +
             'if the drop is real, run again with --force.';
+    }
+    return null;
+}
+
+// What a refresh changed, as lists of ids: previous and stores are the collection
+// points of the old and the new locations.json. "moved" = the pin is more than
+// MOVED_METERS from where it was. A count that stays the same can hide all of these.
+function changesSince(previous, stores) {
+    const before = new Map(previous.map(loc => [loc.id, loc]));
+    const nowIds = new Set(stores.map(loc => loc.id));
+    const changes = { added: [], removed: [], moved: [], renamed: [], cityChanged: [] };
+    for (const loc of stores) {
+        const old = before.get(loc.id);
+        if (!old) {
+            changes.added.push(loc.id);
+            continue;
+        }
+        if (distanceMeters(old, loc) > MOVED_METERS) changes.moved.push(loc.id);
+        if (old.name !== loc.name) changes.renamed.push(loc.id);
+        if (old.city !== loc.city) changes.cityChanged.push(loc.id);
+    }
+    for (const loc of previous) {
+        if (!nowIds.has(loc.id)) changes.removed.push(loc.id);
+    }
+    for (const list of Object.values(changes)) list.sort((a, b) => a - b);
+    return changes;
+}
+
+// Returns the reason not to save, or null. A large change may be real (MAI
+// re-imported its map), but a person should look at it first.
+function checkChanges(changes, previousCount, force) {
+    const gone = changes.removed.length + changes.moved.length;
+    if (!force && gone > previousCount * MAX_SHARE_REMOVED_OR_MOVED) {
+        return gone + ' of ' + previousCount + ' points were removed or moved more than ' + MOVED_METERS +
+            ' m (over 5 %). Check the Changes lines above; if the change is real, run again with --force.';
+    }
+    return null;
+}
+
+// Returns the reason not to save, or null. Overrides are keyed by MAI marker id,
+// so when many stop matching, MAI has probably given its markers new ids and
+// every known-wrong pin would come back.
+function checkOverrides(unmatchedCount, overrideCount, force) {
+    if (!force && unmatchedCount > overrideCount * MAX_SHARE_OVERRIDES_UNMATCHED) {
+        return unmatchedCount + ' of ' + overrideCount + ' overrides match no MAI marker - ' +
+            'MAI may have renumbered its markers. If that is expected, run again with --force.';
     }
     return null;
 }
@@ -680,7 +942,9 @@ function writeJsonAtomic(file, data) {
  * The whole refresh. options:
  *   dir    folder with facilities.json, data_overrides.json and the output (default: this folder)
  *   input  path of a saved API response; without it the live API is fetched
- *   force  save even when the count fell under 90 % of the previous file
+ *   force  save even when the count fell under 90 % of the previous file, over 5 % of
+ *          its points were removed or moved, over 10 % of the overrides match nothing, or the
+ *          previous locations.json cannot be read or has no collection points
  * Returns the object written to data_meta.json.
  */
 async function run(options = {}) {
@@ -707,13 +971,17 @@ async function run(options = {}) {
     }
     console.log('Fetched ' + markers.length + ' markers');
 
-    const previous = loadPrevious(files.output);
-    const built = buildLocations(markers, cityCache(previous), loadOverrides(files.overrides));
-    const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched } = built;
+    const { locations: previous, error: previousError } = loadPrevious(files.output);
+    const overrides = loadOverrides(files.overrides);
+    const built = buildLocations(markers, overrides);
+    const { locations: stores, skipped, stats, dropped, farTwins, overridesUnmatched, overridesWithoutEffect } = built;
     console.log('Skipped:', skipped);
-    console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped) + ', names disambiguated: ' + stats.renamed);
+    console.log('Duplicates removed: ' + (stats.sameSpot + stats.dropped + stats.sameShop) + ', names disambiguated: ' + stats.renamed);
     for (const d of [...dropped.sameSpot, ...dropped.sameName]) {
         console.log('  duplicate ' + d.id + ' dropped, same point as ' + d.sameAs);
+    }
+    for (const d of dropped.sameShop) {
+        console.log('  duplicate ' + d.id + ' dropped, same shop as ' + d.sameAs);
     }
     console.log('Stacked coordinates dropped: ' + stats.stackedPoints + ' points in ' + stats.stackedGroups +
         ' groups (one coordinate, different streets)');
@@ -729,6 +997,10 @@ async function run(options = {}) {
     if (overridesUnmatched.length > 0) {
         console.warn('Overrides not matched by any MAI marker: [' + overridesUnmatched.join(', ') + ']');
     }
+    if (overridesWithoutEffect.length > 0) {
+        console.warn('Overrides without effect (the map is the same without them; delete them when the reason is settled):');
+        for (const o of overridesWithoutEffect) console.warn('  ' + o.id + ': ' + o.reason);
+    }
 
     const facilities = loadFacilities(files.facilities);
     const usedIds = new Set(stores.map(s => s.id));
@@ -738,8 +1010,39 @@ async function run(options = {}) {
     const locations = [...facilities, ...stores];
 
     // Refuse to overwrite good data with a broken response (e.g. API schema change)
-    const previousStores = previous ? previous.filter(loc => loc.type === 'store').length : null;
-    const problem = checkCount(stores.length, previousStores, options.force);
+    const previousStores = previous ? previous.filter(loc => loc.type === 'store') : null;
+    let problem = checkCount(stores.length, previousStores && previousStores.length, options.force);
+    // A previous file with no collection points is as useless to the guards as an unreadable one:
+    // 90 % and 5 % of 0 let anything through.
+    const previousProblem = previousError ? 'could not be read (' + previousError + ')'
+        : (previousStores && previousStores.length === 0 ? 'has no collection points' : null);
+    if (!problem && previousProblem) {
+        if (options.force) {
+            console.warn('The previous locations.json ' + previousProblem + '; saving anyway (--force).');
+        } else {
+            problem = 'The previous locations.json ' + previousProblem + ', so the count and ' +
+                'change guards have nothing to compare with. Check the file; to replace it anyway, run again with --force.';
+        }
+    }
+    if (!problem) problem = checkOverrides(overridesUnmatched.length, Object.keys(overrides).length, options.force);
+
+    // What changed since the previous file (null when there is none to compare with)
+    let changes = null;
+    if (previousStores) {
+        const lists = changesSince(previousStores, stores);
+        const counts = {};
+        for (const [kind, ids] of Object.entries(lists)) counts[kind] = ids.length;
+        changes = { counts, ...lists };
+        console.log('Changes since the previous locations.json: ' +
+            Object.entries(counts).map(([kind, count]) => kind + ' ' + count).join(', '));
+        for (const [kind, ids] of Object.entries(lists)) {
+            if (ids.length > 0) {
+                console.log('  ' + kind + ': ' + ids.slice(0, 20).join(', ') +
+                    (ids.length > 20 ? ' ... and ' + (ids.length - 20) + ' more (all in data_meta.json)' : ''));
+            }
+        }
+        if (!problem) problem = checkChanges(lists, previousStores.length, options.force);
+    }
     if (problem) throw new Error(problem + ' locations.json was NOT changed.');
 
     const meta = {
@@ -748,17 +1051,19 @@ async function run(options = {}) {
         raw_markers: markers.length,
         kept: stores.length,
         skipped: skipped,
-        duplicates_removed: stats.sameSpot + stats.dropped,
+        duplicates_removed: stats.sameSpot + stats.dropped + stats.sameShop,
         stacked_dropped: stats.stackedPoints,
-        overrides_unmatched: overridesUnmatched.map(Number)
+        overrides_unmatched: overridesUnmatched.map(Number),
+        overrides_without_effect: overridesWithoutEffect,
+        changes: changes
     };
     writeJsonAtomic(files.output, { locations });
     writeJsonAtomic(files.meta, meta);
     console.log('Saved ' + locations.length + ' locations (' + stores.length + ' collection points, ' + facilities.length + ' facilities)');
 
-    const chains = {};
-    locations.forEach(loc => { chains[loc.chain] = (chains[loc.chain] || 0) + 1; });
-    console.log('By chain:', chains);
+    const kinds = {};
+    stores.forEach(loc => { const kind = loc.kind || '(none)'; kinds[kind] = (kinds[kind] || 0) + 1; });
+    console.log('By kind:', kinds);
     return meta;
 }
 
@@ -774,7 +1079,8 @@ if (require.main === module) {
 }
 
 module.exports = {
-    transformMarker, buildLocations, determineChain, normalizeCity, municipalName, clean,
+    transformMarker, buildLocations, pointKind, normalizeCity, municipalName, clean,
     isMarkedInactive, isSchool, joinStreet, parseCoordinate, distanceMeters, streetKey, sameStreet, dropStacked,
-    disambiguate, checkCount, parseArgs, run
+    disambiguate, checkCount, parseArgs, run, changesSince, shopChain, houseNumber,
+    withoutRepeatedParts, withoutBoilerplate, ARABIC_SCRIPT, PARCEL_NUMBER
 };

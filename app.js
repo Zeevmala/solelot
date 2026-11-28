@@ -23,6 +23,16 @@ function showNotification(message, duration = 2000) {
     }, duration);
 }
 
+// Take a message away before its time is up (the answer is shown somewhere else)
+function hideNotification() {
+    const notification = document.getElementById('notification');
+    if (!notification) return;
+    clearTimeout(notificationTimeout);
+    clearTimeout(notificationFadeTimeout);
+    notification.classList.remove('show');
+    notification.style.display = 'none';
+}
+
 // Report form URL
 const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSey-yMW6dMKCiq0mPqdWdNTa3ccg0xQ6zn-Ca_3f6jiOMCbng/viewform';
 
@@ -31,6 +41,22 @@ document.querySelectorAll('link[data-deferred]').forEach(link => { link.media = 
 
 // Register Service Worker
 if ('serviceWorker' in navigator) {
+    // After a deploy, the new worker takes over a page the old one served. Reload once
+    // to show the new version, but only if nobody has tapped, typed, scrolled or
+    // touched the screen yet (a mouse wheel fires no pointerdown): a reload under
+    // someone's finger would throw away what they were doing. A page with no
+    // worker at load (the first visit) does not reload.
+    if (navigator.serviceWorker.controller) {
+        let touched = false;
+        const markTouched = () => { touched = true; };
+        window.addEventListener('pointerdown', markTouched, { once: true, capture: true });
+        window.addEventListener('keydown', markTouched, { once: true, capture: true });
+        window.addEventListener('wheel', markTouched, { once: true, capture: true, passive: true });
+        window.addEventListener('touchstart', markTouched, { once: true, capture: true, passive: true });
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!touched) location.reload();
+        }, { once: true });
+    }
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
             .then(() => console.log('Service Worker registered'))
@@ -105,8 +131,9 @@ function playLikeSound() {
     }
 }
 
-// Handle like button click
-function handleLike(locationId) {
+// Handle like button click — mark the button, then open the report form
+// already filled in and marked "the point exists", so the map owner gets the confirmation
+function handleLike(locationId, confirmUrl) {
     playLikeSound();
     const btns = document.querySelectorAll('.like-btn[data-like-id="' + locationId + '"]');
     btns.forEach(function(btn) {
@@ -114,7 +141,7 @@ function handleLike(locationId) {
         btn.classList.add('pop');
         setTimeout(function() { btn.classList.remove('pop'); }, 400);
     });
-    showNotification('תודה על המשוב! 👍');
+    window.open(confirmUrl, '_blank', 'noopener,noreferrer');
 }
 
 // Handle dislike button click — open report form
@@ -178,15 +205,14 @@ function fuzzyMatch(text, query, maxDist = 2) {
 // Makes two spellings of the same thing equal before they are compared:
 // Latin letters in lower case, no quote marks (מתנ"ס = מתנס), hyphens as spaces,
 // and a doubled י or ו as a single one (תקווה = תקוה, קריית = קרית).
-function normalizeText(text) {
-    return String(text || '')
+// keepDoubled leaves a doubled י or ו as it is (for the "as typed" search below).
+function normalizeText(text, keepDoubled = false) {
+    let result = String(text || '')
         .toLowerCase()
         .replace(/["'\u05F4\u201C\u201D\u05F3\u2018\u2019]/g, '')
-        .replace(/[-\u05BE\u2013]/g, ' ')
-        .replace(/י+/g, 'י')
-        .replace(/ו+/g, 'ו')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .replace(/[-\u05BE\u2013]/g, ' ');
+    if (!keepDoubled) result = result.replace(/י+/g, 'י').replace(/ו+/g, 'ו');
+    return result.replace(/\s+/g, ' ').trim();
 }
 
 // Short and old names people type for a city -> the city name used in the data.
@@ -212,18 +238,65 @@ const QUERY_ALIASES = {
     'שוהם': 'שהם',
     'יהוד מונוסון': 'יהוד',
     'מודיעין מכבים רעות': 'מודיעין',
-    'פרדס חנה כרכור': 'פרדס חנה'
+    'פרדס חנה כרכור': 'פרדס חנה',
+    'כ"ס': 'כפר סבא',
+    // English names of the large cities
+    'jerusalem': 'ירושלים',
+    'haifa': 'חיפה',
+    'beer sheva': 'באר שבע',
+    'petah tikva': 'פתח תקווה',
+    'rishon lezion': 'ראשון לציון',
+    'netanya': 'נתניה',
+    'ashdod': 'אשדוד',
+    'holon': 'חולון',
+    'ramat gan': 'רמת גן',
+    'bnei brak': 'בני ברק',
+    'eilat': 'אילת',
+    // Chains, as people type them
+    'bug': 'באג',
+    'ikea': 'איקאה',
+    'ace': 'אייס',
+    'אם פם': 'am.pm',
+    'ampm': 'am.pm',
+    'am:pm': 'am.pm'
 };
 
 // The search text as it is compared with the data
 // A short name written with a quote mark (ב"ש) counts only when the quote mark was
 // typed: the bare letters "בש" are also part of ordinary words and names.
-function normalizeQuery(text) {
+// keepDoubled: see normalizeText().
+function normalizeQuery(text, keepDoubled = false) {
     const query = normalizeText(text);
     const typedQuote = /["\u05F4\u201C\u201D]/.test(String(text || ''));
     const alias = Object.keys(QUERY_ALIASES).find(name =>
         normalizeText(name) === query && (typedQuote || !name.includes('"')));
-    return alias ? normalizeText(QUERY_ALIASES[alias]) : query;
+    return normalizeText(alias ? QUERY_ALIASES[alias] : text, keepDoubled);
+}
+
+// What a search looks through for one location: name, address and city as one text,
+// commas as spaces ("החרש 1, רמת השרון"). "folded" is compared normally; "asTyped"
+// keeps a doubled י or ו. loadLocations() builds it once per location (location.searchText).
+function locationSearchText(location) {
+    const text = [location.name, location.address, location.city].join(' ').replace(/,/g, ' ');
+    return { folded: normalizeText(text), asTyped: normalizeText(text, true) };
+}
+
+// The locations whose text contains every typed word, in any order
+// ("אבן גבירול תל אביב" finds "אבן גבירול 91, תל אביב").
+// A doubled י or ו that was typed is looked for as typed first: "אייס" must not turn
+// into "איס", which is inside every "מוקד איסוף". Only when that finds nothing is it
+// folded, so "קריית אתא" still finds a record spelled "קרית אתא".
+function findContaining(locations, query) {
+    const texts = locations.map(location => location.searchText || locationSearchText(location));
+    const withAll = (words, kind) => locations.filter((location, i) => words.every(word => texts[i][kind].includes(word)));
+    const typed = String(query || '').replace(/,/g, ' '); // an address pasted as written
+    const asTyped = normalizeQuery(typed, true);
+    const folded = normalizeQuery(typed);
+    if (asTyped !== folded) {
+        const found = withAll(asTyped.split(' '), 'asTyped');
+        if (found.length > 0) return found;
+    }
+    return withAll(folded.split(' '), 'folded');
 }
 
 // How many wrong letters a query may have: none in a short word, where one
@@ -244,16 +317,16 @@ function searchLocations(locations, query, cityFilter) {
     const q = normalizeQuery(query);
     if (q === '') return locations.slice();
 
+    const exact = findContaining(locations, query);
+    if (exact.length > 0) return exact;
+
+    const maxDist = fuzzyTolerance(q.length);
+    if (maxDist === 0) return [];
     const fields = locations.map(location => [
         normalizeText(location.name),
         normalizeText(location.address),
         normalizeText(location.city)
     ]);
-    const exact = locations.filter((location, i) => fields[i].some(text => text.includes(q)));
-    if (exact.length > 0) return exact;
-
-    const maxDist = fuzzyTolerance(q.length);
-    if (maxDist === 0) return [];
     return locations.filter((location, i) => fields[i].some(text => fuzzyMatch(text, q, maxDist)));
 }
 
@@ -261,18 +334,25 @@ function searchLocations(locations, query, cityFilter) {
 // cityCounts is a Map of city name -> number of locations. "same" marks the city
 // that IS the typed text (or what its short name stands for): the only kind of
 // suggestion Enter may pick by itself.
-function matchCities(cityCounts, text) {
+// Near spellings (typing mistakes) are offered only when no city contains the text
+// and no location does (exactLocationCount: how many findContaining() found):
+// "ספריה" is found in 11 places, so the cities סתריה and קיסריה are not offered.
+function matchCities(cityCounts, text, exactLocationCount = 0) {
     const query = normalizeQuery(text);
     const maxDist = fuzzyTolerance(query.length);
     const matches = [];
     if (query === '') return matches;
     cityCounts.forEach((count, name) => {
         const city = normalizeText(name);
-        const exact = city.includes(query);
-        if (exact || (maxDist > 0 && fuzzyMatch(city, query, maxDist))) {
-            matches.push({ type: 'city', name, count, exact, same: city === query });
-        }
+        if (city.includes(query)) matches.push({ type: 'city', name, count, exact: true, same: city === query });
     });
+    if (matches.length === 0 && exactLocationCount === 0 && maxDist > 0) {
+        cityCounts.forEach((count, name) => {
+            if (fuzzyMatch(normalizeText(name), query, maxDist)) {
+                matches.push({ type: 'city', name, count, exact: false, same: false });
+            }
+        });
+    }
     // The city that is the typed text first, then cities containing it, then near
     // matches; inside each group the city with more locations first
     matches.sort((a, b) => {
@@ -297,6 +377,22 @@ function isValidLocation(loc) {
 }
 
 // === EMPTY STATE TEXT ===
+const EMPTY_TITLE = 'לא נמצאו נקודות איסוף';
+const EMPTY_TEXT = 'אפשר לחפש עיר, רחוב או שם של חנות';
+const EMPTY_BUTTON = 'ניקוי החיפוש';
+
+// Chains people look for that are not in MAI's list of collection points (Nov 2026).
+// When a search finds nothing and its text names one of them, the empty state says
+// so instead of the usual text. Whole words only: "ksp" inside another word is not KSP.
+function chainNotListedText(query) {
+    const chains = ['סופר פארם', 'סופרפארם', 'super pharm', 'superpharm', 'אופיס דיפו', 'office depot', 'officedepot',
+        'ksp', 'פלאפון', 'pelephone', 'סלקום', 'cellcom'];
+    const text = ' ' + normalizeQuery(String(query || '').replace(/,/g, ' ')) + ' ';
+    if (text.trim() === '') return '';
+    const named = chains.some(chain => text.includes(' ' + normalizeText(chain) + ' '));
+    return named ? 'הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י.' : '';
+}
+
 // The same panel says "no results" for a search and "error" when loading failed
 function setEmptyStateText(title, text, buttonText) {
     const emptyState = document.getElementById('empty-state');
@@ -304,15 +400,17 @@ function setEmptyStateText(title, text, buttonText) {
     const h3 = emptyState.querySelector('h3');
     const p = emptyState.querySelector('p');
     const btn = emptyState.querySelector('.clear-filters-btn');
-    if (h3) h3.textContent = title;
-    if (p) p.textContent = text;
-    if (btn) btn.textContent = buttonText;
+    // Only when the text changes: the panel is an alert, and a screen reader may read it
+    // again on every change (the search updates it on every keystroke)
+    if (h3 && h3.textContent !== title) h3.textContent = title;
+    if (p && p.textContent !== text) p.textContent = text;
+    if (btn && btn.textContent !== buttonText) btn.textContent = buttonText;
 }
 
 // The map library is a separate file (vendor/leaflet). If it did not arrive, nothing
 // below can work: show the error panel instead of leaving the loading screen forever.
 if (typeof L === 'undefined' || typeof L.markerClusterGroup !== 'function') {
-    setEmptyStateText('שגיאה בטעינת המפה', 'בדוק את החיבור לאינטרנט ונסה שוב', 'טען מחדש');
+    setEmptyStateText('שגיאה בטעינת המפה', 'כדאי לבדוק את החיבור לאינטרנט ולנסות שוב', 'טעינה מחדש');
     const libraryErrorPanel = document.getElementById('empty-state');
     const reloadBtn = document.getElementById('clear-filters');
     if (reloadBtn) reloadBtn.addEventListener('click', () => window.location.reload());
@@ -337,7 +435,7 @@ map.fitBounds(ISRAEL_BOUNDS);
 
 // All map buttons sit on the right edge: the details panel opens on the left
 // (bottom on phones) and used to cover the zoom / locate / basemap buttons.
-L.control.zoom({ position: 'topright', zoomInTitle: 'התקרב', zoomOutTitle: 'התרחק' }).addTo(map);
+L.control.zoom({ position: 'topright', zoomInTitle: 'הגדלה', zoomOutTitle: 'הקטנה' }).addTo(map);
 
 // Define multiple basemap options
 // CARTO raster tiles now require an API key (keyless requests return
@@ -346,22 +444,34 @@ L.control.zoom({ position: 'topright', zoomInTitle: 'התקרב', zoomOutTitle: 
 // (.basemap-light in style.css). maxZoom 19 = OSM's max native zoom.
 const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+// Both basemaps are OpenStreetMap, so its credit is part of the one credit line below
+// (setMapCredits), not of each tile layer
 const baseMaps = {
     'רחובות': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
-        crossOrigin: true, // lets the service worker read and cache the tiles
-        attribution: OSM_ATTRIBUTION
+        crossOrigin: true // lets the service worker read and cache the tiles
     }),
     'בהיר': L.tileLayer(OSM_TILE_URL, {
         maxZoom: 19,
         className: 'basemap-light',
-        crossOrigin: true,
-        attribution: OSM_ATTRIBUTION
+        crossOrigin: true
     })
 };
 
-// Credit for the location data, shown next to the map credit
-map.attributionControl.addAttribution('<a href="https://mai.org.il" target="_blank" rel="noopener">נתונים: תאגיד מ.א.י</a>');
+// The credit line names the data sources only; Leaflet is credited in README.md.
+// First the location data (and, once known, the date of its last refresh), then the map.
+// It is one entry, replaced as a whole: Leaflet keeps separate entries in the order they
+// were first added, so a date added later would land after the map credit.
+const MAI_CREDIT = '<a href="https://mai.org.il" target="_blank" rel="noopener">נתונים: תאגיד מ.א.י</a>';
+let mapCredits = '';
+function setMapCredits(updated) {
+    const credits = MAI_CREDIT + (updated ? ` · עודכן ${updated}` : '') + ', ' + OSM_ATTRIBUTION;
+    if (mapCredits) map.attributionControl.removeAttribution(mapCredits);
+    map.attributionControl.addAttribution(credits);
+    mapCredits = credits;
+}
+map.attributionControl.setPrefix(false);
+setMapCredits('');
 
 // Track current basemap
 let currentBasemapName = 'בהיר';
@@ -374,8 +484,8 @@ basemapToggle.onAdd = function() {
     btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
     </svg>`;
-    btn.title = 'החלף ל: רחובות';
-    btn.setAttribute('aria-label', 'החלף סגנון מפה');
+    btn.title = 'מעבר למפת רחובות';
+    btn.setAttribute('aria-label', 'החלפת סגנון המפה');
 
     L.DomEvent.disableClickPropagation(btn);
 
@@ -384,10 +494,10 @@ basemapToggle.onAdd = function() {
 
         if (currentBasemapName === 'בהיר') {
             currentBasemapName = 'רחובות';
-            btn.title = 'החלף ל: בהיר';
+            btn.title = 'מעבר למפה בהירה';
         } else {
             currentBasemapName = 'בהיר';
-            btn.title = 'החלף ל: רחובות';
+            btn.title = 'מעבר למפת רחובות';
         }
 
         baseMaps[currentBasemapName].addTo(map);
@@ -456,10 +566,10 @@ const userSvg = `<svg viewBox="0 0 28 28" width="28" height="28" xmlns="http://w
         <circle class="pin-casing" cx="14" cy="14" r="4"/>
     </svg>`;
 
-function createMarkerIcon(type, width, height) {
+function createMarkerIcon(type, width, height, extraClass = '') {
     return L.divIcon({
         html: pinSvg(type, width, height),
-        className: 'battery-marker battery-marker-' + type,
+        className: 'battery-marker battery-marker-' + type + extraClass,
         iconSize: [width, height],
         iconAnchor: [width / 2, height],
         popupAnchor: [0, -height]
@@ -477,6 +587,12 @@ const icons = {
         iconAnchor: [14, 14],
         popupAnchor: [0, -14]
     })
+};
+
+// The same pins with the class "selected" (drawn larger, see style.css)
+const selectedIcons = {
+    store: createMarkerIcon('store', 30, 40, ' selected'),
+    facility: createMarkerIcon('facility', 34, 46, ' selected')
 };
 
 // Hebrew names for types
@@ -505,6 +621,9 @@ const popupBatterySvg = {
     </svg>`
 };
 
+// A place on the map (outline pin), for city rows in the suggestion list
+const cityIconSvg = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s-7-6.3-7-11.8a7 7 0 0 1 14 0c0 5.5-7 11.8-7 11.8z"/><circle cx="12" cy="9.7" r="2.6"/></svg>';
+
 // Inline SVG icons for like/dislike buttons (18×18, stroke-based)
 const thumbsUpSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3m7-2V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>';
 const thumbsDownSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17m-7 2v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/></svg>';
@@ -529,8 +648,11 @@ const markerCluster = L.markerClusterGroup({
     chunkProgress: (processed, total) => {
         if (processed === total) queueMicrotask(markerBatchesDone);
     },
-    // Wider grouping when zoomed out keeps bubbles from piling on top of each other
-    maxClusterRadius: zoom => (zoom <= 9 ? 70 : zoom <= 13 ? 55 : 40),
+    // Wider grouping when zoomed out keeps bubbles from piling on top of each other.
+    // From zoom 16 (where a pick or "nearest" lands) only pins that touch are grouped,
+    // so every point near you is a pin of its own. Points on one exact coordinate stay
+    // grouped to the last zoom and spread out when tapped (spiderfy).
+    maxClusterRadius: zoom => (zoom <= 9 ? 70 : zoom <= 13 ? 55 : zoom <= 15 ? 48 : 20),
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
     iconCreateFunction: function(cluster) {
@@ -578,11 +700,39 @@ function getDistance(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-// A distance as people read it: metres (rounded to 10) under 1 km, km above
+// A distance as people read it: metres (rounded to 10) under 1 km, km above.
+// A no-break space keeps the number and its unit on one line.
 function formatDistance(km) {
     const metres = Math.round(km * 100) * 10;
-    if (metres < 1000) return `${metres} מ׳`;
-    return `${km.toFixed(1)} ק"מ`;
+    if (metres < 1000) return `${metres}\u00A0מ׳`;
+    return `${km.toFixed(1)}\u00A0ק"מ`;
+}
+
+// The date of a data refresh as people in Israel write it: d.m.yyyy in Israel time.
+// '' for anything that is not an ISO date and time (the text comes from data_meta.json).
+function formatUpdatedDate(isoText) {
+    if (typeof isoText !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(isoText)) return '';
+    const date = new Date(isoText);
+    if (isNaN(date.getTime())) return '';
+    // JavaScript rolls 30 February over to 2 March instead of refusing it: refuse it here
+    const [y, m, d] = isoText.slice(0, 10).split('-').map(Number);
+    const asWritten = new Date(Date.UTC(y, m - 1, d));
+    if (asWritten.getUTCMonth() !== m - 1 || asWritten.getUTCDate() !== d) return '';
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
+    const part = type => Number(parts.find(p => p.type === type).value); // en-GB writes 05, people write 5
+    return `${part('day')}.${part('month')}.${part('year')}`;
+}
+
+// "עודכן <date>" in the credit line, from data_meta.json (written by scraper.js on every
+// refresh). Nice to have only: on any failure the line stays as it is and nothing is logged.
+function showDataDate() {
+    fetch('data_meta.json')
+        .then(response => (response.ok ? response.json() : null))
+        .then(meta => {
+            const updated = formatUpdatedDate(meta && meta.fetched_at);
+            if (updated) setMapCredits(updated);
+        })
+        .catch(() => {});
 }
 
 // Build report URL with pre-filled location name, address, and city
@@ -596,93 +746,41 @@ function getReportUrl(location) {
     return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
-// Create popup content for a location
-function createPopupContent(location) {
-    const safeType = ['store', 'facility'].includes(location.type) ? location.type : 'store';
-    const typeIcon = popupBatterySvg[safeType];
-
-    const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
-
-    let content = `
-        <div class="popup-header">
-            <h3>
-                <span class="popup-icon">${typeIcon}</span>
-                ${escapeHtml(location.name)}
-            </h3>
-        </div>
-        ${hasAddress ? `<div class="popup-row">
-            <span>${escapeHtml(location.address)}</span>
-        </div>` : ''}
-    `;
-
-    if (location.hours && location.hours !== 'בדוק באתר') {
-        content += `
-        <div class="popup-row">
-            <span class="icon">🕐</span>
-            <span>${escapeHtml(location.hours)}</span>
-        </div>`;
-    }
-
-    if (location.description) {
-        content += `
-        <div class="popup-row">
-            <span class="icon">ℹ️</span>
-            <span>${escapeHtml(location.description)}</span>
-        </div>`;
-    }
-
-    if (userLocation) {
-        const distance = getDistance(
-            userLocation.lat, userLocation.lng,
-            location.lat, location.lng
-        );
-        content += `
-        <div class="popup-row distance">
-            <span class="icon">📏</span>
-            <span>${formatDistance(distance)} ממיקומך</span>
-        </div>`;
-    }
-
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
-    const wazeUrl = `https://waze.com/ul?ll=${location.lat},${location.lng}&navigate=yes`;
-
-    const reportUrl = getReportUrl(location);
-
-    content += `
-        <div class="nav-links">
-            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn google">נווט ב-Google</a>
-            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn waze">נווט ב-Waze</a>
-        </div>
-        <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
-                ${thumbsUpSvg}
-            </button>
-            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(reportUrl)}" aria-label="דווח על בעיה">
-                ${thumbsDownSvg}
-            </button>
-        </div>
-    `;
-
-    return content;
+// Same form, for the thumbs-up button: the name field starts with a check mark (\u2714)
+// and "הנקודה קיימת:", so a confirmation is easy to tell from a problem report
+function getConfirmUrl(location) {
+    const params = new URLSearchParams({
+        'entry.1466478113': '\u2714 הנקודה קיימת: ' + location.name,
+        'entry.1234054889': location.address,
+        'entry.1388870063': location.city,
+        'hl': 'he'
+    });
+    return `${REPORT_FORM_URL}?${params.toString()}`;
 }
 
-// Create sidebar content for a location
+// What kind of place a point is, as one short line in its details; '' when the
+// record has no "kind" (an optional field written by scraper.js) or one not listed here
+function pointKindText(location) {
+    const names = { fuel: 'תחנת דלק', shop: 'חנות', municipal: 'נקודת איסוף עירונית' };
+    const kind = location ? location.kind : undefined;
+    return typeof kind === 'string' && Object.prototype.hasOwnProperty.call(names, kind) ? names[kind] : '';
+}
+
+// Create sidebar content for a location: the name, one line with the distance (when
+// located) and the address, the kind of place, the two navigate buttons, then feedback
 function createSidebarContent(location) {
     const hasAddress = location.address && location.address !== 'Unknown' && location.address !== location.name;
 
-    let distanceHtml = '';
+    const meta = [];
     if (userLocation) {
         const distance = getDistance(
             userLocation.lat, userLocation.lng,
             location.lat, location.lng
         );
-        distanceHtml = `
-            <div class="info-row">
-                <span class="info-icon">📏</span>
-                <span class="info-text distance">${formatDistance(distance)} ממיקומך</span>
-            </div>
-        `;
+        meta.push(`<span class="distance">${formatDistance(distance)} בקו אווירי</span>`);
     }
+    if (hasAddress) meta.push(`<span class="sidebar-address">${escapeHtml(location.address)}</span>`);
+    const kind = pointKindText(location);
 
     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
     const wazeUrl = `https://waze.com/ul?ll=${location.lat},${location.lng}&navigate=yes`;
@@ -690,45 +788,29 @@ function createSidebarContent(location) {
     return `
         <div class="sidebar-header">
             <div class="sidebar-title">
-                <h2>${escapeHtml(location.name)}</h2>
+                <h2 tabindex="-1">${escapeHtml(location.name)}</h2>
                 ${location.type === 'facility' ? `<span class="type-badge">${typeNames.facility}</span>` : ''}
             </div>
         </div>
 
         <div class="sidebar-info">
-            ${hasAddress ? `<div class="info-row">
-                <span class="info-text">${escapeHtml(location.address)}</span>
-            </div>` : ''}
-            ${location.hours && location.hours !== 'בדוק באתר' ? `
-            <div class="info-row">
-                <span class="info-icon">🕐</span>
-                <span class="info-text">${escapeHtml(location.hours)}</span>
-            </div>
-            ` : ''}
-            ${location.description ? `
-            <div class="info-row">
-                <span class="info-icon">ℹ️</span>
-                <span class="info-text">${escapeHtml(location.description)}</span>
-            </div>
-            ` : ''}
-            ${distanceHtml}
+            ${meta.length > 0 ? `<p class="sidebar-meta">${meta.join('<span class="meta-sep" aria-hidden="true"> · </span>')}</p>` : ''}
+            ${kind ? `<p class="sidebar-kind">${kind}</p>` : ''}
+            ${location.hours && location.hours !== 'בדוק באתר' ? `<p class="info-text">${escapeHtml(location.hours)}</p>` : ''}
+            ${location.description ? `<p class="info-text">${escapeHtml(location.description)}</p>` : ''}
         </div>
 
         <div class="sidebar-nav">
-            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn google">
-                נווט ב-Google
-            </a>
-            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn waze">
-                נווט ב-Waze
-            </a>
+            <a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn waze">ניווט ב-Waze</a>
+            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="sidebar-nav-btn google">ניווט ב-Google Maps</a>
         </div>
 
         <div class="feedback-row">
-            <button class="feedback-btn like-btn" data-like-id="${location.id}" aria-label="אהבתי נקודה זו">
-                ${thumbsUpSvg}
+            <button type="button" class="feedback-btn like-btn" data-like-id="${location.id}" data-confirm-url="${escapeHtml(getConfirmUrl(location))}" aria-label="הנקודה קיימת - אישור בטופס">
+                ${thumbsUpSvg}<span>הנקודה קיימת</span>
             </button>
-            <button class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דווח על בעיה">
-                ${thumbsDownSvg}
+            <button type="button" class="feedback-btn dislike-btn" data-report-url="${escapeHtml(getReportUrl(location))}" aria-label="דיווח על בעיה">
+                ${thumbsDownSvg}<span>דיווח על בעיה</span>
             </button>
         </div>
     `;
@@ -739,59 +821,119 @@ const cachedSidebar = document.getElementById('sidebar');
 const cachedSidebarContent = document.getElementById('sidebar-content');
 const cachedSidebarClose = document.getElementById('sidebar-close');
 
-// The pin whose details are open is drawn larger and above its neighbours.
-// The "selected" class is styled in style.css.
-let selectedMarker = null;
-let selectedMarkerZIndex = 0; // the pin's own zIndexOffset, put back when it is deselected
-function setSelectedMarker(marker) {
-    if (selectedMarker === marker) return;
-    if (selectedMarker) {
-        const oldElement = selectedMarker.getElement();
-        if (oldElement) oldElement.classList.remove('selected');
-        selectedMarker.setZIndexOffset(selectedMarkerZIndex);
+// The point whose details are open gets a pin of its own, larger, on a layer above
+// the clusters. So it can be seen at any zoom, also while its ordinary pin is still
+// counted inside a cluster bubble. The "selected" class is styled in style.css.
+const selectedLayer = L.layerGroup().addTo(map);
+const selectedPin = L.marker([0, 0], {
+    icon: selectedIcons.store,
+    zIndexOffset: 1500, // above facilities (1000), below the user dot (2000)
+    keyboard: false     // the ordinary pin under it is the one the keyboard reaches
+});
+function setSelectedLocation(location) {
+    if (!location) {
+        selectedLayer.removeLayer(selectedPin);
+        return;
     }
-    selectedMarker = marker;
-    if (marker) {
-        selectedMarkerZIndex = marker.options.zIndexOffset;
-        marker.setZIndexOffset(1500); // above facilities (1000), below the user dot (2000)
-        const element = marker.getElement();
-        if (element) element.classList.add('selected');
-    }
+    selectedPin.setLatLng([location.lat, location.lng]);
+    selectedPin.setIcon(selectedIcons[location.type] || selectedIcons.store);
+    selectedLayer.addLayer(selectedPin);
 }
 
 // On phones the details open as a sheet over the bottom of the map.
-// Move the map just enough for the pin to stay visible above the sheet.
-function keepPinAboveSheet(marker) {
-    if (!cachedSidebar || window.innerWidth > MOBILE_BREAKPOINT) return;
-    if (cachedSidebar.offsetWidth < map.getSize().x) return; // landscape: a side panel, not a sheet
-    map.panInside(marker.getLatLng(), {
-        paddingTopLeft: [20, 60], // room for the pin itself, which is drawn above its point
-        paddingBottomRight: [20, cachedSidebar.offsetHeight + 20]
+// sheetHeight() is how much of the map's bottom the open sheet covers (0 on a desktop).
+function sheetHeight() {
+    if (!cachedSidebar || window.innerWidth > MOBILE_BREAKPOINT) return 0;
+    if (cachedSidebar.style.display === 'none') return 0;
+    if (cachedSidebar.offsetWidth < map.getSize().x) return 0; // landscape: a side panel, not a sheet
+    return cachedSidebar.offsetHeight;
+}
+
+// The map's bottom-right corner (the locate button and the credits) rises above the
+// open sheet, so the sheet never covers it: a tap meant for the locate button would
+// otherwise land on a button in the sheet. --sheet-h is used in style.css.
+function liftCornerAboveSheet() {
+    document.documentElement.style.setProperty('--sheet-h', sheetHeight() + 'px');
+}
+
+// On a desktop, and on a phone held sideways, the details are a panel over the map's
+// left side instead. sidePanelWidth() is how much of the map's width it covers (0 for the sheet).
+function sidePanelWidth() {
+    if (!cachedSidebar || cachedSidebar.style.display === 'none') return 0;
+    const width = cachedSidebar.offsetWidth;
+    return width < map.getSize().x ? width : 0;
+}
+
+// Move the map just enough for the pin to stay visible above the sheet,
+// or to the right of the side panel.
+function keepPinAboveSheet(location) {
+    const covered = sheetHeight();
+    const side = sidePanelWidth();
+    if (covered === 0 && side === 0) return;
+    map.panInside([location.lat, location.lng], {
+        paddingTopLeft: [20 + side, 60], // room for the pin itself, which is drawn above its point
+        paddingBottomRight: [20, covered + 20]
     });
 }
 
-// Show sidebar with location details
+// === THE ADDRESS BAR ===
+// The open point (?id=) or the picked city (?city=) is kept in the address, so a link
+// can be shared and a reload keeps the place. Opening a point is one step in the
+// browser history (the next point replaces it); Back closes it and stays on the page.
+function placeUrl() {
+    if (selectedLocationId !== null) return '?id=' + selectedLocationId;
+    if (currentCity) return '?city=' + encodeURIComponent(currentCity);
+    return window.location.pathname;
+}
+// Closing a point goes one step back in the history. Until the browser has done that
+// (the "popstate" event), the address is left alone; the event handler writes it.
+let historyBackPending = false;
+function rememberPlace(newStep) {
+    if (historyBackPending) return;
+    const state = selectedLocationId !== null ? { id: selectedLocationId } : null;
+    const url = placeUrl();
+    if (newStep) {
+        history.pushState(state, '', url);
+        return;
+    }
+    // Every search change comes here; Safari refuses more than 100 writes in 30 s
+    const unchanged = (window.location.search || window.location.pathname) === url &&
+        (history.state && history.state.id) === (state && state.id);
+    if (!unchanged) history.replaceState(state, '', url);
+}
+
+// Show sidebar with location details.
+// fromHistory: the browser's Back/Forward asked for it, so the history is already right.
 let sidebarHideTimer = null;
-function showSidebar(location) {
+function showSidebar(location, fromHistory = false) {
     if (!cachedSidebar || !cachedSidebarContent) return;
 
     // Cancel a hide that is still animating, or it would hide the sidebar we are about to show
     clearTimeout(sidebarHideTimer);
 
-    map.closePopup();
+    const pointInHistory = !!(history.state && history.state.id);
     selectedLocationId = location.id;
-    const markerItem = allMarkers.find(item => item.location.id === location.id);
-    setSelectedMarker(markerItem ? markerItem.marker : null);
+    setSelectedLocation(location);
+    if (!fromHistory) rememberPlace(!pointInHistory); // a new step only if no point was open
     cachedSidebarContent.innerHTML = createSidebarContent(location);
     cachedSidebar.style.transform = ''; // clear leftover swipe position
     cachedSidebar.style.display = 'flex';
     cachedSidebar.classList.remove('hidden');
+    liftCornerAboveSheet();
 
-    if (cachedSidebarClose) cachedSidebarClose.focus({ preventScroll: true });
+    // Focus goes into the details, so a screen reader says they opened. The phone
+    // sheet hides its close button (swipe down or Escape closes it): then the heading.
+    if (cachedSidebarClose && cachedSidebarClose.offsetParent !== null) {
+        cachedSidebarClose.focus({ preventScroll: true });
+    } else {
+        const heading = cachedSidebarContent.querySelector('h2');
+        if (heading) heading.focus({ preventScroll: true });
+    }
 }
 
 // Hide sidebar
-function hideSidebar() {
+function hideSidebar(fromHistory = false) {
+    const wasOpen = selectedLocationId !== null;
     if (cachedSidebar && cachedSidebar.style.display !== 'none') {
         cachedSidebar.classList.add('hidden');
         clearTimeout(sidebarHideTimer);
@@ -801,19 +943,40 @@ function hideSidebar() {
         }, 300);
     }
     selectedLocationId = null;
-    setSelectedMarker(null);
+    setSelectedLocation(null);
+    document.documentElement.style.setProperty('--sheet-h', '0px');
+    if (fromHistory || !wasOpen) return;
+    if (history.state && history.state.id && !historyBackPending) {
+        historyBackPending = true;
+        history.back(); // the step that opened the point
+    } else {
+        rememberPlace(false);
+    }
 }
 
+// Back / Forward: open or close the details to match the step the browser went to.
+// Added once, here at the top level of the file.
+window.addEventListener('popstate', (e) => {
+    if (historyBackPending) {
+        // The step back asked for by hideSidebar(). A point opened in the meantime
+        // gets its own step again.
+        historyBackPending = false;
+        rememberPlace(selectedLocationId !== null);
+        return;
+    }
+    const id = e.state && e.state.id;
+    if (id && allLocations.some(l => l.id === id)) focusOnLocation(id, true);
+    else hideSidebar(true);
+    rememberPlace(false); // the city may have changed since this step was made
+});
+
 // Adding thousands of pins to the cluster layer takes several batches, with pauses
-// in between so a slow phone does not freeze. Two rules keep that safe:
-// 1. Never start a new add while one is running: the cluster layer would go on adding
-//    the rest of the OLD list, and the map would show pins the search does not match.
-//    A change that arrives meanwhile is remembered and drawn once, when the add ends.
-// 2. The layer cannot zoom to a pin before the last batch is in (it throws an error).
-//    whenMarkersAdded(fn) runs fn now if the map is up to date, or right after it is.
+// in between so a slow phone does not freeze.
+// Never start a new add while one is running: the cluster layer would go on adding
+// the rest of the OLD list, and the map would show pins the search does not match.
+// A change that arrives meanwhile is remembered and drawn once, when the add ends.
 let markerAddRunning = false;   // markerCluster.addLayers() has not finished
 let redrawWanted = false;       // the search or the legend changed during that add
-let afterMarkersAdded = null;   // the one thing waiting for the pins (the latest request wins)
 function markerBatchesDone() {
     // The cluster layer also reports an (empty) add of its own when it is put on the map
     if (!markerAddRunning) return;
@@ -821,59 +984,6 @@ function markerBatchesDone() {
     if (redrawWanted) {
         redrawWanted = false;
         drawMarkers(); // reads the search as it is now, so states in between are skipped
-        return;
-    }
-    const run = afterMarkersAdded;
-    afterMarkersAdded = null;
-    if (run) run();
-}
-function whenMarkersAdded(fn) {
-    if (!markerAddRunning && !redrawWanted) fn();
-    else afterMarkersAdded = fn;
-}
-
-// Zoom the cluster layer in until one pin is drawn by itself, then call done().
-// The cluster layer does this with listeners of its own on the map. If the pins are
-// replaced while it is still zooming, those listeners stay behind and throw an error on
-// every later map movement. So they are written down here while the layer registers
-// them, and cancelReveal() takes them off again before the pins are replaced.
-let cancelReveal = null;
-// While the cluster layer plays its own split/merge animation it ignores map movements.
-// A reveal that moved the map during that time would wait forever, so when the
-// animation ends the layer is told once more that the map has moved.
-markerCluster.on('animationend', () => {
-    if (cancelReveal) map.fire('moveend');
-});
-function zoomToClusteredMarker(marker, done) {
-    if (cancelReveal) cancelReveal();
-    map.stop(); // end a flight to another place first; the layer must start from a still map
-    const listeners = [];
-    const targets = [map, markerCluster];
-    targets.forEach(target => {
-        const realOn = target.on;
-        target.on = function(type, fn, context) {
-            // only the two the reveal itself waits on; Leaflet registers others meanwhile
-            if (context === markerCluster && (type === 'moveend' || type === 'animationend')) {
-                listeners.push([target, type, fn, context]);
-            }
-            return realOn.call(this, type, fn, context);
-        };
-    });
-    let cancelled = false;
-    const cancel = () => {
-        cancelled = true;
-        listeners.forEach(([target, type, fn, context]) => target.off(type, fn, context));
-        if (cancelReveal === cancel) cancelReveal = null;
-    };
-    cancelReveal = cancel;
-    try {
-        markerCluster.zoomToShowLayer(marker, () => {
-            if (cancelled) return;
-            if (cancelReveal === cancel) cancelReveal = null;
-            done();
-        });
-    } finally {
-        targets.forEach(target => { delete target.on; }); // back to the normal on()
     }
 }
 
@@ -883,6 +993,7 @@ function setSearch(text, city) {
     clearTimeout(searchTimeout);
     currentSearch = text;
     currentCity = city;
+    rememberPlace(false);
     return updateMarkers();
 }
 
@@ -895,7 +1006,6 @@ function visibleMarkerItems() {
 // Put those markers on the map, replacing what was there
 function drawMarkers() {
     const clusteredMarkers = [];
-    if (cancelReveal) cancelReveal();
     facilityLayer.clearLayers();
     visibleMarkerItems().forEach(item => {
         if (item.location.type === 'facility') {
@@ -934,6 +1044,7 @@ function updateEmptyState() {
     const listOpen = suggestions && suggestions.classList.contains('active') && suggestions.children.length > 0;
     const isFiltered = currentSearch !== '' || !visibleTypes.store || !visibleTypes.facility;
     const isEmpty = visibleMarkerCount === 0 && isFiltered && allMarkers.length > 0;
+    if (isEmpty) setEmptyStateText(EMPTY_TITLE, chainNotListedText(currentSearch) || EMPTY_TEXT, EMPTY_BUTTON);
     emptyState.style.display = isEmpty && !listOpen ? 'block' : 'none';
 }
 
@@ -947,29 +1058,21 @@ function closeSuggestions() {
     updateEmptyState(); // it may have been waiting for the list to close
 }
 
-// Open a marker's popup, first zooming in until it is no longer inside a cluster
-function revealMarker(marker) {
-    whenMarkersAdded(() => {
-        if (markerCluster.hasLayer(marker)) {
-            zoomToClusteredMarker(marker, () => marker.openPopup());
-        } else {
-            marker.openPopup();
-        }
-    });
-}
-
 // Auto-zoom to visible markers
+// Every flight the app starts counts here. A "moveend" handler of an older flight
+// sees a newer number and does nothing, so it cannot pan back to an old place.
+let mapMoveCount = 0;
+
 function zoomToVisibleMarkers(visibleMarkers) {
     if (visibleMarkers.length === 0) return;
 
     if (visibleMarkers.length === 1) {
-        const marker = visibleMarkers[0];
-        const latlng = marker.getLatLng();
-        // Wait for the flight to really finish instead of guessing with a timer
-        map.once('moveend', () => revealMarker(marker));
-        map.flyTo(latlng, 15, { duration: 0.8 });
+        // One result: open it, the same as picking it from the suggestions
+        const only = allMarkers.find(item => item.marker === visibleMarkers[0]);
+        if (only) focusOnLocation(only.location.id);
     } else {
         const group = L.featureGroup(visibleMarkers);
+        mapMoveCount++;
         map.flyToBounds(group.getBounds(), {
             padding: [50, 50],
             duration: 0.8,
@@ -1010,14 +1113,15 @@ function setupAutocomplete() {
 
         searchTimeout = setTimeout(() => setSearch(text, null), 300);
 
-        const cityMatches = matchCities(cityCounts, text);
+        // Cities with a near spelling are offered only when no location has the text itself
+        const cityMatches = matchCities(cityCounts, text, findContaining(allLocations, text).length);
 
         // Locations: the same ones the map will show for this text
         const locationMatches = searchLocations(allLocations, text, null).map(location => ({
             type: 'location',
             id: location.id,
             name: location.name,
-            city: location.city,
+            address: location.address, // it ends with the city
             locationType: location.type
         }));
 
@@ -1038,25 +1142,25 @@ function setupAutocomplete() {
                          data-type="city"
                          data-value="${escapeHtml(match.name)}"
                          tabindex="-1">
-                        <span class="suggestion-icon">🏙️</span>
+                        <span class="suggestion-icon suggestion-icon-city" aria-hidden="true">${cityIconSvg}</span>
                         <div class="suggestion-text">
                             <div class="suggestion-name">${escapeHtml(match.name)}</div>
-                            <div class="suggestion-city">${match.count === 1 ? 'נקודה אחת' : `${match.count} נקודות`}</div>
+                            <div class="suggestion-city">${match.count === 1 ? 'נקודת איסוף אחת' : `${match.count} נקודות איסוף`}</div>
                         </div>
                     </div>
                 `;
             } else {
-                const icon = match.locationType === 'facility' ? '🏭' : '🟢';
+                const icon = popupBatterySvg[match.locationType] || popupBatterySvg.store;
                 return `
                     <div class="suggestion-item"
                          role="option"
                          data-type="location"
                          data-id="${match.id}"
                          tabindex="-1">
-                        <span class="suggestion-icon">${icon}</span>
+                        <span class="suggestion-icon" aria-hidden="true">${icon}</span>
                         <div class="suggestion-text">
                             <div class="suggestion-name">${escapeHtml(match.name)}</div>
-                            <div class="suggestion-city">${escapeHtml(match.city)}</div>
+                            <div class="suggestion-city">${escapeHtml(match.address)}</div>
                         </div>
                     </div>
                 `;
@@ -1131,9 +1235,7 @@ function setupAutocomplete() {
 
     // Show exactly one city on the map
     function pickCity(city) {
-        searchInput.value = city;
-        const visibleMarkers = setSearch(city, city);
-        zoomToVisibleMarkers(visibleMarkers);
+        showCity(city);
         emptySuggestions();
     }
 
@@ -1165,61 +1267,54 @@ function setupAutocomplete() {
     });
 }
 
-// Focus on a location (show on map and sidebar)
-function focusOnLocation(locationId) {
+// Show exactly one city on the map, with its name in the search box.
+// An open point is closed first: the address then carries the city, and the
+// map is not taken back to the point when its flight ends.
+function showCity(city) {
+    if (selectedLocationId !== null) hideSidebar();
+    const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('search-clear');
+    if (searchInput) searchInput.value = city;
+    if (clearBtn) clearBtn.style.display = 'flex';
+    const visibleMarkers = setSearch(city, city);
+    zoomToVisibleMarkers(visibleMarkers);
+}
+
+// Focus on a location: open its details and fly the map to it
+function focusOnLocation(locationId, fromHistory = false) {
     const location = allLocations.find(l => l.id === locationId);
     if (!location) return;
 
-    // Details first: opening them closes any open popup, and the pin's popup comes after
-    showSidebar(location);
+    // Details first: the flight below needs to know how high the sheet is
+    showSidebar(location, fromHistory);
 
-    const markerItem = allMarkers.find(item => item.location.id === locationId);
-    if (markerItem) {
-        const marker = markerItem.marker;
-        // Every step below can happen late (after a flight, or after the pins were added).
-        // By then the details may be closed or show another place: then do nothing.
-        const stillWanted = () => selectedLocationId === locationId;
-        const arrive = () => {
-            if (!stillWanted()) return;
-            marker.openPopup();
-            keepPinAboveSheet(marker);
-        };
-        const flyClose = () => {
-            if (!stillWanted()) return;
-            map.once('moveend', arrive);
-            map.flyTo([location.lat, location.lng], 16, { duration: 0.8 });
-        };
-        // Picking a suggestion has just put every pin back on the map; on a slow
-        // phone that is still going on, so wait for it to finish.
-        whenMarkersAdded(() => {
-            if (!stillWanted()) return;
-            if (markerCluster.hasLayer(marker)) {
-                // The cluster layer zooms in, and opens a group of pins that share one spot,
-                // until this pin itself is drawn. Flying first and asking afterwards left
-                // the pin hidden inside a cluster on phones.
-                zoomToClusteredMarker(marker, () => (map.getZoom() < 16 ? flyClose() : arrive()));
-            } else {
-                flyClose();
-            }
-        });
-    }
+    // The details cover part of the map, so aim for the middle of the part that stays
+    // visible: on a phone the map centre goes half a sheet below the point; with the
+    // side panel (desktop, or a phone held sideways) half a panel to its left.
+    const zoom = Math.max(map.getZoom(), 16);
+    const centre = map.unproject(map.project([location.lat, location.lng], zoom).add([-sidePanelWidth() / 2, sheetHeight() / 2]), zoom);
+
+    // flyTo ends a flight or pan that is still running, and ending a pan fires
+    // "moveend" at once. So the listener is added after flyTo: the next "moveend"
+    // is then the end of this flight.
+    const move = ++mapMoveCount;
+    map.flyTo(centre, zoom, { duration: 0.8 });
+    map.once('moveend', () => {
+        // The details may be closed or show another place, or a newer flight
+        // may have started, by now: then do nothing
+        if (move === mapMoveCount && selectedLocationId === locationId) keepPinAboveSheet(location);
+    });
 }
 
 // === GPS GEOLOCATION ===
-const locateIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+const locateIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/>
         <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
     </svg>`;
-const extentIconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>
-        <path d="M12 8v8M8 12h8"/>
-    </svg>`;
-
 let gpsActive = false;
 let userAccuracyCircle = null;
 
-// Beyond this distance "nearest" is not useful, so we just centre on the user
+// Beyond this distance "nearest" is not useful: the map stays where it is
 const NEAREST_MAX_KM = 30;
 
 // Closest collection point to a position (facilities are not public drop-off points)
@@ -1233,38 +1328,48 @@ function findNearestLocation(lat, lng) {
     return best;
 }
 
-const locateControl = L.control({ position: 'topright' });
+// Open the details of the nearest point and frame it together with the user,
+// both above the sheet on a phone. Used by the first tap and by every later tap.
+function showNearest(nearest) {
+    const location = nearest.location;
+    showSidebar(location); // first: the framing below needs the height of the sheet
+    const view = L.latLngBounds([[userLocation.lat, userLocation.lng], [location.lat, location.lng]]);
+    // On a desktop, and on a phone held sideways, the details panel covers the map's left side
+    const panel = sidePanelWidth();
+    const move = ++mapMoveCount;
+    map.flyToBounds(view, {
+        paddingTopLeft: [40 + panel, 80], // room above for the pin, which is drawn above its point
+        paddingBottomRight: [40, sheetHeight() + 40],
+        maxZoom: 17,
+        duration: 0.8
+    });
+    map.once('moveend', () => {
+        if (move === mapMoveCount && selectedLocationId === location.id) keepPinAboveSheet(location);
+    });
+}
+
+// The main action on a phone: a labelled button in the bottom right, where a thumb
+// reaches. After the first fix the label is hidden (style.css) and it is a round
+// re-centre button with the same name.
+const LOCATE_LABEL = 'הנקודה הקרובה אליי';
+const locateControl = L.control({ position: 'bottomright' });
 locateControl.onAdd = function() {
     const btn = L.DomUtil.create('button', 'locate-btn');
-    btn.innerHTML = locateIconSvg;
-    btn.title = 'מצא את מיקומי';
-    btn.setAttribute('aria-label', 'מצא את מיקומי');
+    btn.type = 'button';
+    btn.innerHTML = locateIconSvg + `<span class="locate-label">${LOCATE_LABEL}</span>`;
+    btn.title = LOCATE_LABEL;
+    btn.setAttribute('aria-label', LOCATE_LABEL);
 
     L.DomEvent.disableClickPropagation(btn);
 
     btn.onclick = function() {
-        // Toggle: if GPS is active, zoom to full extent
-        if (gpsActive) {
-            gpsActive = false;
-            btn.classList.remove('active');
-            btn.innerHTML = locateIconSvg;
-            btn.title = 'מצא את מיקומי';
-            btn.setAttribute('aria-label', 'מצא את מיקומי');
-
-            // Remove user marker and its accuracy circle
-            if (userMarker) {
-                map.removeLayer(userMarker);
-                userMarker = null;
+        // Already located: go back to the user and the nearest point (like a map app's re-centre)
+        if (gpsActive && userLocation) {
+            const nearest = findNearestLocation(userLocation.lat, userLocation.lng);
+            if (nearest && nearest.distance <= NEAREST_MAX_KM) {
+                showNearest(nearest);
+                return;
             }
-            if (userAccuracyCircle) {
-                map.removeLayer(userAccuracyCircle);
-                userAccuracyCircle = null;
-            }
-            userLocation = null;
-
-            map.flyToBounds(ISRAEL_BOUNDS, { duration: 0.8 });
-            showNotification('תצוגה מלאה');
-            return;
         }
 
         // Find my location
@@ -1277,7 +1382,8 @@ locateControl.onAdd = function() {
         if (btn.classList.contains('loading')) return;
 
         btn.classList.add('loading');
-        showNotification('מאתר מיקום...');
+        // Shown for the whole wait (the browser gives up after 10 s); the answer replaces it
+        showNotification('מאתר מיקום...', 11000);
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -1293,13 +1399,13 @@ locateControl.onAdd = function() {
 
                 userLocation = { lat, lng };
 
-                // Place/update user marker
+                // Place/update user marker. It cannot be tapped: it often sits on top
+                // of the nearest pin and would take the tap meant for that pin.
                 if (userMarker) {
                     userMarker.setLatLng([lat, lng]);
                 } else {
-                    userMarker = L.marker([lat, lng], { icon: icons.user, zIndexOffset: 2000, keyboard: false })
-                        .addTo(map)
-                        .bindPopup('המיקום שלך');
+                    userMarker = L.marker([lat, lng], { icon: icons.user, zIndexOffset: 2000, keyboard: false, interactive: false })
+                        .addTo(map);
                 }
 
                 // Circle showing how precise the GPS fix is (radius in metres)
@@ -1316,31 +1422,26 @@ locateControl.onAdd = function() {
                     }).addTo(map);
                 }
 
-                // Frame the user together with the nearest collection point
+                // Open the nearest collection point. Its details say what was found,
+                // so no message is needed. Nothing near: the map stays where it is.
                 const nearest = findNearestLocation(lat, lng);
                 if (nearest && nearest.distance <= NEAREST_MAX_KM) {
-                    const view = L.latLngBounds([[lat, lng], [nearest.location.lat, nearest.location.lng]]);
-                    map.flyToBounds(view, { padding: [80, 80], maxZoom: 16, duration: 0.8 });
-                    showNotification(`הנקודה הקרובה: ${nearest.location.name} (${formatDistance(nearest.distance)})`, 4000);
+                    hideNotification();
+                    gpsActive = true;
+                    btn.classList.add('active');
+                    showNearest(nearest);
                 } else {
-                    map.flyTo([lat, lng], 14, { duration: 0.8 });
-                    showNotification('מיקום נמצא');
+                    gpsActive = false;
+                    btn.classList.remove('active');
+                    showNotification('אין נקודות איסוף עד 30 ק"מ ממך', 4000);
                 }
-
-                // Switch to "full extent" mode
-                gpsActive = true;
-                btn.classList.add('active');
-                btn.innerHTML = extentIconSvg;
-                btn.title = 'הצג מפה מלאה';
-                btn.setAttribute('aria-label', 'הצג מפה מלאה');
             },
-            (error) => {
+            () => {
+                // Denied, unavailable or too slow: searching is the other way to a point
                 btn.classList.remove('loading');
-                let msg = 'שגיאה באיתור מיקום';
-                if (error.code === 1) msg = 'גישה למיקום נדחתה';
-                else if (error.code === 2) msg = 'מיקום לא זמין';
-                else if (error.code === 3) msg = 'זמן איתור מיקום עבר';
-                showNotification(msg);
+                showNotification('לא הצלחנו לאתר מיקום. חפשו עיר או רחוב', 5000);
+                const searchInput = document.getElementById('search-input');
+                if (searchInput) searchInput.focus();
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
@@ -1407,7 +1508,7 @@ function updateLegendCounts() {
 }
 
 // Clicking the map background closes the details panel
-map.on('click', hideSidebar);
+map.on('click', () => hideSidebar());
 
 // Loading functions
 function showLoading(text) {
@@ -1446,6 +1547,8 @@ function loadLocations() {
             // Validate and filter location data
             allLocations = data.locations.filter(isValidLocation);
             totalLocations = allLocations.length;
+            // The text each search looks through, built once instead of on every keystroke
+            allLocations.forEach(location => { location.searchText = locationSearchText(location); });
 
             // Pre-compute city counts for fast autocomplete
             cityCounts.clear();
@@ -1459,7 +1562,7 @@ function loadLocations() {
             }
 
             // Clear previous markers if retrying
-            setSelectedMarker(null);
+            setSelectedLocation(null);
             allMarkers = [];
             markerCluster.clearLayers();
 
@@ -1470,15 +1573,16 @@ function loadLocations() {
                     zIndexOffset: isFacility ? 1000 : 0 // facilities draw above other pins
                 });
 
-                // Popup HTML is built each time it opens (desktop only),
-                // so the distance line is always up to date with the GPS position
-                if (window.innerWidth > MOBILE_BREAKPOINT) {
-                    marker.bindPopup(() => createPopupContent(location), { maxWidth: 300 });
-                }
-
+                // A tap, a click and Enter on a focused pin all open the same details
+                // (sidebar, or the sheet on a phone). There is no pin popup.
                 marker.on('click', () => {
                     showSidebar(location);
-                    keepPinAboveSheet(marker);
+                    keepPinAboveSheet(location);
+                });
+                marker.on('keypress', (e) => {
+                    if (e.originalEvent.key !== 'Enter') return;
+                    showSidebar(location);
+                    keepPinAboveSheet(location);
                 });
 
                 // Add aria-label when marker is added to map.
@@ -1488,8 +1592,6 @@ function loadLocations() {
                     const element = marker.getElement();
                     if (element) {
                         element.setAttribute('aria-label', `${location.name} - ${typeNames[location.type]}`);
-                        // Clustering builds a new element each time the pin comes back
-                        element.classList.toggle('selected', marker === selectedMarker);
                     }
                 });
 
@@ -1498,11 +1600,34 @@ function loadLocations() {
 
             setupAutocomplete();
             updateLegendCounts();
+            showDataDate(); // after the points: they matter more on a slow connection
 
             // After a failed load the panel still holds the error texts: put the
             // "no results" texts back. updateMarkers() then shows or hides the panel.
-            setEmptyStateText('לא נמצאו תוצאות', 'נסה לשנות את הסינון או לחפש מונח אחר', 'נקה סינון');
+            setEmptyStateText(EMPTY_TITLE, EMPTY_TEXT, EMPTY_BUTTON);
             updateMarkers();
+
+            // A shared link: ?id=<point> opens that point, ?city=<name> picks that city.
+            // Both are checked against the data; anything else opens the plain map.
+            const params = new URLSearchParams(window.location.search);
+            const linkedId = /^[1-9][0-9]{0,9}$/.test(params.get('id') || '') ? Number(params.get('id')) : null;
+            const linkedCity = params.get('city');
+            if (linkedId !== null && allLocations.some(l => l.id === linkedId)) {
+                if (history.state && history.state.id === linkedId) {
+                    // A reload (by hand, or the automatic one after a deploy) of a page with
+                    // this point open: the plain step before it is already in the history
+                    focusOnLocation(linkedId, true);
+                } else {
+                    // A shared link: the plain page becomes the step before the point,
+                    // so Back closes it and stays here
+                    history.replaceState(null, '', window.location.pathname);
+                    focusOnLocation(linkedId);
+                }
+            } else if (linkedCity && cityCounts.has(linkedCity)) {
+                showCity(linkedCity);
+            } else if (params.has('id') || params.has('city')) {
+                history.replaceState(null, '', window.location.pathname);
+            }
 
             // PWA shortcut ?action=nearest: only now is there data to find the nearest point in
             if (pendingNearest) {
@@ -1520,7 +1645,7 @@ function loadLocations() {
             hideLoading();
 
             // Show empty state with retry option
-            setEmptyStateText('שגיאה בטעינת הנתונים', 'בדוק את החיבור לאינטרנט ונסה שוב', 'נסה שוב');
+            setEmptyStateText('שגיאה בטעינת הנתונים', 'כדאי לבדוק את החיבור לאינטרנט ולנסות שוב', 'ניסיון נוסף');
             const emptyState = document.getElementById('empty-state');
             if (emptyState) emptyState.style.display = 'block';
         });
@@ -1536,7 +1661,7 @@ loadLocations();
 // Sidebar Close
 const sidebarClose = document.getElementById('sidebar-close');
 if (sidebarClose) {
-    sidebarClose.addEventListener('click', hideSidebar);
+    sidebarClose.addEventListener('click', () => hideSidebar());
 }
 
 // Sidebar swipe-to-close on mobile
@@ -1620,7 +1745,7 @@ document.addEventListener('keydown', (e) => {
 // Delegated click handler for feedback buttons (avoids inline onclick)
 document.addEventListener('click', (e) => {
     const likeBtn = e.target.closest('[data-like-id]');
-    if (likeBtn) { handleLike(Number(likeBtn.dataset.likeId)); return; }
+    if (likeBtn) { handleLike(Number(likeBtn.dataset.likeId), likeBtn.dataset.confirmUrl); return; }
     const dislikeBtn = e.target.closest('[data-report-url]');
     if (dislikeBtn) { handleDislike(dislikeBtn.dataset.reportUrl); return; }
 });

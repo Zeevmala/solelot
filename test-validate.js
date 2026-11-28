@@ -24,7 +24,7 @@ test.after(() => fs.rmSync(TMP, { recursive: true, force: true }));
 function point(id, lat, lng, extra = {}) {
     return {
         id, name: 'נקודה ' + id, address: 'רחוב ' + id + ', תל אביב', city: 'תל אביב',
-        type: 'store', chain: 'x', lat, lng, hours: '', ...extra
+        type: 'store', kind: 'shop', lat, lng, hours: '', ...extra
     };
 }
 
@@ -77,6 +77,8 @@ test('a clean file of 1,000 points passes every check with no warnings', () => {
     assert.match(result.block('14a'), /: 0 to review/);
     assert.match(result.block('14b'), /: 0 points in 0 groups/);
     assert.match(result.block('14c'), /: 0 to review/);
+    assert.match(result.block('14d'), /: 0 to review/);
+    assert.match(result.block('24'), /: 0 pairs to review/);
 });
 
 test('check 4 fails on נסגר and on כפל as a whole word, not inside another word', () => {
@@ -151,6 +153,63 @@ test('14c warns (exit 0) about the only point of a city that sits inside another
     assert.match(result.block('14c'), /^\[!\].*: 1 to review\n    id=101: 5 of 5 nearest are תל אביב - גבעתיים/);
 });
 
+test('14d warns (exit 0) about two points of one street in one city 3 km apart, not 200 m apart', () => {
+    const north = km => Number((32.09 + km / KM_PER_DEGREE_LAT).toFixed(6));
+    const far = validate([...cleanPoints(),
+        point(101, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, north(3), 34.79, { address: 'הרצל 40, תל אביב' })]);
+    assert.strictEqual(far.status, 0, far.stdout);
+    assert.match(far.block('14d'), /^\[!\].*: 2 to review/);
+    assert.match(far.block('14d'), /id=101: 3\.0 km from id=102 on the same street - תל אביב - "הרצל 5, תל אביב"/);
+    assert.match(far.block('14d'), /id=102: 3\.0 km from id=101/);
+
+    const close = validate([...cleanPoints(),
+        point(101, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, north(0.2), 34.79, { address: 'הרצל 40, תל אביב' })]);
+    assert.strictEqual(close.status, 0, close.stdout);
+    assert.match(close.block('14d'), /^\[!\].*: 0 to review/);
+});
+
+test('14d flags only a point with a house number, and not two different streets', () => {
+    const north = km => Number((32.09 + km / KM_PER_DEGREE_LAT).toFixed(6));
+    const result = validate([...cleanPoints(),
+        // the street without a number can be anywhere along it, so only the numbered point is flagged
+        point(101, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, north(3), 34.79, { address: 'הרצל, תל אביב' }),
+        // two different streets, a road number is not a house number
+        point(103, north(1), 34.80, { address: 'ויצמן 3, תל אביב' }),
+        point(104, north(4), 34.80, { address: 'כביש 4, תל אביב' }),
+        point(105, north(1), 34.81, { address: 'כביש 4, תל אביב' })]);
+    assert.strictEqual(result.status, 0, result.stdout);
+    assert.match(result.block('14d'), /^\[!\].*: 1 to review\n    id=101: 3\.0 km/);
+});
+
+test('14a-14d count an id in REVIEWED_OK on one line and still list an id that is not in it', () => {
+    // 345243 and 343966 are in REVIEWED_OK for 14a (fuel stations filed under the nearest town)
+    // one point north of the grid, one south of it (the grid's bottom row is lat 32.08)
+    const north = km => Number((GRID_TOP_LAT + km / KM_PER_DEGREE_LAT).toFixed(6));
+    const south = km => Number((32.08 - km / KM_PER_DEGREE_LAT).toFixed(6));
+    const result = validate([...cleanPoints(),
+        point(345243, north(5.25), 34.78), point(101, south(5.25), 34.78)]);
+    assert.strictEqual(result.status, 0, result.stdout);
+    assert.match(result.block('14a'), /^\[!\].*: 1 to review\n    id=101: /);
+    assert.match(result.block('14a'), /\n    \+ 1 reviewed earlier \(REVIEWED_OK in validate_data\.js\), not listed/);
+    assert.doesNotMatch(result.block('14a'), /id=345243/);
+
+    // A listed id hides only that check: 345243 is not listed for 14d, so 14d still shows it
+    const street = validate([...cleanPoints(),
+        point(345243, 32.09, 34.79, { address: 'הרצל 5, תל אביב' }),
+        point(102, 32.117, 34.79, { address: 'הרצל 40, תל אביב' })]);
+    assert.match(street.block('14d'), /id=345243: /);
+
+    // 14b: a group is hidden only when every member is listed (344450-344453: one village, no street)
+    const group = (ids, lat) => ids.map((id, i) => point(id, lat, 34.79, { address: ['מבנה רווחה', 'בנין מועצה', 'מועדון נוער', 'מרכז צעירים'][i] + ', תל אביב' }));
+    const villages = validate([...cleanPoints(), ...group([344450, 344451, 344452, 344453], 32.09), ...group([101, 346488], 32.095)]);
+    assert.match(villages.block('14b'), /: 2 points in 1 groups/);
+    assert.match(villages.block('14b'), /id=101: /);
+    assert.match(villages.block('14b'), /\+ 1 group reviewed earlier/);
+});
+
 test('check 15 fails under 1,000 locations', () => {
     const result = validate(cleanPoints().slice(0, 999));
     assertFails(result, 15, /only 999 locations/);
@@ -221,4 +280,103 @@ test('check 22 fails on a school, not on a shop in a street named after one', ()
     assert.strictEqual(result.status, 1, result.stdout);
     assert.match(result.block('22'), /^\[X\].*: 1 issues/);
     assert.match(result.block('22'), /id=101/);
+});
+
+test('check 22 fails on a school campus named תיכונט or חמ"ד', () => {
+    const result = validate([...cleanPoints(),
+        point(101, 32.09, 34.79, { name: 'מוקד איסוף - תיכונט ע"ש אלתרמן' }),
+        point(102, 32.10, 34.79, { name: 'מוקד איסוף - חמ"ד מודיעים - יהלום, כניסה ראשית' }),
+        point(103, 32.11, 34.79, { name: 'מוקד איסוף - נחלת החדשה, מול בית הספר' })]);
+    assert.strictEqual(result.status, 1, result.stdout);
+    assert.match(result.block('22'), /^\[X\].*: 2 issues/);
+    assert.doesNotMatch(result.block('22'), /id=103/);
+});
+
+test('check 23 fails on a city with a digit, a Latin letter, a bracket, a dot or a one-letter word', () => {
+    const inCity = (id, city) => point(id, 32.09 + id / 100000, 34.79, { city, address: 'א 1, ' + city });
+    const result = validate([...cleanPoints(),
+        inCity(101, 'גבעת ח ן'), inCity(102, 'עובדה (שיכון משפחות)'), inCity(103, 'צ.צלמון'),
+        inCity(104, 'מחלף M הדרך'), inCity(105, 'נתניה 2'),
+        // real names that must pass: a geresh, a gershayim, a hyphen with a one-letter part
+        inCity(106, "דגניה א'"), inCity(107, 'פעמי תש"ז'), inCity(108, "ג'סר א-זרקא"), inCity(109, 'באקה אל-גרבייה')]);
+    assertFails(result, 23, /5 issues/);
+    for (const id of [101, 102, 103, 104, 105]) assert.match(result.block(23), new RegExp('id=' + id));
+});
+
+test('24 warns (exit 0) when one city name is another plus a word, unless the pair is known to be two places', () => {
+    const inCity = (id, city) => point(id, 32.09 + id / 100000, 34.79, { city, address: 'א 1, ' + city });
+    const result = validate([...cleanPoints(),
+        inCity(101, 'סילבר'), inCity(102, 'כפר סילבר'),
+        inCity(103, 'משגב'), inCity(104, 'מועצה אזורית משגב'),
+        inCity(105, 'יבנה'), inCity(106, 'גן יבנה'),             // two towns: in the known list
+        inCity(107, 'רמת גן'), inCity(108, 'רמת השרון')]);       // share a word, neither contains the other
+    assert.strictEqual(result.status, 0, result.stdout);
+    assert.match(result.block('24'), /^\[!\].*: 2 pairs to review/);
+    assert.match(result.block('24'), /סילבר \(1\) \/ כפר סילבר \(1\)/);
+    assert.match(result.block('24'), /משגב \(1\) \/ מועצה אזורית משגב \(1\)/);
+    assert.doesNotMatch(result.block('24'), /יבנה/);
+});
+
+test('check 25 fails on one shop listed twice: same chain, same address, under 100 m', () => {
+    const north = m => Number((32.09 + m / 1000 / KM_PER_DEGREE_LAT).toFixed(6));
+    const shop = (id, metres, name, address) => point(id, north(metres), 34.79, { name, address });
+    const result = validate([...cleanPoints(),
+        shop(101, 0, 'רמי לוי', 'תדהר 1, תל אביב'), shop(102, 90, 'רמי לוי - תקשורת', 'תדהר 1, תל אביב'),
+        // the same address written with a geresh: one address
+        shop(103, 1000, 'קרביץ', "ז'בוטינסקי 2, תל אביב"), shop(104, 1050, 'קרביץ - רננים', 'זבוטינסקי 2, תל אביב'),
+        // kept: 120 m apart; another chain; another house number; municipal points (two buildings)
+        shop(105, 2000, 'גלי', 'הרצל 3, תל אביב'), shop(106, 2120, 'גלי - מרכז', 'הרצל 3, תל אביב'),
+        shop(107, 3000, 'באג', 'ויצמן 5, תל אביב'), shop(108, 3010, 'מגה', 'ויצמן 5, תל אביב'),
+        shop(109, 4000, 'אבי סופר - אלנבי 113', 'אלנבי 113, תל אביב'), shop(110, 4005, 'אבי סופר - אלנבי 124', 'אלנבי 124, תל אביב'),
+        shop(111, 5000, 'מוקד איסוף - ספרייה', 'העלייה 1, תל אביב'), shop(112, 5010, 'מוקד איסוף - מתנ"ס', 'העלייה 1, תל אביב')]);
+    assertFails(result, 25, /2 issues/);
+    assert.match(result.block(25), /id=102: same shop as id=101, 90 m - "רמי לוי - תקשורת"/);
+    assert.match(result.block(25), /id=104: same shop as id=103/);
+});
+
+test('checks 26-30 fail on a repeated name part, בע"מ, Arabic script or a parcel number, a name ending in "-", and boilerplate after the prefix', () => {
+    const named = (id, name, address = 'הרצל ' + id + ', תל אביב') => point(id, 32.09 + id / 100000, 34.79, { name, address });
+    const result = validate([...cleanPoints(),
+        named(101, 'חשמלית - חשמלית - מקס שיין 9'),                     // 26
+        named(102, 'שופרסל סטוק בע"מ - סניף חולון'),                     // 27
+        named(103, 'מוקד איסוף - זאהר עומר ظاهر العم'),                   // 28, Arabic in the name
+        named(104, 'מוקד איסוף - אל פוואר', 'אל פוואר 10271/7, תל אביב'), // 28, a parcel number in the address
+        named(105, 'מוקד איסוף - חדר אשפה קומה 1-'),                     // 29
+        named(106, 'מוקד איסוף - עיריית רמת גן - מוקד איסוף עירוני - ספרייה'), // 30
+        // fine: a repeated word inside a part, a hyphen inside a word, a floor written (1-), an ordinary 10/2
+        named(107, 'גלי - גלי מרכז'), named(108, 'סופר-פארם'), named(109, 'מוקד איסוף - קומת חנייה (1-) כניסה 1'),
+        named(110, 'באג', 'הרצל 10/2, תל אביב')]);
+    assert.strictEqual(result.status, 1, result.stdout);
+    assertFails(result, 26, /^\[X\].*: 1 issues\n    id=101/);
+    assertFails(result, 27, /^\[X\].*: 1 issues\n    id=102/);
+    assertFails(result, 28, /2 issues/);
+    assert.match(result.block(28), /id=103/);
+    assert.match(result.block(28), /id=104/);
+    assertFails(result, 29, /^\[X\].*: 1 issues\n    id=105/);
+    assertFails(result, 30, /^\[X\].*: 1 issues\n    id=106/);
+});
+
+test('check 31 fails on a kind that is not fuel, shop or municipal; a point with no kind passes it', () => {
+    const result = validate([...cleanPoints(),
+        point(2001, 32.095, 34.79, { kind: 'gas_station' }), point(2002, 32.0951, 34.79, { kind: '' }),
+        point(2003, 32.0952, 34.79, { kind: 'fuel' }), point(2004, 32.0953, 34.79, { kind: 'municipal' }),
+        point(2005, 32.0954, 34.79, { kind: undefined })]);
+    assertFails(result, 31, /^\[X\].*: 2 issues/);
+    assert.match(result.block(31), /id=2001: kind="gas_station"/);
+    assert.match(result.block(31), /id=2002: kind=""/);
+});
+
+test('check 32 fails when under 95 % of collection points have a kind; a facility is not counted', () => {
+    const withoutKind = count => cleanPoints().map((p, i) => (i < count ? { ...p, kind: undefined } : p));
+    const facility = point(1, 32.5, 34.9, { type: 'facility', kind: undefined, name: 'מפעל', address: 'א 1, חדרה', city: 'חדרה' });
+    const ok = validate([...withoutKind(50), facility]);                // 950 of 1,000 = 95.0 %
+    assert.match(ok.block(32), /^\[\+\] 32\./);
+    const short = validate(withoutKind(51));                            // 949 of 1,000
+    assertFails(short, 32, /only 949 of 1000 collection points \(94\.9 %\) have a kind/);
+});
+
+test('check 9 no longer asks for chain', () => {
+    const result = validate(cleanPoints());
+    assert.ok(!('chain' in cleanPoints()[0]));
+    assert.match(result.block(9), /^\[\+\]/);
 });

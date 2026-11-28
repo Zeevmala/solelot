@@ -4,6 +4,8 @@ node_modules/
 # Debug/temp files
 raw_markers.json
 locations.backup.json
+# left behind if a write by scraper.js is cut off before the rename
+*.tmp
 
 # OS files
 .DS_Store

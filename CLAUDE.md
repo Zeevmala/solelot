@@ -10,25 +10,29 @@ Interactive map for battery recycling locations in Israel
 HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Locations to Include
-- **Collection points**: whatever the MAI map lists under batteries. Mostly shops and chains, petrol stations, municipal points and street e-waste bins (~3,600 points, Nov 2026). **Schools are left out on purpose** (owner's decision, Nov 2026: a bin inside a school is not open to the public) — `isSchool()` in `scraper.js` skips them and validator check 22 fails if one appears. Colleges and universities stay. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
+- **Batteries only.** The map is strictly for recycling batteries (owner's decision, Nov 2026). Do not show what else a point accepts (MAI categories 14/15, electrical items), and do not add other recycling types
+- **Collection points**: whatever the MAI map lists under batteries. Mostly shops and chains, petrol stations, municipal points and street e-waste bins (~3,600 points, Nov 2026). **Schools are left out on purpose** (owner's decision, Nov 2026: a bin inside a school is not open to the public) — `isSchool()` in `scraper.js` skips them and validator check 22 fails if one appears; a school the rule cannot see (no school word in the name or place) is excluded by id in `data_overrides.json`. Colleges and universities stay. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
 - **Facilities**: none shown. Batte-Re and RE-CAR were added and then removed at the owner's request (Nov 2026). `facilities.json` is empty; the app still supports the type
 
 ## Current Features
-- Interactive Leaflet map centered on Israel (OSM tiles; light = CSS-desaturated default — CARTO now requires an API key)
+- Interactive Leaflet map centered on Israel (OSM tiles; light = the default, OSM through `filter: saturate(0.3) brightness(1.06) contrast(0.88)` so the sea stays faintly blue while pins and clusters remain the strongest colour — CARTO now requires an API key)
 - Custom SVG pin markers: green battery pin = collection point, orange factory pin = recycling facility (different shape AND colour)
-- Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered
+- Marker clustering for collection points (green ring around a white disc, size grows with count); facilities are never clustered. Cluster radius 70 / 55 / 48 / 20 px at zoom ≤ 9 / ≤ 13 / ≤ 15 / 16+, so a pick or "nearest" (zoom 16+) shows single pins; points on one exact coordinate still spread out when tapped (spiderfy). Pins and small clusters have invisible `::after` hit areas larger than the drawing; the selected pin is drawn 1.4×
 - Legend (bottom right) that also works as an on/off filter per type — shown only when the data has both types, so it is hidden while there are no facilities
 - Map opens framed on Israel (`fitBounds`) and cannot be panned far outside it (`maxBounds`)
 - Search with autocomplete suggestions (city + location)
-- GPS geolocation ("find my location" button: accuracy circle, frames you with the nearest collection point, shows distance in popups)
-- Navigation links (Google Maps / Waze) in popups and sidebar
-- Location detail sidebar
-- "Report a problem" link in popups/sidebar (Google Form)
-- Empty state with clear/retry when search has no results
-- PWA support (installable, offline via service worker)
+- GPS geolocation: a filled pill "הנקודה הקרובה אליי" in the bottom right (thumb zone, 48px; a round re-centre button after the first fix). One tap opens the nearest collection point with its distance. The +/− zoom buttons are hidden on touch phones (`pointer: coarse`), kept on desktop
+- Location details (sidebar on desktop, bottom sheet on phones; on a phone held sideways a panel over the left half, away from the map buttons on the right; a shown point is centred in the part of the map the details leave free), in this order: the name; one line with the distance ("… בקו אווירי", when located) and the address; the kind of place when the record has `kind` (`pointKindText()`: fuel → תחנת דלק, shop → חנות, municipal → נקודת איסוף עירונית); two filled navigate buttons of equal size, "ניווט ב-Waze" and "ניווט ב-Google Maps"; two labelled feedback buttons
+- "דיווח על בעיה" opens the Google Form filled in with the point
+- "הנקודה קיימת" opens the same Google Form marked "✔ הנקודה קיימת:" in the name field, so the owner receives a confirmation that the point exists
+- Empty state with clear/retry when search has no results: "לא נמצאו נקודות איסוף" / "אפשר לחפש עיר, רחוב או שם של חנות" / "ניקוי החיפוש". When the text names a chain MAI does not list (סופר פארם, אופיס דיפו, KSP, פלאפון, סלקום, also in English; `chainNotListedText()`), it says "הרשת הזו לא מופיעה ברשימת נקודות האיסוף של תאגיד מ.א.י."
+- Search placeholder "עיר, רחוב או חנות"; suggestion rows carry drawn icons (the battery for a point, an outline pin for a city, "N נקודות איסוף")
+- PWA support (installable, offline via service worker). Icons: `purpose: any` set, one maskable 512 (`icons/icon-maskable-512.png`), an opaque `icons/apple-touch-icon.png`, `icons/icon.svg` as SVG favicon. The worker precaches with `cache: 'reload'` (not the HTTP cache); after a deploy, a page the old worker served reloads itself once when the new worker takes over, unless it has had a `pointerdown`, `keydown`, `wheel` or `touchstart` (`app.js`, next to the registration)
+- The credit line (bottom right) reads "נתונים: תאגיד מ.א.י · עודכן <d.m.yyyy>, © OpenStreetMap". The date is `fetched_at` from `data_meta.json`, fetched after the points (`showDataDate()`, `formatUpdatedDate()`, Israel time); on any failure the date is left out. `data_meta.json` is an optional precached asset in `sw.js` and network-first like `locations.json`. The whole line is one attribution entry (`setMapCredits()`), so the date stays next to the MAI credit
 - Multiple basemap options (light, streets)
 - Accessibility (ARIA labels, keyboard navigation, skip links)
-- Open Graph + Twitter Card meta tags for social sharing
+- Open Graph + Twitter Card meta tags for social sharing: `icons/og-image.png` (1200×630, opaque, a map screenshot with the logo and title; not precached), `summary_large_image`
+- CSP in a meta tag: `img-src` names only the OSM tile host (both basemaps use it), plus `base-uri 'self'` and `form-action 'none'` (the Google Form is opened as a link, never posted)
 - XSS protection (HTML escaping on all location data)
 - Loading spinner overlay with error retry
 
@@ -75,7 +79,8 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Map colours: collection point = `--cw-data-cat-3` (sea green), facility = `--cw-data-cat-2` (orange), user location = `--cw-accent`. SVGs in `app.js` use `fill="currentColor"` and the class `pin-casing` for white parts; the colour itself is set in `style.css`
 - The page is fixed to the light theme (`data-theme="light"` on `<html>`): the OSM basemap is a light picture, and the dark-theme pin colours are made for a dark map
 - Font: IBM Plex Sans / IBM Plex Sans Hebrew, served from `cartowolf/fonts/` (no Google Fonts). Weights 400, 500, 600 only
-- UI text is in **Hebrew**
+- UI text is in **Hebrew**, in neutral forms ("ניקוי החיפוש", "ניסיון נוסף", not a masculine imperative). No emoji in `app.js` or `index.html` (`LC_ALL=C.UTF-8 grep -nP '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]' app.js index.html` prints nothing): icons are inline SVG in `currentColor`. A distance keeps its number and unit together with a no-break space (`formatDistance`)
+- The map credit line has no Leaflet prefix (`setPrefix(false)`); Leaflet is credited in `README.md`
 - Layout is **RTL** (right-to-left)
 - No build tools - plain static files, no npm
 - Location types: `store` (collection point) or `facility` (recycling plant)
@@ -85,7 +90,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ### Architecture — Do NOT Change
 - No build tools. Plain HTML/CSS/JS. No npm, no bundler, no TypeScript. Keep it that way.
-- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, chain, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `description` is optional and shown in popup/sidebar.
+- `locations.json` schema: `{ "locations": [{ id, name, address, city, type, kind?, lat, lng, hours, description? }] }`. `id` is the MAI marker id (stable between refreshes); facilities use ids 1–99. `kind` is `"fuel"`, `"shop"` or `"municipal"`, set by `pointKind()` in `scraper.js`, and missing when the point cannot be classified (no business name, or the name is only the address). `description` is optional and shown in the details. `kind` is shown as one line in the details (`pointKindText()` in `app.js`).
 - `type` must be exactly `"store"` or `"facility"`. Adding a third value requires updating `typeNames` in `app.js` AND adding a test.
 - All UI strings are Hebrew. Layout is RTL. Do not add English UI text.
 - `test.html` and `test-map.html` run in the browser (open the file) and in the gate (headless Chrome). Pure functions are copied verbatim from `app.js`; the gate fails if a copy differs from `app.js`. A green test page still does NOT prove the app works: also load the real page and check the browser console.
@@ -133,7 +138,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Do NOT add event listeners inside functions callable multiple times without a cleanup path.
 - Do NOT add new `location.type` values without updating `typeNames` in `app.js` and tests.
 - Do NOT forget to bump `STATIC_CACHE` version in `sw.js` after changing any cached file (the gate checks this against the default branch).
-- Do NOT call `markerCluster.zoomToShowLayer` right after `updateMarkers()`: markers are added in chunks, and on a slow phone the marker is not there yet. Wrap it in `whenMarkersAdded(...)`.
+- Do NOT bring back `markerCluster.zoomToShowLayer` to show a picked point. The picked point is drawn on its own layer above the clusters (`setSelectedLocation`); `zoomToShowLayer` left listeners behind and raced the chunked marker add on slow phones (removed 2026-11-27).
 - Do NOT say something passes without running `bash .factory/check.sh` and reading its last line (`GATE PASSED`).
 - Do NOT use inline `onclick` handlers in template strings. Use `data-*` attributes + event delegation.
 - Do NOT edit `locations.json` by hand — it is overwritten by `scraper.js`. Put manual fixes in `data_overrides.json` and facilities in `facilities.json`.
@@ -142,22 +147,27 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Do NOT add `<defs>`/gradients/filters with `id`s inside marker SVGs — the SVG is repeated per marker, which repeats the ids.
 
 ### Testing Notes
-- `CHAIN_PATTERNS` / `determineChain` live in `scraper.js` only (the app does not use `chain`). They are tested in `test-scraper.js`, which imports the real functions.
+- `pointKind` (the `kind` field) lives in `scraper.js` and is tested in `test-scraper.js`, which imports the real functions: each rule, the two electrical chains that stay shops, and the records that get no kind. `test-validate.js` covers validator checks 31 (`kind` is one of the three values) and 32 (at least 95% of collection points have one). `chain`, `CHAIN_PATTERNS` and `determineChain` were removed (2026-11-27); `shopChain` is a different thing, used only to find one shop listed twice.
 - XSS tests cover `<script>`, `<img>`, SVG `onload`, `javascript:` and `data:` strings.
 - `test-map.html` covers: data integrity, unique ids, facilities, city spelling, template output, search filtering, sidebar state, GPS distance. Empty state and `?action=nearest` are covered by `test-smoke.js` on the real page.
 - `test-validate.js` runs the real `validate_data.js` on small fixtures and checks the exit code.
 - Not yet tested automatically: Leaflet map init, legend toggles, real GPS callback, live event delegation, service worker install. The wiring of the real page (search box, Enter, picks, `?action=nearest`, failure states, selected pin, service worker install and update) is covered by `node test-smoke.js`, which is run by hand because it needs Playwright (not installed on the gate's runner) and the network for map tiles.
 
 ### Data Integrity Notes
-- Refresh flow: `node scraper.js` → `node validate_data.js` (must print ALL CHECKS PASSED) → review warnings 14a/14b/14c → `bash .factory/check.sh`. The scraper prints every id it drops and writes `data_meta.json`.
+- Refresh flow: `node scraper.js` → `node validate_data.js` (must print ALL CHECKS PASSED) → review warnings 14a/14b/14c/14d → `bash .factory/check.sh`. The scraper prints every id it drops and writes `data_meta.json`.
 - MAI API facts (Nov 2026): `map_id "5"` is the live map (`"2"` is an old unnamed copy — ignore); category `12` = batteries; `address` is always null; use `custom_field_data` (city, street, house_number, neighborhood, business_name).
 - ~416 live markers have no name or address at all. They are skipped on purpose (nothing useful to show).
-- MAI has records whose coordinates belong to a different record (pin up to 190 km from the listed city). `validate_data.js` lists suspects as warnings: 14a = more than 5 km from every other point of its city, 14b = one exact coordinate shared by different streets, 14c = the only point of its city, sitting inside another city. Confirm with a reverse geocode (Nominatim), then add `{ "city": ... }` or `{ "exclude": true }` to `data_overrides.json` and a dated line in its `_about` list.
+- MAI has records whose coordinates belong to a different record (pin up to 190 km from the listed city). `validate_data.js` lists suspects as warnings: 14a = more than 5 km from every other point of its city, 14b = one exact coordinate shared by different streets, 14c = the only point of its city, sitting inside another city, 14d = a point with a house number whose nearest other point on the same street of its city is over 1.5 km away. Confirm with a reverse geocode (Nominatim), then add `{ "city": ... }` or `{ "exclude": true }` to `data_overrides.json` and a dated line in its `_about` list. A warning that turns out fine goes in `REVIEWED_OK` in `validate_data.js` (per check, with the date and why); the run then counts it on one line, so the lists show only what is new.
 - The position checks cannot see errors under 5 km, or a single wrong pin that sits alone at a city centre.
 - **Stacked pins**: MAI's geocoder puts an address it cannot find at the centre of the city. The scraper drops every group of points that share one exact coordinate but name different streets (162 points in Nov 2026) — nobody can tell which, if any, is right. Same street spelled two ways (a shopping centre) is kept; so is a group with no street in one village.
-- The scraper also refuses to save when the new count is under 90% of the previous file, unless run with `--force`.
+- **One shop listed twice**: the scraper keeps the lower id of two records with the same chain (first part of the name, the brand too for a fuel station; "רמי לוי - תקשורת" counts as "רמי לוי"), in the same city, at most 50 m apart, on the same street or with one of them without a house number. A record without a house number that has two or more different addresses of its chain within 50 m (street and house number: הרצל 10 and ויצמן 10 are two) is merged with none. One shop under two cities is settled by an override (the label that does not fit the pin is excluded). Two different house numbers are never merged (אבי סופר at אלנבי 113, 122 and 124 are three shops within 23 m). Municipal points are not a chain. Validator check 25 fails on the same chain at the same address under 100 m; a pair 50–100 m apart goes in `data_overrides.json`.
+- **Point kind** (`kind`, 2026-11-27), from the raw MAI business name and categories: `fuel` = the name starts "תחנת דלק", has אלונית / דור אלון, or starts YELLOW and has the word פז; `municipal` = the name has רשות מקומית / חשמלית / מועצה / עיריית / מוקד איסוף / מרכז איסוף, or the categories include 14 and the name does not start מחסני חשמל or איידיגיטל; `shop` = the rest. Category 14 is only a sign of a municipal point; the map never says what else a point takes. No `kind` for 33 points (24 without a business name, 9 whose name is only the address). Counts at this date: municipal 1,268, shop 1,486, fuel 789. A seeded sample of 40 was all correct.
+- Points inside places the public cannot freely enter (an air force base, the police headquarters, a pre-army academy) are excluded by id in `data_overrides.json` (owner, 2026-11-27).
+- The scraper also refuses to save when the new count is under 90% of the previous file, or when the previous `locations.json` cannot be read or has no collection points (a count of 0 would switch the guards off), unless run with `--force`.
+- The run lists, as `overrides_without_effect` in `data_meta.json`, every override that leaves the map the same: building with and without that one override gives the same `locations.json`. The reason says what happens to the record without it (skipped, merged away, stacked, or the same record). Delete those whose reason is settled. A city override that makes a same-city merge happen does have an effect and is not listed.
 - The scraper refuses to save if fewer than 1,000 points parse (protects against another API change wiping the data).
 - Runtime bounds check (29–34°N, 34–36°E) in `app.js` is a safety net, not a substitute for clean source data.
+- **Name and address clean-up** (`transformMarker`): a name part that repeats an earlier part is left out; municipal boilerplate is removed from the place field too; ` בע"מ` is cut from names; Arabic-script text and land-registry parcel numbers (`10262/31` in the house-number field) are removed; a trailing hyphen is dropped (after a number it is a floor below ground and becomes `(1-)`); a street or place part that is only the city is left out; a leading `רחוב`/`רח'` is cut; an address that is only the city takes the street from the end of the name (`חשמלית - הדס 8`); and the place is left out of the address when the name already ends with it (unless it is all the address has besides the city). Validator checks 26–30 fail on what these rules should have removed.
 - City names are normalised in `normalizeCity()` (e.g. קרית → קריית, תל אביב-יפו → תל אביב). Add new variants to `CITY_ALIASES`.
 
 ### Launch readiness (Nov 2026)
@@ -188,8 +198,8 @@ Slightly under 44px touch target. Consider increasing to 44px.
 ### Performance Notes (at ~3,600 locations)
 - **Search**: Full scan (7 string ops × ~4,200 markers) per debounce tick. Fine at 4K. At 10K+, pre-build a `Map<city, locations[]>` index.
 - **Markers**: ~4,200 markers × 2–3 event listeners each. Marker SVGs are flat (no per-marker gradients/filters). Fine at 4K. At 10K+, switch to virtual markers (create on `moveend` for visible bounds only).
-- **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 40 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
-- **Tiles**: 200-tile cache cap with cleanup every 20 puts. Adequate. At high zoom/pan frequency, reduce cleanup interval to 10.
+- **Clustering**: `chunkedLoading: true` + zoom-dependent `maxClusterRadius` (70 / 55 / 48 / 20 px) handles 4K well. Zoom 7→10 in ~133ms, zoom 10→14 in ~365ms. No action needed.
+- **Tiles**: 200-tile cache cap, trimmed after every 50 new tiles (`tileCacheCount % 50` in `sw.js`). The counter lives in the worker's memory and starts again at 0 whenever the browser stops the worker, so a run of short visits with fewer than 50 new tiles each never trims; the cap is a target, not a guarantee.
 
 <!-- factory:start -->
 ## Factory
