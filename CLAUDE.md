@@ -11,7 +11,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 
 ## Locations to Include
 - **Batteries only.** The map is strictly for recycling batteries (owner's decision, Nov 2026). Do not show what else a point accepts (MAI categories 14/15, electrical items), and do not add other recycling types
-- **Collection points**: whatever the MAI map lists under batteries. Mostly shops and chains, petrol stations, municipal points and street e-waste bins (~3,600 points, Nov 2026). **Schools are left out on purpose** (owner's decision, Nov 2026: a bin inside a school is not open to the public) — `isSchool()` in `scraper.js` skips them and validator check 22 fails if one appears. Colleges and universities stay. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
+- **Collection points**: whatever the MAI map lists under batteries. Mostly shops and chains, petrol stations, municipal points and street e-waste bins (~3,600 points, Nov 2026). **Schools are left out on purpose** (owner's decision, Nov 2026: a bin inside a school is not open to the public) — `isSchool()` in `scraper.js` skips them and validator check 22 fails if one appears; a school the rule cannot see (no school word in the name or place) is excluded by id in `data_overrides.json`. Colleges and universities stay. Superpharm, Office Depot, Pelephone and Cellcom have **no** records in the MAI data, so they are not on the map
 - **Facilities**: none shown. Batte-Re and RE-CAR were added and then removed at the owner's request (Nov 2026). `facilities.json` is empty; the app still supports the type
 
 ## Current Features
@@ -138,7 +138,7 @@ HTML, CSS, JavaScript + Leaflet.js for maps
 - Do NOT add event listeners inside functions callable multiple times without a cleanup path.
 - Do NOT add new `location.type` values without updating `typeNames` in `app.js` and tests.
 - Do NOT forget to bump `STATIC_CACHE` version in `sw.js` after changing any cached file (the gate checks this against the default branch).
-- Do NOT call `markerCluster.zoomToShowLayer` right after `updateMarkers()`: markers are added in chunks, and on a slow phone the marker is not there yet. Wrap it in `whenMarkersAdded(...)`.
+- Do NOT bring back `markerCluster.zoomToShowLayer` to show a picked point. The picked point is drawn on its own layer above the clusters (`setSelectedLocation`); `zoomToShowLayer` left listeners behind and raced the chunked marker add on slow phones (removed 2026-11-27).
 - Do NOT say something passes without running `bash .factory/check.sh` and reading its last line (`GATE PASSED`).
 - Do NOT use inline `onclick` handlers in template strings. Use `data-*` attributes + event delegation.
 - Do NOT edit `locations.json` by hand — it is overwritten by `scraper.js`. Put manual fixes in `data_overrides.json` and facilities in `facilities.json`.

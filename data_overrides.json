@@ -25,6 +25,7 @@
     "Removed 2026-11-27: 7 overrides that did nothing, found by the new \"overrides without effect\" report of scraper.js. Their records are skipped as schools (owner decision, settled), so the city fixes 344824 (עוספייה), 345329 (תל אביב), 345596 and 345597 (אלעד), 346048 (שפרעם), 347289 (אום אל פחם) and the exclude 345588 change nothing. Corrected 2026-11-27: this line first called 345148 and 345913 dead as well, which was wrong. Each city fix is what lets its record merge with its twin in the same city: 345148 (חיפה) is then the same shop as 344152, and 345913 (שפרעם) the same point as 345903; without them a second pin appears under \"חוצות\" or \"אבטליון\". Both stay.",
     "Removed 2026-11-27: the exclude 344803 (רמי לוי, \"היוצרים 7, כרמיאל\", pin in תל אביב). Its record shares one exact coordinate (32.071749, 34.794428) with 343446 (יגאל אלון 108, תל אביב) and 346433 (צומת גילת), three different streets, so the stacked rule drops it anyway (settled: the scraper drops every such group). The scraper's \"overrides without effect\" report listed it, and a build without the exclude gives the same locations.json.",
     "Added 2026-11-27: 347314 (קולומביה, \"שבילים, צומת זרזיר\") had the junction as its city, so a search for a town did not find it. Nominatim reverse geocode of the pin: road 7626 in מועצה אזורית עמק יזרעאל, inside no town; forward geocode: זרזיר is 891 m from the pin, רמת ישי 5.4 km. The pin is 46 m from 343849 (דלק מנטה, \"כביש 77, מחלף זרזיר\"), which MAI lists under רמת ישי although its own label names זרזיר; the nearest town and the junction's name both say זרזיר, a spelling already in the data (344335).",
+    "Added 2026-11-28 (owner's decision): 4 excludes for points that are probably inside schools, which the school rule does not catch because no school word is in the name or place field: 343719 \"חב\"ד בנים\" and 343904 \"חב\"ד בנות\" (שד' ירושלים 30 and 34, קריית מלאכי), 346055 \"אמי\"ת י'\" (נחל שניר 3, אשדוד; AMIT runs a school network), and 347337, a street bin whose street field reads \"אפרסק בית ספר רימונים\" (אשדוד).",
     "An id that MAI later fixes or removes can simply be deleted from this file."
   ],
   "overrides": {
@@ -532,6 +533,9 @@
     "343679": {
       "exclude": true
     },
+    "343719": {
+      "exclude": true
+    },
     "343745": {
       "exclude": true
     },
@@ -545,6 +549,9 @@
       "exclude": true
     },
     "343852": {
+      "exclude": true
+    },
+    "343904": {
       "exclude": true
     },
     "343927": {
@@ -727,6 +734,9 @@
     "346046": {
       "exclude": true
     },
+    "346055": {
+      "exclude": true
+    },
     "346071": {
       "exclude": true
     },
@@ -824,6 +834,9 @@
       "exclude": true
     },
     "347280": {
+      "exclude": true
+    },
+    "347337": {
       "exclude": true
     }
   }
